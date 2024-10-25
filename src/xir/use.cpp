@@ -4,19 +4,23 @@
 
 namespace luisa::compute::xir {
 
-Use::Use(Pool *pool, User *user, Value *value) noexcept
-    : Super{pool}, _user{user}, _value{value} {
+Use::Use(Pool *pool, User *user) noexcept
+    : Super{pool}, _user{user} {
     LUISA_DEBUG_ASSERT(user != nullptr, "User must not be null.");
-    set_value(value);
 }
 
-void Use::set_value(Value *value) noexcept {
+void Use::reset_value() noexcept {
+    if (_value) {
+        // if the old value is not nullptr, we need to remove the use from the use list
+        remove_self();
+        _value = nullptr;
+    }
+}
+
+void Use::set_value(Value *value, bool add_to_use_list) noexcept {
     if (_value != value) {// we don't need to do anything if the value is not changed
-        if (_value) {
-            // if the old value is not nullptr, we need to remove the use from the use list
-            remove_self();
-        }
-        if ((_value = value) != nullptr) {
+        reset_value();
+        if ((_value = value) != nullptr && add_to_use_list) {
             // if the new value is not nullptr, we need to insert the use to the use list
             _value->use_list().insert_front(this);
         }
