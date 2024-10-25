@@ -303,9 +303,9 @@ private:
     IntrinsicOp _op;
 
 public:
-    explicit IntrinsicInst(Pool *pool, IntrinsicOp op = IntrinsicOp::NOP,
+    explicit IntrinsicInst(Pool *pool, const Type *type = nullptr,
+                           IntrinsicOp op = IntrinsicOp::NOP,
                            luisa::span<Value *const> operands = {},
-                           const Type *type = nullptr,
                            const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::INTRINSIC;

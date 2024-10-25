@@ -38,6 +38,10 @@ public:
     void set_default_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
+    BasicBlock *create_default_block(Pool *pool, const Name *name = nullptr) noexcept;
+    BasicBlock *create_merge_block(Pool *pool, const Name *name = nullptr) noexcept;
+    BasicBlock *create_case_block(Pool *pool, case_value_type value, const Name *name = nullptr) noexcept;
+
     void set_case_count(size_t count) noexcept;
     [[nodiscard]] size_t case_count() const noexcept;
 

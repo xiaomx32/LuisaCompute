@@ -36,6 +36,24 @@ void BranchInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
+BasicBlock *BranchInst::create_true_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_true_block(block);
+    return block;
+}
+
+BasicBlock *BranchInst::create_false_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_false_block(block);
+    return block;
+}
+
+BasicBlock *BranchInst::create_merge_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_merge_block(block);
+    return block;
+}
+
 Value *BranchInst::cond() noexcept {
     return operand(operand_index_cond);
 }

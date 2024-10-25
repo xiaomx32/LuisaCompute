@@ -27,6 +27,24 @@ void SwitchInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
+BasicBlock *SwitchInst::create_default_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_default_block(block);
+    return block;
+}
+
+BasicBlock *SwitchInst::create_merge_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_merge_block(block);
+    return block;
+}
+
+BasicBlock *SwitchInst::create_case_block(Pool *pool, case_value_type value, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    add_case(value, block);
+    return block;
+}
+
 void SwitchInst::set_case(size_t index, case_value_type value, BasicBlock *block) noexcept {
     set_case_value(index, value);
     set_case_block(index, block);

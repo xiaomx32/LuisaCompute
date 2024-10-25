@@ -2,9 +2,9 @@
 
 namespace luisa::compute::xir {
 
-CallInst::CallInst(Pool *pool, Value *callee,
-                   luisa::span<Value *const> arguments,
-                   const Type *type, const Name *name) noexcept
+CallInst::CallInst(Pool *pool, const Type *type,
+                   Value *callee, luisa::span<Value *const> arguments,
+                   const Name *name) noexcept
     : Instruction{pool, type, name} {
     set_operand_count(1u + arguments.size());
     set_operand(operand_index_callee, callee);

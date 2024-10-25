@@ -11,8 +11,7 @@ public:
     static constexpr size_t operand_index_value = 1u;
 
 public:
-    explicit StoreInst(Pool *pool,
-                       Value *variable = nullptr,
+    explicit StoreInst(Pool *pool, Value *variable = nullptr,
                        Value *value = nullptr,
                        const Name *name = nullptr) noexcept;
 

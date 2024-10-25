@@ -2,9 +2,9 @@
 
 namespace luisa::compute::xir {
 
-GEPInst::GEPInst(Pool *pool, Value *base,
-                 luisa::span<Value *const> indices,
-                 const Type *type, const Name *name) noexcept
+GEPInst::GEPInst(Pool *pool, const Type *type,
+                 Value *base, luisa::span<Value *const> indices,
+                 const Name *name) noexcept
     : Instruction{pool, type, name} {
     set_operand_count(1u + indices.size());
     set_operand(operand_index_base, base);

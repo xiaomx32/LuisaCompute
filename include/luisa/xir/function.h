@@ -14,7 +14,7 @@ class LC_XIR_API Function : public Value {
 
 private:
     FunctionTag _function_tag;
-    BasicBlock *_body = nullptr;
+    BasicBlock *_body;
     ArgumentList _arguments;
     SharedVariableList _shared_variables;
     LocalVariableList _local_variables;

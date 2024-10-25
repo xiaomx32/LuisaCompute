@@ -5,14 +5,14 @@
 
 namespace luisa::compute::xir {
 
-LoopInst::LoopInst(Pool *pool, Value *cond, const Name *name) noexcept
+LoopInst::LoopInst(Pool *pool, const Name *name) noexcept
     : Instruction{pool, nullptr, name} {
     auto prepare = static_cast<Value *>(nullptr);
+    auto cond = static_cast<Value *>(nullptr);
     auto body = static_cast<Value *>(nullptr);
     auto update = static_cast<Value *>(nullptr);
     auto merge = static_cast<Value *>(nullptr);
     auto operands = std::array{prepare, cond, body, update, merge};
-    LUISA_DEBUG_ASSERT(operands[operand_index_cond] == cond, "Unexpected operand index.");
     set_operands(operands);
 }
 
@@ -40,6 +40,30 @@ void LoopInst::set_update_block(BasicBlock *block) noexcept {
 void LoopInst::set_merge_block(BasicBlock *block) noexcept {
     _replace_owned_basic_block(merge_block(), block);
     set_operand(operand_index_merge_block, block);
+}
+
+BasicBlock *LoopInst::create_prepare_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_prepare_block(block);
+    return block;
+}
+
+BasicBlock *LoopInst::create_body_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_body_block(block);
+    return block;
+}
+
+BasicBlock *LoopInst::create_update_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_update_block(block);
+    return block;
+}
+
+BasicBlock *LoopInst::create_merge_block(Pool *pool, const Name *name) noexcept {
+    auto block = pool->create<BasicBlock>(name);
+    set_merge_block(block);
+    return block;
 }
 
 BasicBlock *LoopInst::prepare_block() noexcept {

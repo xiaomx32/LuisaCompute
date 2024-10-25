@@ -3,9 +3,9 @@
 namespace luisa::compute::xir {
 
 Function::Function(Pool *pool, FunctionTag tag, const Type *type, const Name *name) noexcept
-    : Value{pool, type, name},
-      _function_tag{tag}, _body{pool->create<BasicBlock>(this)},
-      _arguments{pool}, _shared_variables{pool}, _local_variables{pool} {
+    : Value{pool, type, name}, _body{pool->create<BasicBlock>()},
+      _function_tag{tag}, _arguments{pool}, _shared_variables{pool}, _local_variables{pool} {
+    _body->_set_parent_value(this);
     _arguments.head_sentinel()->set_parent_function(this);
     _arguments.tail_sentinel()->set_parent_function(this);
     _shared_variables.head_sentinel()->set_parent_function(this);

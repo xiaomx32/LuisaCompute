@@ -12,9 +12,8 @@ public:
     static constexpr size_t operand_index_index_offset = 1u;
 
 public:
-    explicit GEPInst(Pool *pool, Value *base = nullptr,
-                     luisa::span<Value *const> indices = {},
-                     const Type *type = nullptr,
+    explicit GEPInst(Pool *pool, const Type *type = nullptr,
+                     Value *base = nullptr, luisa::span<Value *const> indices = {},
                      const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::GEP;

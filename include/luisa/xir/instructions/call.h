@@ -11,9 +11,9 @@ public:
     static constexpr size_t operand_index_argument_offset = 1u;
 
 public:
-    explicit CallInst(Pool *pool, Value *callee = nullptr,
+    explicit CallInst(Pool *pool, const Type *type = nullptr,
+                      Value *callee = nullptr,
                       luisa::span<Value *const> arguments = {},
-                      const Type *type = nullptr,
                       const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::CALL;

@@ -16,11 +16,11 @@ private:
 
 private:
     friend class User;
+    friend class Function;
     void _set_parent_value(Value *parent_value) noexcept;
 
 public:
-    explicit BasicBlock(Pool *pool, Value *parent_value = nullptr,
-                        const Name *name = nullptr) noexcept;
+    explicit BasicBlock(Pool *pool, const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
         return DerivedValueTag::BASIC_BLOCK;
     }

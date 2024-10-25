@@ -1,5 +1,6 @@
 set(LUISA_COMPUTE_XIR_SOURCES
         basic_block.cpp
+        builder.cpp
         constant.cpp
         function.cpp
         instruction.cpp
