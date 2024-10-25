@@ -1,5 +1,7 @@
 #pragma once
 
+#include <luisa/ast/type_registry.h>
+#include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -59,9 +61,9 @@ public:
     IntrinsicInst *call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept;
 
     CastInst *static_cast_(const Type *type, Value *value) noexcept;
-    CastInst *bitwise_cast_(const Type *type, Value *value) noexcept;
+    CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
-    PhiInst *phi(const Type *type) noexcept;
+    PhiInst *phi(const Type *type, luisa::span<const PhiIncoming> incomings = {}) noexcept;
     PrintInst *print(luisa::string format, luisa::span<Value *const> values) noexcept;
 
     GEPInst *gep(const Type *type, Value *base, luisa::span<Value *const> indices) noexcept;
@@ -69,6 +71,13 @@ public:
     StoreInst *store(Value *variable, Value *value) noexcept;
 
     CommentInst *comment(luisa::string text) noexcept;
+
+    [[nodiscard]] Constant *const_(const Type *type, const void *data) noexcept;
+
+    template<typename T>
+    [[nodiscard]] Constant *const_(const T &value) noexcept {
+        return const_(Type::of<T>(), &value);
+    }
 };
 
 }// namespace luisa::compute::xir

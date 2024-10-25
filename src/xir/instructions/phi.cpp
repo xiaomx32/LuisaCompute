@@ -4,6 +4,18 @@
 
 namespace luisa::compute::xir {
 
+PhiInst::PhiInst(Pool *pool, const Type *type,
+                 luisa::span<const PhiIncoming> incomings,
+                 const Name *name) noexcept
+    : Instruction{pool, type, name} { set_incomings(incomings); }
+
+void PhiInst::set_incomings(luisa::span<const PhiIncoming> incomings) noexcept {
+    set_incoming_count(incomings.size());
+    for (auto i = 0u; i < incomings.size(); i++) {
+        set_incoming(i, incomings[i].value, incomings[i].block);
+    }
+}
+
 void PhiInst::set_incoming_count(size_t count) noexcept {
     set_operand_count(count * 2);
 }

@@ -59,12 +59,12 @@ CastInst *Builder::static_cast_(const Type *type, Value *value) noexcept {
     return _create_and_append_instruction<CastInst>(type, CastOp::STATIC_CAST, value);
 }
 
-CastInst *Builder::bitwise_cast_(const Type *type, Value *value) noexcept {
+CastInst *Builder::bit_cast_(const Type *type, Value *value) noexcept {
     return _create_and_append_instruction<CastInst>(type, CastOp::BITWISE_CAST, value);
 }
 
-PhiInst *Builder::phi(const Type *type) noexcept {
-    return _create_and_append_instruction<PhiInst>(type);
+PhiInst *Builder::phi(const Type *type, luisa::span<const PhiIncoming> incomings) noexcept {
+    return _create_and_append_instruction<PhiInst>(type, incomings);
 }
 
 PrintInst *Builder::print(luisa::string format, luisa::span<Value *const> values) noexcept {
@@ -85,6 +85,11 @@ StoreInst *Builder::store(Value *variable, Value *value) noexcept {
 
 CommentInst *Builder::comment(luisa::string text) noexcept {
     return _create_and_append_instruction<CommentInst>(std::move(text));
+}
+
+Constant *Builder::const_(const Type *type, const void *data) noexcept {
+    auto pool = _pool_from_insertion_point();
+    return pool->create<Constant>(type, data);
 }
 
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {

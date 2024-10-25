@@ -13,19 +13,25 @@ private:
     };
 
     [[nodiscard]] bool _is_small() const noexcept;
+    [[noreturn]] void _error_cannot_change_type() const noexcept;
 
 public:
     explicit Constant(Pool *pool, const Type *type,
                       const void *data = nullptr,
                       const Name *name = nullptr) noexcept;
     ~Constant() noexcept override;
-    void set_type(const Type *type) noexcept override;
-    void set_data(const void *data) noexcept;
-    [[nodiscard]] void *data() noexcept;
-    [[nodiscard]] const void *data() const noexcept;
+
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
         return DerivedValueTag::CONSTANT;
     }
+
+    [[noreturn]] void set_type(const Type *type) noexcept override {
+        _error_cannot_change_type();
+    }
+
+    void set_data(const void *data) noexcept;
+    [[nodiscard]] void *data() noexcept;
+    [[nodiscard]] const void *data() const noexcept;
 
     template<typename T>
     [[nodiscard]] T &as() noexcept {

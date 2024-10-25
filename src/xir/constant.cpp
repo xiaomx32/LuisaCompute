@@ -23,16 +23,16 @@ bool Constant::_is_small() const noexcept {
     return type()->size() <= sizeof(void *);
 }
 
+void Constant::_error_cannot_change_type() const noexcept {
+    LUISA_ERROR_WITH_LOCATION("Constant type cannot be changed.");
+}
+
 void Constant::set_data(const void *data) noexcept {
     if (data == nullptr) {
         memset(this->data(), 0, type()->size());
     } else {
         memmove(this->data(), data, type()->size());
     }
-}
-
-void Constant::set_type(const Type *type) noexcept {
-    LUISA_ERROR_WITH_LOCATION("Constant type cannot be changed.");
 }
 
 void *Constant::data() noexcept {

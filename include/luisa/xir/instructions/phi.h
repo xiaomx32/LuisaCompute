@@ -28,10 +28,13 @@ struct ConstPhiIncomingUse {
 
 class LC_XIR_API PhiInst final : public Instruction {
 public:
-    using Instruction::Instruction;
+    explicit PhiInst(Pool *pool, const Type *type = nullptr,
+                     luisa::span<const PhiIncoming> incomings = {},
+                     const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::PHI;
     }
+    void set_incomings(luisa::span<const PhiIncoming> incomings) noexcept;
     void set_incoming_count(size_t count) noexcept;
     void set_incoming(size_t index, Value *value, BasicBlock *block) noexcept;
     void add_incoming(Value *value, BasicBlock *block) noexcept;
