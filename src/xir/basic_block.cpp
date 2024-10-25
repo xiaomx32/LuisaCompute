@@ -6,11 +6,11 @@ BasicBlock::BasicBlock(Pool *pool, Value *parent_value, const Name *name) noexce
     : Value{pool, nullptr, name},
       _parent_value{parent_value},
       _instructions{pool} {
-    _instructions.head_sentinel()->set_parent_block(this);
-    _instructions.tail_sentinel()->set_parent_block(this);
+    _instructions.head_sentinel()->_set_parent_block(this);
+    _instructions.tail_sentinel()->_set_parent_block(this);
 }
 
-void BasicBlock::set_parent_value(Value *parent_value) noexcept {
+void BasicBlock::_set_parent_value(Value *parent_value) noexcept {
     _parent_value = parent_value;
 }
 

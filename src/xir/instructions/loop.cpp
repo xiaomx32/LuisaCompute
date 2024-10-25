@@ -7,16 +7,12 @@ namespace luisa::compute::xir {
 
 LoopInst::LoopInst(Pool *pool, Value *cond, const Name *name) noexcept
     : Instruction{pool, nullptr, name} {
-    auto prepare = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto body = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto update = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto merge = static_cast<Value *>(pool->create<BasicBlock>(this));
+    auto prepare = static_cast<Value *>(nullptr);
+    auto body = static_cast<Value *>(nullptr);
+    auto update = static_cast<Value *>(nullptr);
+    auto merge = static_cast<Value *>(nullptr);
     auto operands = std::array{prepare, cond, body, update, merge};
     LUISA_DEBUG_ASSERT(operands[operand_index_cond] == cond, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_prepare_block] == prepare, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_body_block] == body, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_update_block] == update, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_merge_block] == merge, "Unexpected operand index.");
     set_operands(operands);
 }
 
@@ -24,6 +20,26 @@ void LoopInst::set_cond(Value *cond) noexcept {
     LUISA_DEBUG_ASSERT(cond == nullptr || cond->type() == Type::of<bool>(),
                        "Loop condition must be a boolean value.");
     set_operand(operand_index_cond, cond);
+}
+
+void LoopInst::set_prepare_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(prepare_block(), block);
+    set_operand(operand_index_prepare_block, block);
+}
+
+void LoopInst::set_body_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(body_block(), block);
+    set_operand(operand_index_body_block, block);
+}
+
+void LoopInst::set_update_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(update_block(), block);
+    set_operand(operand_index_update_block, block);
+}
+
+void LoopInst::set_merge_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(merge_block(), block);
+    set_operand(operand_index_merge_block, block);
 }
 
 BasicBlock *LoopInst::prepare_block() noexcept {

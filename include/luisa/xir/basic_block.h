@@ -6,6 +6,7 @@ namespace luisa::compute::xir {
 
 class Function;
 class Instruction;
+class User;
 
 class LC_XIR_API BasicBlock : public Value {
 
@@ -13,14 +14,16 @@ private:
     Value *_parent_value = nullptr;
     InstructionList _instructions;
 
+private:
+    friend class User;
+    void _set_parent_value(Value *parent_value) noexcept;
+
 public:
     explicit BasicBlock(Pool *pool, Value *parent_value = nullptr,
                         const Name *name = nullptr) noexcept;
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
         return DerivedValueTag::BASIC_BLOCK;
     }
-
-    void set_parent_value(Value *parent_value) noexcept;
     [[nodiscard]] Value *parent_value() noexcept { return _parent_value; }
     [[nodiscard]] const Value *parent_value() const noexcept { return _parent_value; }
     [[nodiscard]] auto &instructions() noexcept { return _instructions; }

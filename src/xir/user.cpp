@@ -1,35 +1,13 @@
 #include <luisa/core/logging.h>
+#include <luisa/xir/basic_block.h>
 #include <luisa/xir/user.h>
 
 namespace luisa::compute::xir {
 
-void User::_remove_operand_uses() noexcept {
-    for (auto o : _operands) {
-        if (o != nullptr) {
-            o->remove_self();
-        }
-    }
-}
-
-void User::_add_operand_uses() noexcept {
-    for (auto o : _operands) {
-        if (o != nullptr) {
-            LUISA_DEBUG_ASSERT(o->user() == this, "Use::user() should be the same as this.");
-            if (!o->is_linked() && o->value() != nullptr) {
-                o->add_to_list(o->value()->use_list());
-            }
-        }
-    }
-}
-
 void User::set_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index < _operands.size(), "Index out of range.");
-    if (auto old = _operands[index]) {
-        old->set_value(value);
-    } else {
-        auto use = pool()->create<Use>(value, this);
-        _operands[index] = use;
-    }
+    LUISA_DEBUG_ASSERT(_operands[index] != nullptr && _operands[index]->user() == this, "Invalid operand.");
+    _operands[index]->set_value(value);
 }
 
 Use *User::operand_use(size_t index) noexcept {
@@ -50,36 +28,47 @@ const Value *User::operand(size_t index) const noexcept {
     return operand_use(index)->value();
 }
 
+void User::_replace_owned_basic_block(BasicBlock *old_block, BasicBlock *new_block) noexcept {
+    if (old_block) { old_block->_set_parent_value(nullptr); }
+    if (new_block) { new_block->_set_parent_value(this); }
+}
+
 void User::set_operand_count(size_t n) noexcept {
-    for (auto i = n; i < _operands.size(); i++) {
-        _operands[i]->remove_self();
+    if (n < _operands.size()) {// remove redundant operands
+        for (auto i = n; i < _operands.size(); i++) {
+            operand_use(i)->set_value(nullptr);
+        }
+        _operands.resize(n);
+    } else {// create new operands
+        _operands.reserve(n);
+        for (auto i = _operands.size(); i < n; i++) {
+            auto use = pool()->create<Use>(this, nullptr);
+            _operands.emplace_back(use);
+        }
     }
-    _operands.resize(n);
 }
 
 void User::set_operands(luisa::span<Value *const> operands) noexcept {
-    _remove_operand_uses();
-    _operands.clear();
-    for (auto o : operands) {
-        auto use = pool()->create<Use>(o, this);
-        _operands.emplace_back(use);
+    set_operand_count(operands.size());
+    for (auto i = 0u; i < operands.size(); i++) {
+        set_operand(i, operands[i]);
     }
 }
 
 void User::add_operand(Value *value) noexcept {
-    auto use = pool()->create<Use>(value, this);
+    auto use = pool()->create<Use>(this, value);
     _operands.emplace_back(use);
 }
 
 void User::insert_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index <= _operands.size(), "Index out of range.");
-    auto use = pool()->create<Use>(value, this);
+    auto use = pool()->create<Use>(this, value);
     _operands.insert(_operands.cbegin() + index, use);
 }
 
 void User::remove_operand(size_t index) noexcept {
     if (index < _operands.size()) {
-        _operands[index]->remove_self();
+        _operands[index]->set_value(nullptr);
         _operands.erase(_operands.cbegin() + index);
     }
 }

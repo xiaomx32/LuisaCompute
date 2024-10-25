@@ -14,7 +14,7 @@ class BasicBlock;
 //     // continue goes here
 //     { update_block }
 //   } else {
-//     // goto merge
+//     // goto merge_block
 //   }
 // }
 // // break goes here
@@ -38,6 +38,10 @@ public:
     }
 
     void set_cond(Value *cond) noexcept;
+    void set_prepare_block(BasicBlock *block) noexcept;
+    void set_body_block(BasicBlock *block) noexcept;
+    void set_update_block(BasicBlock *block) noexcept;
+    void set_merge_block(BasicBlock *block) noexcept;
 
     [[nodiscard]] BasicBlock *prepare_block() noexcept;
     [[nodiscard]] const BasicBlock *prepare_block() const noexcept;

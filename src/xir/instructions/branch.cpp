@@ -7,14 +7,11 @@ namespace luisa::compute::xir {
 
 BranchInst::BranchInst(Pool *pool, Value *cond, const Name *name) noexcept
     : Instruction{pool, nullptr, name} {
-    auto true_block = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto false_block = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto merge_block = static_cast<Value *>(pool->create<BasicBlock>(this));
+    auto true_block = static_cast<Value *>(nullptr);
+    auto false_block = static_cast<Value *>(nullptr);
+    auto merge_block = static_cast<Value *>(nullptr);
     auto operands = std::array{cond, true_block, false_block, merge_block};
     LUISA_DEBUG_ASSERT(operands[operand_index_cond] == cond, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_true_block] == true_block, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_false_block] == false_block, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_merge_block] == merge_block, "Unexpected operand index.");
     set_operands(operands);
 }
 
@@ -22,6 +19,21 @@ void BranchInst::set_cond(Value *cond) noexcept {
     LUISA_DEBUG_ASSERT(cond == nullptr || cond->type() == Type::of<bool>(),
                        "Branch condition must be a boolean value.");
     set_operand(operand_index_cond, cond);
+}
+
+void BranchInst::set_true_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(true_block(), block);
+    set_operand(operand_index_true_block, block);
+}
+
+void BranchInst::set_false_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(false_block(), block);
+    set_operand(operand_index_false_block, block);
+}
+
+void BranchInst::set_merge_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(merge_block(), block);
+    set_operand(operand_index_merge_block, block);
 }
 
 Value *BranchInst::cond() noexcept {

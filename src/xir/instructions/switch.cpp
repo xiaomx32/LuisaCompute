@@ -6,17 +6,30 @@ namespace luisa::compute::xir {
 
 SwitchInst::SwitchInst(Pool *pool, Value *value, const Name *name) noexcept
     : Instruction{pool, nullptr, name} {
-    auto merge_block = static_cast<Value *>(pool->create<BasicBlock>(this));
-    auto default_block = static_cast<Value *>(pool->create<BasicBlock>(this));
+    auto merge_block = static_cast<Value *>(nullptr);
+    auto default_block = static_cast<Value *>(nullptr);
     auto operands = std::array{value, merge_block, default_block};
     LUISA_DEBUG_ASSERT(operands[operand_index_value] == value, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_merge_block] == merge_block, "Unexpected operand index.");
-    LUISA_DEBUG_ASSERT(operands[operand_index_default_block] == default_block, "Unexpected operand index.");
     set_operands(operands);
 }
 
 void SwitchInst::set_value(Value *value) noexcept {
     set_operand(operand_index_value, value);
+}
+
+void SwitchInst::set_default_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(default_block(), block);
+    set_operand(operand_index_default_block, block);
+}
+
+void SwitchInst::set_merge_block(BasicBlock *block) noexcept {
+    _replace_owned_basic_block(merge_block(), block);
+    set_operand(operand_index_merge_block, block);
+}
+
+void SwitchInst::set_case(size_t index, case_value_type value, BasicBlock *block) noexcept {
+    set_case_value(index, value);
+    set_case_block(index, block);
 }
 
 void SwitchInst::set_case_count(size_t count) noexcept {
@@ -35,23 +48,25 @@ void SwitchInst::set_case_value(size_t index, case_value_type value) noexcept {
     _case_values[index] = value;
 }
 
-BasicBlock *SwitchInst::add_case(case_value_type value) noexcept {
-    _case_values.emplace_back(value);
-    auto block = pool()->create<BasicBlock>(this);
-    add_operand(block);
-    return block;
+void SwitchInst::set_case_block(size_t index, BasicBlock *block) noexcept {
+    _replace_owned_basic_block(case_block(index), block);
+    set_operand(operand_index_case_block_offset + index, block);
 }
 
-BasicBlock *SwitchInst::insert_case(size_t index, case_value_type value) noexcept {
+void SwitchInst::add_case(case_value_type value, BasicBlock *block) noexcept {
+    _case_values.emplace_back(value);
+    add_operand(block);
+}
+
+void SwitchInst::insert_case(size_t index, case_value_type value, BasicBlock *block) noexcept {
     LUISA_DEBUG_ASSERT(index <= case_count(), "Switch case index out of range.");
     _case_values.insert(_case_values.cbegin() + index, value);
-    auto block = pool()->create<BasicBlock>(this);
     insert_operand(operand_index_case_block_offset + index, block);
-    return block;
 }
 
 void SwitchInst::remove_case(size_t index) noexcept {
     if (index < case_count()) {
+        _replace_owned_basic_block(case_block(index), nullptr);
         _case_values.erase(_case_values.cbegin() + index);
         remove_operand(operand_index_case_block_offset + index);
     }

@@ -197,7 +197,9 @@
 #include <luisa/vstl/vector.h>
 #include <luisa/vstl/vstring.h>
 
+#ifdef LUISA_ENABLE_XIR
 #include <luisa/xir/basic_block.h>
+#include <luisa/xir/builder.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/function.h>
 #include <luisa/xir/ilist.h>
@@ -220,10 +222,13 @@
 #include <luisa/xir/instructions/unreachable.h>
 #include <luisa/xir/metadata.h>
 #include <luisa/xir/metadata/location.h>
+#include <luisa/xir/module.h>
 #include <luisa/xir/name.h>
 #include <luisa/xir/pool.h>
+#include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/use.h>
 #include <luisa/xir/user.h>
 #include <luisa/xir/value.h>
 #include <luisa/xir/variable.h>
+#endif
 

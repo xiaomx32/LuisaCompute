@@ -35,6 +35,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})
 target_link_libraries(luisa-compute-xir PUBLIC luisa-compute-ast)
 
+target_compile_definitions(luisa-compute-xir PUBLIC LUISA_ENABLE_XIR=1)
 target_compile_definitions(luisa-compute-xir PRIVATE LC_XIR_EXPORT_DLL=1)
 
 set_target_properties(luisa-compute-xir PROPERTIES

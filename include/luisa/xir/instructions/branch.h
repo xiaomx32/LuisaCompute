@@ -33,6 +33,9 @@ public:
     }
 
     void set_cond(Value *cond) noexcept;
+    void set_true_block(BasicBlock *block) noexcept;
+    void set_false_block(BasicBlock *block) noexcept;
+    void set_merge_block(BasicBlock *block) noexcept;
 
     [[nodiscard]] Value *cond() noexcept;
     [[nodiscard]] const Value *cond() const noexcept;

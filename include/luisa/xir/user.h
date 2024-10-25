@@ -4,14 +4,16 @@
 
 namespace luisa::compute::xir {
 
+class BasicBlock;
+
 class LC_XIR_API User : public Value {
 
 private:
     luisa::vector<Use *> _operands;
 
 protected:
-    void _add_operand_uses() noexcept;
-    void _remove_operand_uses() noexcept;
+    void _replace_owned_basic_block(BasicBlock *old_block,
+                                    BasicBlock *new_block) noexcept;
 
 public:
     using Value::Value;

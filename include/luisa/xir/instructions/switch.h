@@ -35,13 +35,17 @@ public:
     }
 
     void set_value(Value *value) noexcept;
+    void set_default_block(BasicBlock *block) noexcept;
+    void set_merge_block(BasicBlock *block) noexcept;
 
     void set_case_count(size_t count) noexcept;
     [[nodiscard]] size_t case_count() const noexcept;
 
+    void set_case(size_t index, case_value_type value, BasicBlock *block) noexcept;
     void set_case_value(size_t index, case_value_type value) noexcept;
-    BasicBlock *add_case(case_value_type value) noexcept;
-    BasicBlock *insert_case(size_t index, case_value_type value) noexcept;
+    void set_case_block(size_t index, BasicBlock *block) noexcept;
+    void add_case(case_value_type value, BasicBlock *block) noexcept;
+    void insert_case(size_t index, case_value_type value, BasicBlock *block) noexcept;
     void remove_case(size_t index) noexcept;
 
     [[nodiscard]] case_value_type case_value(size_t index) const noexcept;
@@ -54,8 +58,10 @@ public:
 
     [[nodiscard]] Value *value() noexcept;
     [[nodiscard]] const Value *value() const noexcept;
+
     [[nodiscard]] BasicBlock *merge_block() noexcept;
     [[nodiscard]] const BasicBlock *merge_block() const noexcept;
+
     [[nodiscard]] BasicBlock *default_block() noexcept;
     [[nodiscard]] const BasicBlock *default_block() const noexcept;
 };
