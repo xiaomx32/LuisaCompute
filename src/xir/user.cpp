@@ -7,7 +7,7 @@ namespace luisa::compute::xir {
 void User::set_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index < _operands.size(), "Index out of range.");
     LUISA_DEBUG_ASSERT(_operands[index] != nullptr && _operands[index]->user() == this, "Invalid operand.");
-    _operands[index]->set_value(value, _should_add_self_to_use_lists());
+    _operands[index]->set_value(value, _should_add_self_to_operand_use_lists());
 }
 
 Use *User::operand_use(size_t index) noexcept {
@@ -57,14 +57,14 @@ void User::set_operands(luisa::span<Value *const> operands) noexcept {
 
 void User::add_operand(Value *value) noexcept {
     auto use = pool()->create<Use>(this);
-    use->set_value(value, _should_add_self_to_use_lists());
+    use->set_value(value, _should_add_self_to_operand_use_lists());
     _operands.emplace_back(use);
 }
 
 void User::insert_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index <= _operands.size(), "Index out of range.");
     auto use = pool()->create<Use>(this);
-    use->set_value(value, _should_add_self_to_use_lists());
+    use->set_value(value, _should_add_self_to_operand_use_lists());
     _operands.insert(_operands.cbegin() + index, use);
 }
 

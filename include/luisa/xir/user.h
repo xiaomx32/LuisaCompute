@@ -15,7 +15,7 @@ protected:
     void _replace_owned_basic_block(BasicBlock *old_block,
                                     BasicBlock *new_block) noexcept;
 
-    [[nodiscard]] virtual bool _should_add_self_to_use_lists() const noexcept = 0;
+    [[nodiscard]] virtual bool _should_add_self_to_operand_use_lists() const noexcept = 0;
 
 public:
     using Value::Value;

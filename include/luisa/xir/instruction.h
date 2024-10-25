@@ -46,7 +46,7 @@ protected:
     void _set_parent_block(BasicBlock *block) noexcept;
     void _remove_self_from_operand_use_lists() noexcept;
     void _add_self_to_operand_use_lists() noexcept;
-    [[nodiscard]] bool _should_add_self_to_use_lists() const noexcept override;
+    [[nodiscard]] bool _should_add_self_to_operand_use_lists() const noexcept override;
 
 public:
     explicit Instruction(Pool *pool, const Type *type = nullptr,

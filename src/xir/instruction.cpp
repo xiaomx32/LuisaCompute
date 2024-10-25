@@ -9,7 +9,7 @@ void Instruction::_set_parent_block(BasicBlock *block) noexcept {
     _parent_block = block;
 }
 
-bool Instruction::_should_add_self_to_use_lists() const noexcept {
+bool Instruction::_should_add_self_to_operand_use_lists() const noexcept {
     return is_linked();
 }
 
