@@ -1384,7 +1384,7 @@ template<typename T>
     return reinterpret_cast<T *>(buffer + 1) + key_index;
 }
 
-[[nodiscard]] __device__ lc_float4x4 lc_instance_motion_matrix(LCAccel accel, lc_uint inst_index, lc_uint key_index) noexcept {
+[[nodiscard]] __device__ lc_float4x4 lc_accel_instance_motion_matrix(LCAccel accel, lc_uint inst_index, lc_uint key_index) noexcept {
     auto m = *lc_instance_motion_data<LCMatrixData>(accel, inst_index, key_index);
     return lc_make_float4x4(
         m.m[0], m.m[4], m.m[8], 0.0f,
@@ -1393,7 +1393,7 @@ template<typename T>
         m.m[3], m.m[7], m.m[11], 1.0f);
 }
 
-[[nodiscard]] __device__ LCMotionSRT lc_instance_motion_srt(LCAccel accel, lc_uint inst_index, lc_uint key_index) noexcept {
+[[nodiscard]] __device__ LCMotionSRT lc_accel_instance_motion_srt(LCAccel accel, lc_uint inst_index, lc_uint key_index) noexcept {
     auto srt = *lc_instance_motion_data<LCSRTData>(accel, inst_index, key_index);
     LCMotionSRT result;
     result.m0[0] = srt.pvx;
@@ -1412,7 +1412,7 @@ template<typename T>
     return result;
 }
 
-__device__ void lc_set_instance_motion_matrix(LCAccel accel, lc_uint inst_index, lc_uint key_index, lc_float4x4 m) noexcept {
+__device__ void lc_accel_set_instance_motion_matrix(LCAccel accel, lc_uint inst_index, lc_uint key_index, lc_float4x4 m) noexcept {
     LCMatrixData data;
     data.m[0] = m[0][0];
     data.m[1] = m[1][0];
@@ -1429,7 +1429,7 @@ __device__ void lc_set_instance_motion_matrix(LCAccel accel, lc_uint inst_index,
     *lc_instance_motion_data<LCMatrixData>(accel, inst_index, key_index) = data;
 }
 
-__device__ void lc_set_instance_motion_srt(LCAccel accel, lc_uint inst_index, lc_uint key_index, LCMotionSRT srt) noexcept {
+__device__ void lc_accel_set_instance_motion_srt(LCAccel accel, lc_uint inst_index, lc_uint key_index, LCMotionSRT srt) noexcept {
     LCSRTData data;
     data.sx = srt.m2[0];
     data.sy = srt.m2[1];
