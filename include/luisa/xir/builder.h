@@ -30,7 +30,8 @@ private:
 
     template<typename T, typename... Args>
     [[nodiscard]] auto _create_and_append_instruction(Args &&...args) noexcept {
-        auto inst = _pool_from_insertion_point()->create<T>(std::forward<Args>(args)...);
+        auto pool = _pool_from_insertion_point();
+        auto inst = pool->create<T>(std::forward<Args>(args)...);
         _insertion_point->insert_after_self(inst);
         _insertion_point = inst;
         return inst;
