@@ -2,6 +2,7 @@
 
 #include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
+#include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -71,6 +72,10 @@ public:
 
     PrintInst *print(luisa::string format, luisa::span<Value *const> values) noexcept;
     PrintInst *print(luisa::string format, std::initializer_list<Value *> values) noexcept;
+
+    AllocaInst *alloca_(const Type *type, AllocSpace space) noexcept;
+    AllocaInst *alloca_local(const Type *type) noexcept;
+    AllocaInst *alloca_shared(const Type *type) noexcept;
 
     GEPInst *gep(const Type *type, Value *base, luisa::span<Value *const> indices) noexcept;
     GEPInst *gep(const Type *type, Value *base, std::initializer_list<Value *> indices) noexcept;

@@ -259,6 +259,8 @@ private:
     T **_prev_next = nullptr;// pointer to the next pointer of the previous node
 
 public:
+    [[nodiscard]] auto next() noexcept -> T * { return _next; }
+    [[nodiscard]] auto next() const noexcept -> const T * { return _next; }
     [[nodiscard]] auto is_linked() const noexcept { return _prev_next != nullptr; }
 
     virtual void add_to_list(IntrusiveForwardList<T> &list) noexcept {

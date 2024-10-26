@@ -23,13 +23,14 @@ enum struct DerivedInstructionTag {
     PHI,        // basic block beginning: phi nodes
 
     // variable instructions
+    ALLOCA,
     LOAD,
     STORE,
     GEP,
 
     /* other instructions */
-    INTRINSIC,// intrinsic function calls
     CALL,     // user or external function calls
+    INTRINSIC,// intrinsic function calls
     CAST,     // type casts
     PRINT,    // kernel print
     AUTO_DIFF,// automatic differentiation
@@ -61,6 +62,7 @@ public:
     void remove_self() noexcept override;
     void insert_before_self(Instruction *node) noexcept override;
     void insert_after_self(Instruction *node) noexcept override;
+    void replace_self_with(Instruction *node) noexcept;
 
     [[nodiscard]] BasicBlock *parent_block() noexcept { return _parent_block; }
     [[nodiscard]] const BasicBlock *parent_block() const noexcept { return _parent_block; }

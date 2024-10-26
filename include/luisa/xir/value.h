@@ -16,7 +16,8 @@ enum struct DerivedValueTag {
     BASIC_BLOCK,
     INSTRUCTION,
     CONSTANT,
-    VARIABLE,
+    VALUE_ARGUMENT,
+    REFERENCE_ARGUMENT,
 };
 
 class LC_XIR_API Value : public PooledObject {
@@ -30,6 +31,8 @@ private:
 public:
     explicit Value(Pool *pool, const Type *type = nullptr, const Name *name = nullptr) noexcept;
     [[nodiscard]] virtual DerivedValueTag derived_value_tag() const noexcept = 0;
+
+    void replace_all_uses_with(Value *value) noexcept;
 
     virtual void set_type(const Type *type) noexcept;
     virtual void set_name(const Name *name) noexcept;

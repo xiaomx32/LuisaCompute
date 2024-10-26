@@ -198,12 +198,14 @@
 #include <luisa/vstl/vstring.h>
 
 #ifdef LUISA_ENABLE_XIR
+#include <luisa/xir/argument.h>
 #include <luisa/xir/basic_block.h>
 #include <luisa/xir/builder.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/function.h>
 #include <luisa/xir/ilist.h>
 #include <luisa/xir/instruction.h>
+#include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -226,9 +228,9 @@
 #include <luisa/xir/name.h>
 #include <luisa/xir/pool.h>
 #include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/xir2text.h>
 #include <luisa/xir/use.h>
 #include <luisa/xir/user.h>
 #include <luisa/xir/value.h>
-#include <luisa/xir/variable.h>
 #endif
 

@@ -1,7 +1,7 @@
 #pragma once
 
+#include <luisa/xir/argument.h>
 #include <luisa/xir/basic_block.h>
-#include <luisa/xir/variable.h>
 
 namespace luisa::compute::xir {
 
@@ -15,9 +15,7 @@ class LC_XIR_API Function : public IntrusiveForwardNode<Function, Value> {
 private:
     FunctionTag _function_tag;
     BasicBlock *_body;
-    ArgumentList _arguments;
-    SharedVariableList _shared_variables;
-    LocalVariableList _local_variables;
+    luisa::vector<Argument *> _arguments;
 
 public:
     explicit Function(Pool *pool, FunctionTag tag,
@@ -30,26 +28,21 @@ public:
     }
 
     void add_argument(Argument *argument) noexcept;
-    void add_shared_variable(SharedVariable *shared) noexcept;
-    void add_local_variable(LocalVariable *local) noexcept;
+    void insert_argument(size_t index, Argument *argument) noexcept;
+    void remove_argument(Argument *argument) noexcept;
+    void remove_argument(size_t index) noexcept;
+    void replace_argument(Argument *old_argument, Argument *new_argument) noexcept;
+    void replace_argument(size_t index, Argument *argument) noexcept;
 
     Argument *create_argument(const Type *type, bool by_ref, const Name *name = nullptr) noexcept;
-    Argument *create_value_argument(const Type *type, const Name *name = nullptr) noexcept;
-    Argument *create_reference_argument(const Type *type, const Name *name = nullptr) noexcept;
-    SharedVariable *create_shared_variable(const Type *type, const Name *name = nullptr) noexcept;
-    LocalVariable *create_local_variable(const Type *type, const Name *name = nullptr) noexcept;
+    ValueArgument *create_value_argument(const Type *type, const Name *name = nullptr) noexcept;
+    ReferenceArgument *create_reference_argument(const Type *type, const Name *name = nullptr) noexcept;
 
     [[nodiscard]] BasicBlock *body() noexcept { return _body; }
     [[nodiscard]] const BasicBlock *body() const noexcept { return _body; }
 
     [[nodiscard]] auto &arguments() noexcept { return _arguments; }
     [[nodiscard]] auto &arguments() const noexcept { return _arguments; }
-
-    [[nodiscard]] auto &shared_variables() noexcept { return _shared_variables; }
-    [[nodiscard]] auto &shared_variables() const noexcept { return _shared_variables; }
-
-    [[nodiscard]] auto &local_variables() noexcept { return _local_variables; }
-    [[nodiscard]] auto &local_variables() const noexcept { return _local_variables; }
 };
 
 class LC_XIR_API ExternalFunction : public IntrusiveForwardNode<ExternalFunction, Value> {

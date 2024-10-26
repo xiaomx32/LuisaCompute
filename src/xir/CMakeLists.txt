@@ -1,4 +1,6 @@
 set(LUISA_COMPUTE_XIR_SOURCES
+
+        argument.cpp
         basic_block.cpp
         builder.cpp
         constant.cpp
@@ -11,9 +13,9 @@ set(LUISA_COMPUTE_XIR_SOURCES
         use.cpp
         user.cpp
         value.cpp
-        variable.cpp
 
         # derived instructions
+        instructions/alloca.cpp
         instructions/branch.cpp
         instructions/break.cpp
         instructions/call.cpp
@@ -32,6 +34,9 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # derived metadata
         metadata/location.cpp
+
+        # translators
+        translators/xir2text.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})

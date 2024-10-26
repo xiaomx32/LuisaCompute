@@ -67,6 +67,18 @@ PrintInst *Builder::print(luisa::string format, std::initializer_list<Value *> v
     return _create_and_append_instruction<PrintInst>(std::move(format), luisa::span{values.begin(), values.end()});
 }
 
+AllocaInst *Builder::alloca_(const Type *type, AllocSpace space) noexcept {
+    return _create_and_append_instruction<AllocaInst>(type, space);
+}
+
+AllocaInst *Builder::alloca_local(const Type *type) noexcept {
+    return alloca_(type, AllocSpace::LOCAL);
+}
+
+AllocaInst *Builder::alloca_shared(const Type *type) noexcept {
+    return alloca_(type, AllocSpace::SHARED);
+}
+
 GEPInst *Builder::gep(const Type *type, Value *base, std::initializer_list<Value *> indices) noexcept {
     return _create_and_append_instruction<GEPInst>(type, base, luisa::span{indices.begin(), indices.end()});
 }

@@ -5,13 +5,13 @@ using namespace luisa::compute;
 
 int main() {
     auto module = xir::Module{};
-    auto kernel = module.create_kernel();
-    auto x = kernel->create_value_argument(Type::of<int>());
-    auto y = kernel->create_value_argument(Type::of<int>());
+    auto f = module.create_callable(Type::of<float>());
+    auto x = f->create_value_argument(Type::of<float>());
+    auto y = f->create_value_argument(Type::of<float>());
 
     auto b = xir::Builder{};
-    b.set_insertion_point(kernel->body());
-    auto z = b.call(Type::of<int>(), xir::IntrinsicOp::BINARY_ADD, {x, y});
-    b.return_(z);
-
+    b.set_insertion_point(f->body());
+    auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
+    auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
+    b.return_(mul);
 }

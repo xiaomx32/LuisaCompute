@@ -49,4 +49,10 @@ void Instruction::insert_after_self(Instruction *node) noexcept {
     node->_set_parent_block(_parent_block);
 }
 
+void Instruction::replace_self_with(Instruction *node) noexcept {
+    replace_all_uses_with(node);
+    insert_before_self(node);
+    remove_self();
+}
+
 }// namespace luisa::compute::xir
