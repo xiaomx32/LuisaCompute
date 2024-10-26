@@ -18,7 +18,7 @@ namespace luisa::compute::xir {
 class LC_XIR_API SwitchInst final : public Instruction {
 
 public:
-    using case_value_type = int64_t;
+    using case_value_type = int;
     static constexpr size_t operand_index_value = 0u;
     static constexpr size_t operand_index_merge_block = 1u;
     static constexpr size_t operand_index_default_block = 2u;
@@ -38,9 +38,9 @@ public:
     void set_default_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_default_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_case_block(Pool *pool, case_value_type value, const Name *name = nullptr) noexcept;
+    BasicBlock *create_default_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_case_block(case_value_type value, const Name *name = nullptr) noexcept;
 
     void set_case_count(size_t count) noexcept;
     [[nodiscard]] size_t case_count() const noexcept;

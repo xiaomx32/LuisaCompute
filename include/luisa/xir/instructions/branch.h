@@ -37,9 +37,9 @@ public:
     void set_false_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_true_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_false_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(Pool *pool, const Name *name = nullptr) noexcept;
+    BasicBlock *create_true_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_false_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
 
     [[nodiscard]] Value *cond() noexcept;
     [[nodiscard]] const Value *cond() const noexcept;

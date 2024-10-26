@@ -297,6 +297,9 @@ enum struct IntrinsicOp {
     SHADER_EXECUTION_REORDER,// (uint hint, uint hint_bits): void
 };
 
+[[nodiscard]] LC_XIR_API luisa::string to_string(IntrinsicOp op) noexcept;
+[[nodiscard]] LC_XIR_API IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept;
+
 class LC_XIR_API IntrinsicInst final : public Instruction {
 
 private:

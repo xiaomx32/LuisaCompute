@@ -42,26 +42,26 @@ void LoopInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
-BasicBlock *LoopInst::create_prepare_block(Pool *pool, const Name *name) noexcept {
-    auto block = pool->create<BasicBlock>(name);
+BasicBlock *LoopInst::create_prepare_block(const Name *name) noexcept {
+    auto block = pool()->create<BasicBlock>(name);
     set_prepare_block(block);
     return block;
 }
 
-BasicBlock *LoopInst::create_body_block(Pool *pool, const Name *name) noexcept {
-    auto block = pool->create<BasicBlock>(name);
+BasicBlock *LoopInst::create_body_block(const Name *name) noexcept {
+    auto block = pool()->create<BasicBlock>(name);
     set_body_block(block);
     return block;
 }
 
-BasicBlock *LoopInst::create_update_block(Pool *pool, const Name *name) noexcept {
-    auto block = pool->create<BasicBlock>(name);
+BasicBlock *LoopInst::create_update_block(const Name *name) noexcept {
+    auto block = pool()->create<BasicBlock>(name);
     set_update_block(block);
     return block;
 }
 
-BasicBlock *LoopInst::create_merge_block(Pool *pool, const Name *name) noexcept {
-    auto block = pool->create<BasicBlock>(name);
+BasicBlock *LoopInst::create_merge_block(const Name *name) noexcept {
+    auto block = pool()->create<BasicBlock>(name);
     set_merge_block(block);
     return block;
 }

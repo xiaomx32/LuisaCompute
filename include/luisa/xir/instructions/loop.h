@@ -42,10 +42,10 @@ public:
     void set_update_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_prepare_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_body_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_update_block(Pool *pool, const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(Pool *pool, const Name *name = nullptr) noexcept;
+    BasicBlock *create_prepare_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_body_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_update_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
 
     [[nodiscard]] BasicBlock *prepare_block() noexcept;
     [[nodiscard]] const BasicBlock *prepare_block() const noexcept;

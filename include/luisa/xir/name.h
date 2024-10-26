@@ -12,7 +12,7 @@ private:
 
 public:
     explicit Name(Pool *pool, luisa::string s = {}) noexcept;
-    [[nodiscard]] auto string() const noexcept { return _s; }
+    [[nodiscard]] const auto &string() const noexcept { return _s; }
     [[nodiscard]] const auto &operator*() const noexcept { return _s; }
     [[nodiscard]] const auto *operator->() const noexcept { return &_s; }
 };
