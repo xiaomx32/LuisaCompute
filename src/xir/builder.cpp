@@ -119,11 +119,6 @@ CommentInst *Builder::comment(luisa::string text) noexcept {
     return _create_and_append_instruction<CommentInst>(std::move(text));
 }
 
-Constant *Builder::const_(const Type *type, const void *data) const noexcept {
-    auto pool = _pool_from_insertion_point();
-    return pool->create<Constant>(type, data);
-}
-
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {
     _insertion_point = insertion_point;
 }

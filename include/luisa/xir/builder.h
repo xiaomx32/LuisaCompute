@@ -84,13 +84,6 @@ public:
     StoreInst *store(Value *variable, Value *value) noexcept;
 
     CommentInst *comment(luisa::string text) noexcept;
-
-    [[nodiscard]] Constant *const_(const Type *type, const void *data) const noexcept;
-
-    template<typename T>
-    [[nodiscard]] Constant *const_(const T &value) noexcept {
-        return const_(Type::of<T>(), &value);
-    }
 };
 
 }// namespace luisa::compute::xir

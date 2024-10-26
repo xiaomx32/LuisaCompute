@@ -5,6 +5,9 @@ using namespace luisa::compute;
 
 int main() {
     auto module = xir::Module{};
+    auto u32_zero = module.create_constant(0u);
+    auto f32_one = module.create_constant(1.f);
+
     auto b = xir::Builder{};
 
     auto f = module.create_callable(Type::of<float>());
@@ -16,9 +19,8 @@ int main() {
     auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
     auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
     auto coord = b.call(Type::of<uint3>(), xir::IntrinsicOp::DISPATCH_ID, {});
-    auto zero = b.const_(0u);
-    auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, zero});
-    auto cond = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, zero});
+    auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, u32_zero});
+    auto cond = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
     auto branch = b.if_(cond);
     auto true_block = branch->create_true_block();
     b.set_insertion_point(true_block);
@@ -33,11 +35,10 @@ int main() {
     b.set_insertion_point(k->body());
     auto va = b.alloca_local(Type::of<float>());
     auto vb = b.alloca_local(Type::of<float>());
-    auto one = b.const_(1.0f);
-    b.store(va, one);
-    b.store(vb, one);
+    b.store(va, f32_one);
+    b.store(vb, f32_one);
     auto result = b.call(Type::of<float>(), f, {va, vb});
-    b.call(nullptr, xir::IntrinsicOp::BUFFER_WRITE, {buffer, zero, result});
+    b.call(nullptr, xir::IntrinsicOp::BUFFER_WRITE, {buffer, u32_zero, result});
     b.return_void();
 
     LUISA_INFO("IR:\n{}", xir::translate_to_text(module));

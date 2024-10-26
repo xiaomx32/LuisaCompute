@@ -1,8 +1,11 @@
 #pragma once
 
+#include <luisa/ast/type_registry.h>
 #include <luisa/xir/function.h>
 
 namespace luisa::compute::xir {
+
+class Constant;
 
 class LC_XIR_API Module {
 
@@ -17,6 +20,13 @@ public:
 
     [[nodiscard]] Function *create_kernel(const Name *name = nullptr) noexcept;
     [[nodiscard]] Function *create_callable(const Type *ret_type, const Name *name = nullptr) noexcept;
+
+    [[nodiscard]] Constant *create_constant(const Type *type, const void *data, const Name *name = nullptr) noexcept;
+
+    template<typename T>
+    [[nodiscard]] Constant *create_constant(const T &value, const Name *name = nullptr) noexcept {
+        return create_constant(Type::of<T>(), &value, name);
+    }
 
     void set_name(const Name *name) noexcept;
     void add_function(Function *function) noexcept;
