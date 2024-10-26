@@ -6,7 +6,7 @@
 
 namespace luisa::compute::xir {
 
-Module::Module(const Name *name) noexcept : _name{name} {}
+Module::Module() noexcept = default;
 
 Function *Module::create_kernel(const Name *name) noexcept {
     auto f = pool()->create<Function>(FunctionTag::KERNEL, nullptr, name);

@@ -12,11 +12,11 @@ class LC_XIR_API Module {
 private:
     Pool _pool;
     FunctionList _functions;
-    const Name *_name;
+    const Name *_name = nullptr;
     MetadataList _metadata_list;
 
 public:
-    explicit Module(const Name *name = nullptr) noexcept;
+    Module() noexcept;
 
     [[nodiscard]] Function *create_kernel(const Name *name = nullptr) noexcept;
     [[nodiscard]] Function *create_callable(const Type *ret_type, const Name *name = nullptr) noexcept;
