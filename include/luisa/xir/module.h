@@ -20,7 +20,7 @@ public:
 
     [[nodiscard]] Function *create_kernel(const Name *name = nullptr) noexcept;
     [[nodiscard]] Function *create_callable(const Type *ret_type, const Name *name = nullptr) noexcept;
-
+    [[nodiscard]] const Name *create_name(luisa::string name) noexcept;
     [[nodiscard]] Constant *create_constant(const Type *type, const void *data, const Name *name = nullptr) noexcept;
 
     template<typename T>

@@ -24,6 +24,7 @@ int main() {
     auto branch = b.if_(cond);
     auto true_block = branch->create_true_block();
     b.set_insertion_point(true_block);
+    auto rq = b.alloca_local(Type::of<RayQueryAll>());
     b.comment("hello, world!");
     b.print("({} + {}) * {} = {}", {x, y, y, mul});
     auto merge = branch->create_merge_block();
@@ -31,6 +32,7 @@ int main() {
     b.return_(mul);
 
     auto k = module.create_kernel();
+    k->set_name(module.create_name("test_kernel"));
     auto buffer = k->create_value_argument(Type::of<Buffer<float>>());
     b.set_insertion_point(k->body());
     auto va = b.alloca_local(Type::of<float>());

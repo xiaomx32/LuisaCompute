@@ -1,4 +1,5 @@
 #include <luisa/core/logging.h>
+#include <luisa/xir/name.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/function.h>
 #include <luisa/xir/module.h>
@@ -21,6 +22,10 @@ Function *Module::create_callable(const Type *ret_type, const Name *name) noexce
 
 Constant *Module::create_constant(const Type *type, const void *data, const Name *name) noexcept {
     return pool()->create<Constant>(type, data, name);
+}
+
+const Name *Module::create_name(luisa::string name) noexcept {
+    return pool()->create<Name>(std::move(name));
 }
 
 void Module::set_name(const Name *name) noexcept {
