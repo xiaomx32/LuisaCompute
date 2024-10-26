@@ -1,3 +1,4 @@
+#include <luisa/core/logging.h>
 #include <luisa/xir/instruction.h>
 
 namespace luisa::compute::xir {
@@ -23,6 +24,7 @@ void Instruction::_remove_self_from_operand_use_lists() noexcept {
 
 void Instruction::_add_self_to_operand_use_lists() noexcept {
     for (auto use : operand_uses()) {
+        LUISA_DEBUG_ASSERT(!use->is_linked(), "Use already linked.");
         if (auto value = use->value()) {
             value->use_list().insert_front(use);
         }

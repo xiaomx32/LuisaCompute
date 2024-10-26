@@ -35,7 +35,7 @@ private:
         auto pool = _pool_from_insertion_point();
         auto inst = pool->create<T>(std::forward<Args>(args)...);
         _insertion_point->insert_after_self(inst);
-        _insertion_point = inst;
+        set_insertion_point(inst);
         return inst;
     }
 
@@ -58,21 +58,29 @@ public:
     ReturnInst *return_void() noexcept;
 
     CallInst *call(const Type *type, Value *callee, luisa::span<Value *const> arguments) noexcept;
+    CallInst *call(const Type *type, Value *callee, std::initializer_list<Value *> arguments) noexcept;
+
     IntrinsicInst *call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept;
+    IntrinsicInst *call(const Type *type, IntrinsicOp op, std::initializer_list<Value *> arguments) noexcept;
 
     CastInst *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
     PhiInst *phi(const Type *type, luisa::span<const PhiIncoming> incomings = {}) noexcept;
+    PhiInst *phi(const Type *type, std::initializer_list<PhiIncoming> incomings) noexcept;
+
     PrintInst *print(luisa::string format, luisa::span<Value *const> values) noexcept;
+    PrintInst *print(luisa::string format, std::initializer_list<Value *> values) noexcept;
 
     GEPInst *gep(const Type *type, Value *base, luisa::span<Value *const> indices) noexcept;
+    GEPInst *gep(const Type *type, Value *base, std::initializer_list<Value *> indices) noexcept;
+
     LoadInst *load(const Type *type, Value *variable) noexcept;
     StoreInst *store(Value *variable, Value *value) noexcept;
 
     CommentInst *comment(luisa::string text) noexcept;
 
-    [[nodiscard]] Constant *const_(const Type *type, const void *data) noexcept;
+    [[nodiscard]] Constant *const_(const Type *type, const void *data) const noexcept;
 
     template<typename T>
     [[nodiscard]] Constant *const_(const T &value) noexcept {

@@ -10,7 +10,7 @@ enum struct FunctionTag {
     CALLABLE,
 };
 
-class LC_XIR_API Function : public Value {
+class LC_XIR_API Function : public IntrusiveForwardNode<Function, Value> {
 
 private:
     FunctionTag _function_tag;
@@ -34,6 +34,8 @@ public:
     void add_local_variable(LocalVariable *local) noexcept;
 
     Argument *create_argument(const Type *type, bool by_ref, const Name *name = nullptr) noexcept;
+    Argument *create_value_argument(const Type *type, const Name *name = nullptr) noexcept;
+    Argument *create_reference_argument(const Type *type, const Name *name = nullptr) noexcept;
     SharedVariable *create_shared_variable(const Type *type, const Name *name = nullptr) noexcept;
     LocalVariable *create_local_variable(const Type *type, const Name *name = nullptr) noexcept;
 
@@ -50,10 +52,16 @@ public:
     [[nodiscard]] auto &local_variables() const noexcept { return _local_variables; }
 };
 
-class LC_XIR_API ExternalFunction : public Value {
+class LC_XIR_API ExternalFunction : public IntrusiveForwardNode<ExternalFunction, Value> {
 
-private:
-
+public:
+    using Super::Super;
+    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept override {
+        return DerivedValueTag::EXTERNAL_FUNCTION;
+    }
 };
+
+using FunctionList = IntrusiveForwardList<Function>;
+using ExternalFunctionList = IntrusiveForwardList<ExternalFunction>;
 
 }// namespace luisa::compute::xir

@@ -5,6 +5,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         function.cpp
         instruction.cpp
         metadata.cpp
+        module.cpp
         name.cpp
         pool.cpp
         use.cpp

@@ -3,7 +3,7 @@
 namespace luisa::compute::xir {
 
 Function::Function(Pool *pool, FunctionTag tag, const Type *type, const Name *name) noexcept
-    : Value{pool, type, name}, _body{pool->create<BasicBlock>()},
+    : Super{pool, type, name}, _body{pool->create<BasicBlock>()},
       _function_tag{tag}, _arguments{pool}, _shared_variables{pool}, _local_variables{pool} {
     _body->_set_parent_value(this);
     _arguments.head_sentinel()->set_parent_function(this);
@@ -30,6 +30,14 @@ Argument *Function::create_argument(const Type *type, bool by_ref, const Name *n
     auto argument = pool()->create<Argument>(by_ref, this, type, name);
     add_argument(argument);
     return argument;
+}
+
+Argument *Function::create_value_argument(const Type *type, const Name *name) noexcept {
+    return create_argument(type, false, name);
+}
+
+Argument *Function::create_reference_argument(const Type *type, const Name *name) noexcept {
+    return create_argument(type, true, name);
 }
 
 SharedVariable *Function::create_shared_variable(const Type *type, const Name *name) noexcept {

@@ -51,6 +51,26 @@ CallInst *Builder::call(const Type *type, Value *callee, luisa::span<Value *cons
     return _create_and_append_instruction<CallInst>(type, callee, arguments);
 }
 
+CallInst *Builder::call(const Type *type, Value *callee, std::initializer_list<Value *> arguments) noexcept {
+    return _create_and_append_instruction<CallInst>(type, callee, luisa::span{arguments.begin(), arguments.end()});
+}
+
+IntrinsicInst *Builder::call(const Type *type, IntrinsicOp op, std::initializer_list<Value *> arguments) noexcept {
+    return _create_and_append_instruction<IntrinsicInst>(type, op, luisa::span{arguments.begin(), arguments.end()});
+}
+
+PhiInst *Builder::phi(const Type *type, std::initializer_list<PhiIncoming> incomings) noexcept {
+    return _create_and_append_instruction<PhiInst>(type, luisa::span{incomings.begin(), incomings.end()});
+}
+
+PrintInst *Builder::print(luisa::string format, std::initializer_list<Value *> values) noexcept {
+    return _create_and_append_instruction<PrintInst>(std::move(format), luisa::span{values.begin(), values.end()});
+}
+
+GEPInst *Builder::gep(const Type *type, Value *base, std::initializer_list<Value *> indices) noexcept {
+    return _create_and_append_instruction<GEPInst>(type, base, luisa::span{indices.begin(), indices.end()});
+}
+
 IntrinsicInst *Builder::call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept {
     return _create_and_append_instruction<IntrinsicInst>(type, op, arguments);
 }
@@ -87,7 +107,7 @@ CommentInst *Builder::comment(luisa::string text) noexcept {
     return _create_and_append_instruction<CommentInst>(std::move(text));
 }
 
-Constant *Builder::const_(const Type *type, const void *data) noexcept {
+Constant *Builder::const_(const Type *type, const void *data) const noexcept {
     auto pool = _pool_from_insertion_point();
     return pool->create<Constant>(type, data);
 }
