@@ -14,6 +14,7 @@ private:
 
     [[nodiscard]] bool _is_small() const noexcept;
     [[noreturn]] void _error_cannot_change_type() const noexcept;
+    void _check_reinterpret_cast_type_size(size_t size) const noexcept;
 
 public:
     explicit Constant(Pool *pool, const Type *type,
@@ -35,7 +36,7 @@ public:
 
     template<typename T>
     [[nodiscard]] T &as() noexcept {
-        assert(type()->size() == sizeof(T) && "Type size mismatch.");
+        _check_reinterpret_cast_type_size(sizeof(T));
         return *reinterpret_cast<T *>(data());
     }
 

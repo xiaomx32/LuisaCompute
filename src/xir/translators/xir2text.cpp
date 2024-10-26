@@ -15,8 +15,10 @@
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/instructions/load.h>
 #include <luisa/xir/instructions/loop.h>
+#include <luisa/xir/instructions/outline.h>
 #include <luisa/xir/instructions/phi.h>
 #include <luisa/xir/instructions/print.h>
+#include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
@@ -118,7 +120,7 @@ private:
     }
 
     void _emit_indent(int indent) noexcept {
-        for (int i = 0; i < indent; i++) { _main << "  "; }
+        for (int i = 0; i < indent; i++) { _main << "    "; }
     }
 
     void _emit_string_escaped(luisa::string_view s) noexcept {
@@ -188,6 +190,22 @@ private:
         _emit_basic_block(inst->body_block(), indent);
         _main << ", update ";
         _emit_basic_block(inst->update_block(), indent);
+        _main << ", merge ";
+        _emit_basic_block(inst->merge_block(), indent);
+    }
+
+    void _emit_outline_inst(const OutlineInst *inst, int indent) noexcept {
+        _main << "outline body ";
+        _emit_basic_block(inst->body_block(), indent);
+        _main << ", merge ";
+        _emit_basic_block(inst->merge_block(), indent);
+    }
+
+    void _emit_ray_query_inst(const RayQueryInst *inst, int indent) noexcept {
+        _main << "ray_query " << _value_ident(inst->query_object()) << ", on_surface_candidate ";
+        _emit_basic_block(inst->on_surface_candidate_block(), indent);
+        _main << ", on_procedural_candidate ";
+        _emit_basic_block(inst->on_procedural_candidate_block(), indent);
         _main << ", merge ";
         _emit_basic_block(inst->merge_block(), indent);
     }
@@ -319,7 +337,12 @@ private:
             case DerivedInstructionTag::PRINT:
                 _emit_print_inst(static_cast<const PrintInst *>(inst));
                 break;
-            case DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
+            case DerivedInstructionTag::OUTLINE:
+                _emit_outline_inst(static_cast<const OutlineInst *>(inst), indent);
+                break;
+            case DerivedInstructionTag::AUTO_DIFF:
+                _emit_ray_query_inst(static_cast<const RayQueryInst *>(inst), indent);
+                break;
             case DerivedInstructionTag::RAY_QUERY: LUISA_NOT_IMPLEMENTED();
         }
         _main << ";\n";
@@ -340,22 +363,23 @@ private:
 
     void _emit_function(const Function *f) noexcept {
         switch (f->function_tag()) {
-            case FunctionTag::KERNEL: _main << "kernel "; break;
-            case FunctionTag::CALLABLE: _main << "callable "; break;
+            case FunctionTag::KERNEL: _main << "kernel " << _value_ident(f); break;
+            case FunctionTag::CALLABLE: _main << "callable " << _value_ident(f) << ": " << _type_ident(f->type()); break;
         }
-        _main << _value_ident(f) << ": " << _type_ident(f->type()) << " (";
+        _main << " = (";
         // TODO: metadata
         if (!f->arguments().empty()) { _main << "\n"; }
         for (auto arg : f->arguments()) {
-            _main << "  " << _value_ident(arg) << ": ";
+            _emit_indent(1);
+            _main << _value_ident(arg) << ": ";
             if (arg->derived_value_tag() == DerivedValueTag::REFERENCE_ARGUMENT) {
                 _main << "&";
             }
             _main << _type_ident(arg->type()) << ";\n";
         }
-        _main << ") ";
+        _main << "), body ";
         _emit_basic_block(f->body(), 0);
-        _main << "\n\n";
+        _main << ";\n\n";
     }
 
     void _emit_module(const Module *module) noexcept {

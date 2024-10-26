@@ -26,8 +26,10 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/intrinsic.cpp
         instructions/load.cpp
         instructions/loop.cpp
+        instructions/outline.cpp
         instructions/phi.cpp
         instructions/print.cpp
+        instructions/ray_query.cpp
         instructions/return.cpp
         instructions/store.cpp
         instructions/switch.cpp

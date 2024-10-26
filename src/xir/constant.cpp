@@ -43,4 +43,8 @@ const void *Constant::data() const noexcept {
     return const_cast<Constant *>(this)->data();
 }
 
+void Constant::_check_reinterpret_cast_type_size(size_t size) const noexcept {
+    LUISA_ASSERT(type()->size() == size, "Type size mismatch.");
+}
+
 }// namespace luisa::compute::xir

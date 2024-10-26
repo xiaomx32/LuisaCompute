@@ -119,6 +119,14 @@ CommentInst *Builder::comment(luisa::string text) noexcept {
     return _create_and_append_instruction<CommentInst>(std::move(text));
 }
 
+OutlineInst *Builder::outline() noexcept {
+    return _create_and_append_instruction<OutlineInst>();
+}
+
+RayQueryInst *Builder::ray_query(Value *query_object) noexcept {
+    return _create_and_append_instruction<RayQueryInst>(query_object);
+}
+
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {
     _insertion_point = insertion_point;
 }

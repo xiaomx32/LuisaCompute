@@ -20,7 +20,12 @@ int main() {
     auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
     auto coord = b.call(Type::of<uint3>(), xir::IntrinsicOp::DISPATCH_ID, {});
     auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, u32_zero});
+    auto outline = b.outline();
+    auto outline_body = outline->create_body_block();
+    b.set_insertion_point(outline_body);
     auto cond = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
+    auto outline_merge = outline->create_merge_block();
+    b.set_insertion_point(outline_merge);
     auto branch = b.if_(cond);
     auto true_block = branch->create_true_block();
     b.set_insertion_point(true_block);
@@ -42,6 +47,8 @@ int main() {
     auto result = b.call(Type::of<float>(), f, {va, vb});
     b.call(nullptr, xir::IntrinsicOp::BUFFER_WRITE, {buffer, u32_zero, result});
     b.return_void();
+
+    auto dummy = module.create_callable(nullptr);
 
     LUISA_INFO("IR:\n{}", xir::translate_to_text(module));
 }

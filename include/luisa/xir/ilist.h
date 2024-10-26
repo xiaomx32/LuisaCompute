@@ -41,7 +41,9 @@ private:
     public:
         [[nodiscard]] auto &operator*() const noexcept { return *_current; }
         [[nodiscard]] auto operator->() const noexcept { return _current; }
-        [[nodiscard]] auto operator==(luisa::default_sentinel_t) const noexcept { return _current->is_sentinel(); }
+        [[nodiscard]] auto operator==(luisa::default_sentinel_t) const noexcept -> bool {
+            return _current->is_sentinel();
+        }
         IteratorBase &operator++() noexcept {
             Advance::advance(_current);
             return *this;
@@ -215,7 +217,9 @@ private:
     public:
         [[nodiscard]] auto &operator*() const noexcept { return *_current; }
         [[nodiscard]] auto operator->() const noexcept { return _current; }
-        [[nodiscard]] auto operator==(luisa::default_sentinel_t) const noexcept { return _current == nullptr; }
+        [[nodiscard]] auto operator==(luisa::default_sentinel_t) const noexcept -> bool {
+            return _current == nullptr;
+        }
         IteratorBase &operator++() noexcept {
             _current = _current->next();
             return *this;

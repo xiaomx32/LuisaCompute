@@ -33,6 +33,8 @@ enum struct DerivedInstructionTag {
     INTRINSIC,// intrinsic function calls
     CAST,     // type casts
     PRINT,    // kernel print
+
+    OUTLINE,
     AUTO_DIFF,// automatic differentiation
     RAY_QUERY,// ray queries
 };

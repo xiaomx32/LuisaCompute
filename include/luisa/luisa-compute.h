@@ -216,8 +216,10 @@
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/instructions/load.h>
 #include <luisa/xir/instructions/loop.h>
+#include <luisa/xir/instructions/outline.h>
 #include <luisa/xir/instructions/phi.h>
 #include <luisa/xir/instructions/print.h>
+#include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>

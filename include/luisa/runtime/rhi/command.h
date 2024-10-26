@@ -184,7 +184,8 @@ public:
                         const void *data,
                         luisa::move_only_function<void(void *)> &&upload_callback) noexcept
         : Command{Command::Tag::EBufferUploadCommand},
-          _handle{handle}, _offset{offset_bytes}, _size{size_bytes}, _data{data}, _upload_callback{std::move(upload_callback)} {}
+          _handle{handle}, _offset{offset_bytes}, _size{size_bytes}, _data{data},
+          _upload_callback{std::move(upload_callback)} {}
     [[nodiscard]] auto handle() const noexcept { return _handle; }
     [[nodiscard]] auto offset() const noexcept { return _offset; }
     [[nodiscard]] auto size() const noexcept { return _size; }
