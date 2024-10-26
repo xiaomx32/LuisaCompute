@@ -12,16 +12,14 @@ if is_plat("windows") then
     add_defines("UNICODE", "_CRT_SECURE_NO_WARNINGS")
 end
 on_load(function(target)
-    if get_config("cuda_backend") then
-        local cuda_path = os.getenv("CUDA_PATH")
-        if cuda_path then
-            target:add("includedirs", path.join(cuda_path, "include/"))
-            target:add("linkdirs", path.join(cuda_path, "lib/x64/"))
-            target:add("links", "nvrtc_static", "nvrtc-builtins_static", "cudart_static", "cuda")
-            target:add("defines", "LCDX_ENABLE_CUDA")
-            if is_plat("windows") then
-                target:add("syslinks", "Cfgmgr32", "Advapi32")
-            end
+    local cuda_path = os.getenv("CUDA_PATH")
+    if cuda_path then
+        target:add("includedirs", path.join(cuda_path, "include/"))
+        target:add("linkdirs", path.join(cuda_path, "lib/x64/"))
+        target:add("links", "nvrtc_static", "cudart_static", "cuda")
+        target:add("defines", "LCDX_ENABLE_CUDA")
+        if is_plat("windows") then
+            target:add("syslinks", "Cfgmgr32", "Advapi32")
         end
     end
 end)
