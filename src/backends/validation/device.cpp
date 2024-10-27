@@ -16,6 +16,7 @@
 #include "raster_ext_impl.h"
 #include "dstorage_ext_impl.h"
 #include "pinned_mem_impl.h"
+#include "native_res_ext_impl.h"
 #include <luisa/core/logging.h>
 #include <luisa/runtime/rhi/command.h>
 #include <luisa/backends/ext/registry.h>
@@ -31,6 +32,7 @@ Device::Device(Context &&ctx, luisa::shared_ptr<DeviceInterface> &&native) noexc
     auto raster_ext = static_cast<RasterExt *>(_native->extension(RasterExt::name));
     auto dstorage_ext = static_cast<DStorageExt *>(_native->extension(DStorageExt::name));
     auto pinned_ext = static_cast<PinnedMemoryExt *>(_native->extension(PinnedMemoryExt::name));
+    auto native_res_ext = static_cast<NativeResourceExt *>(_native->extension(NativeResourceExt::name));
     if (raster_ext) {
         auto raster_impl = new RasterExtImpl(raster_ext);
         exts.try_emplace(
@@ -59,6 +61,16 @@ Device::Device(Context &&ctx, luisa::shared_ptr<DeviceInterface> &&native) noexc
                 pinned_ext_impl,
                 detail::ext_deleter<DeviceExtension>{[](DeviceExtension *ptr) {
                     delete static_cast<PinnedMemoryExtImpl *>(ptr);
+                }}});
+    }
+    if (native_res_ext) {
+        auto native_res_ext_impl = new NativeResourceExtImpl(this, native_res_ext);
+        exts.try_emplace(
+            NativeResourceExt::name,
+            ExtPtr{
+                native_res_ext_impl,
+                detail::ext_deleter<DeviceExtension>{[](DeviceExtension *ptr) {
+                    delete static_cast<NativeResourceExtImpl *>(ptr);
                 }}});
     }
 }
