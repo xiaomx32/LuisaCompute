@@ -4,7 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API Constant : public Value {
+class LC_XIR_API Constant : public DerivedValue<DerivedValueTag::CONSTANT> {
 
 private:
     union {
@@ -20,10 +20,6 @@ public:
     explicit Constant(Pool *pool, const Type *type,
                       const void *data = nullptr) noexcept;
     ~Constant() noexcept override;
-
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
-        return DerivedValueTag::CONSTANT;
-    }
 
     [[noreturn]] void set_type(const Type *type) noexcept override {
         _error_cannot_change_type();

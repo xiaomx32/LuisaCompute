@@ -9,7 +9,7 @@ enum struct AllocSpace {
     SHARED,
 };
 
-class LC_XIR_API AllocaInst final : public Instruction {
+class LC_XIR_API AllocaInst final : public DerivedInstruction<DerivedInstructionTag::ALLOCA> {
 
 private:
     AllocSpace _space;
@@ -17,10 +17,6 @@ private:
 public:
     explicit AllocaInst(Pool *pool, const Type *type = nullptr,
                         AllocSpace space = AllocSpace::LOCAL) noexcept;
-
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::ALLOCA;
-    }
     void set_space(AllocSpace space) noexcept;
     [[nodiscard]] auto space() const noexcept { return _space; }
 };

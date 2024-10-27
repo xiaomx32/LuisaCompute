@@ -300,7 +300,7 @@ enum struct IntrinsicOp {
 [[nodiscard]] LC_XIR_API luisa::string to_string(IntrinsicOp op) noexcept;
 [[nodiscard]] LC_XIR_API IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept;
 
-class LC_XIR_API IntrinsicInst final : public Instruction {
+class LC_XIR_API IntrinsicInst final : public DerivedInstruction<DerivedInstructionTag::INTRINSIC> {
 
 private:
     IntrinsicOp _op;
@@ -309,10 +309,6 @@ public:
     explicit IntrinsicInst(Pool *pool, const Type *type = nullptr,
                            IntrinsicOp op = IntrinsicOp::NOP,
                            luisa::span<Value *const> operands = {}) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::INTRINSIC;
-    }
-
     [[nodiscard]] auto op() const noexcept { return _op; }
     void set_op(IntrinsicOp op) noexcept { _op = op; }
 };

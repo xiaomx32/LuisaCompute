@@ -4,13 +4,11 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API LoadInst final : public Instruction {
+class LC_XIR_API LoadInst final : public DerivedInstruction<DerivedInstructionTag::LOAD> {
 public:
     explicit LoadInst(Pool *pool, const Type *type = nullptr,
                       Value *variable = nullptr) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::LOAD;
-    }
+
     [[nodiscard]] Value *variable() noexcept;
     [[nodiscard]] const Value *variable() const noexcept;
 

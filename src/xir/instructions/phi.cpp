@@ -6,7 +6,7 @@ namespace luisa::compute::xir {
 
 PhiInst::PhiInst(Pool *pool, const Type *type,
                  luisa::span<const PhiIncoming> incomings) noexcept
-    : Instruction{pool, type} { set_incomings(incomings); }
+    : DerivedInstruction{pool, type} { set_incomings(incomings); }
 
 void PhiInst::set_incomings(luisa::span<const PhiIncoming> incomings) noexcept {
     set_incoming_count(incomings.size());

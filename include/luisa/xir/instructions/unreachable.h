@@ -5,12 +5,9 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API UnreachableInst final : public Instruction {
+class LC_XIR_API UnreachableInst final : public DerivedInstruction<DerivedInstructionTag::UNREACHABLE> {
 public:
-    using Instruction::Instruction;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::UNREACHABLE;
-    }
+    using DerivedInstruction::DerivedInstruction;
 };
 
 }// namespace luisa::compute::xir

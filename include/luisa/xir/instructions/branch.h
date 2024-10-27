@@ -16,7 +16,7 @@ class BasicBlock;
 // { merge_block }
 //
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API BranchInst final : public Instruction {
+class LC_XIR_API BranchInst final : public DerivedInstruction<DerivedInstructionTag::BRANCH> {
 
 public:
     static constexpr size_t operand_index_cond = 0u;
@@ -26,10 +26,6 @@ public:
 
 public:
     explicit BranchInst(Pool *pool, Value *cond = nullptr) noexcept;
-
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::BRANCH;
-    }
 
     void set_cond(Value *cond) noexcept;
     void set_true_block(BasicBlock *block) noexcept;

@@ -3,7 +3,7 @@
 namespace luisa::compute::xir {
 
 ReturnInst::ReturnInst(Pool *pool, Value *value) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     set_operands(std::array{value});
 }
 

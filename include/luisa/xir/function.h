@@ -10,7 +10,7 @@ enum struct FunctionTag {
     CALLABLE,
 };
 
-class LC_XIR_API Function : public IntrusiveForwardNode<Function, Value> {
+class LC_XIR_API Function : public IntrusiveForwardNode<Function, DerivedValue<DerivedValueTag::FUNCTION>> {
 
 private:
     FunctionTag _function_tag;
@@ -22,9 +22,6 @@ public:
                       const Type *type = nullptr) noexcept;
 
     [[nodiscard]] auto function_tag() const noexcept { return _function_tag; }
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
-        return DerivedValueTag::FUNCTION;
-    }
 
     void add_argument(Argument *argument) noexcept;
     void insert_argument(size_t index, Argument *argument) noexcept;

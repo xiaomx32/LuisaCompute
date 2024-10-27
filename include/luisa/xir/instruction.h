@@ -38,7 +38,7 @@ enum struct DerivedInstructionTag {
     RAY_QUERY,// ray queries
 };
 
-class LC_XIR_API Instruction : public IntrusiveNode<Instruction, User> {
+class LC_XIR_API Instruction : public IntrusiveNode<Instruction, DerivedValue<DerivedValueTag::INSTRUCTION, User>> {
 
 private:
     friend BasicBlock;
@@ -55,9 +55,6 @@ public:
     [[nodiscard]] virtual DerivedInstructionTag derived_instruction_tag() const noexcept {
         return DerivedInstructionTag::SENTINEL;
     }
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
-        return DerivedValueTag::INSTRUCTION;
-    }
 
     void remove_self() noexcept override;
     void insert_before_self(Instruction *node) noexcept override;
@@ -69,5 +66,19 @@ public:
 };
 
 using InstructionList = InlineIntrusiveList<Instruction>;
+
+template<DerivedInstructionTag tag, typename Base = Instruction>
+class DerivedInstruction : public Base {
+public:
+    using Base::Base;
+
+    [[nodiscard]] static constexpr DerivedInstructionTag
+    static_derived_instruction_tag() noexcept { return tag; }
+
+    [[nodiscard]] DerivedInstructionTag
+    derived_instruction_tag() const noexcept final {
+        return static_derived_instruction_tag();
+    }
+};
 
 }// namespace luisa::compute::xir

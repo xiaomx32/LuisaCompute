@@ -5,7 +5,7 @@ namespace luisa::compute::xir {
 
 CastInst::CastInst(Pool *pool, const Type *target_type,
                    CastOp op, Value *value) noexcept
-    : Instruction{pool, target_type}, _op{op} {
+    : DerivedInstruction{pool, target_type}, _op{op} {
     auto operands = std::array{value};
     set_operands(operands);
 }

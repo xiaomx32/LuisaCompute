@@ -5,7 +5,7 @@
 namespace luisa::compute::xir {
 
 SwitchInst::SwitchInst(Pool *pool, Value *value) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     auto merge_block = static_cast<Value *>(nullptr);
     auto default_block = static_cast<Value *>(nullptr);
     auto operands = std::array{value, merge_block, default_block};

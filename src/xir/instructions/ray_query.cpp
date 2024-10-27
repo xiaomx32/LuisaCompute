@@ -5,7 +5,7 @@
 namespace luisa::compute::xir {
 
 RayQueryInst::RayQueryInst(Pool *pool, Value *query_object) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     auto on_surface_candidate_block = static_cast<Value *>(nullptr);
     auto on_procedural_candidate_block = static_cast<Value *>(nullptr);
     auto merge_block = static_cast<Value *>(nullptr);

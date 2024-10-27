@@ -40,4 +40,18 @@ public:
     [[nodiscard]] auto &metadata_list() const noexcept { return _metadata_list; }
 };
 
+template<DerivedValueTag tag, typename Base = Value>
+class DerivedValue : public Base {
+public:
+    using Base::Base;
+
+    [[nodiscard]] static constexpr DerivedValueTag
+    static_derived_value_tag() noexcept { return tag; }
+
+    [[nodiscard]] DerivedValueTag
+    derived_value_tag() const noexcept final {
+        return static_derived_value_tag();
+    }
+};
+
 }// namespace luisa::compute::xir

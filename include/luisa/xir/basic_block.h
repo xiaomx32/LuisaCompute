@@ -8,7 +8,7 @@ class Function;
 class Instruction;
 class User;
 
-class LC_XIR_API BasicBlock : public Value {
+class LC_XIR_API BasicBlock : public DerivedValue<DerivedValueTag::BASIC_BLOCK> {
 
 private:
     Value *_parent_value = nullptr;
@@ -21,9 +21,6 @@ private:
 
 public:
     explicit BasicBlock(Pool *pool) noexcept;
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
-        return DerivedValueTag::BASIC_BLOCK;
-    }
     [[nodiscard]] Value *parent_value() noexcept { return _parent_value; }
     [[nodiscard]] const Value *parent_value() const noexcept { return _parent_value; }
     [[nodiscard]] auto &instructions() noexcept { return _instructions; }

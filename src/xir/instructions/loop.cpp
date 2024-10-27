@@ -6,7 +6,7 @@
 namespace luisa::compute::xir {
 
 LoopInst::LoopInst(Pool *pool) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     auto prepare = static_cast<Value *>(nullptr);
     auto cond = static_cast<Value *>(nullptr);
     auto body = static_cast<Value *>(nullptr);

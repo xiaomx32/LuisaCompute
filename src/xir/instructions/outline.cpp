@@ -4,7 +4,7 @@
 namespace luisa::compute::xir {
 
 OutlineInst::OutlineInst(Pool *pool) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     set_operand_count(2u);
 }
 

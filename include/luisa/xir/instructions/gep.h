@@ -5,7 +5,7 @@
 namespace luisa::compute::xir {
 
 // Get element pointer instruction.
-class LC_XIR_API GEPInst final : public Instruction {
+class LC_XIR_API GEPInst final : public DerivedInstruction<DerivedInstructionTag::GEP> {
 
 public:
     static constexpr size_t operand_index_base = 0u;
@@ -15,9 +15,6 @@ public:
     explicit GEPInst(Pool *pool, const Type *type = nullptr,
                      Value *base = nullptr,
                      luisa::span<Value *const> indices = {}) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::GEP;
-    }
     [[nodiscard]] auto base() noexcept { return operand(operand_index_base); }
     [[nodiscard]] auto base() const noexcept { return operand(operand_index_base); }
     [[nodiscard]] auto index(size_t i) noexcept { return operand(operand_index_index_offset + i); }

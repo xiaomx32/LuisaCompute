@@ -9,7 +9,7 @@ enum struct CastOp {
     BITWISE_CAST,
 };
 
-class LC_XIR_API CastInst final : public Instruction {
+class LC_XIR_API CastInst final : public DerivedInstruction<DerivedInstructionTag::CAST> {
 
 private:
     CastOp _op;
@@ -18,10 +18,6 @@ public:
     explicit CastInst(Pool *pool, const Type *target_type = nullptr,
                       CastOp op = CastOp::STATIC_CAST,
                       Value *value = nullptr) noexcept;
-
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::CAST;
-    }
 
     [[nodiscard]] auto op() const noexcept { return _op; }
     [[nodiscard]] Value *value() noexcept;

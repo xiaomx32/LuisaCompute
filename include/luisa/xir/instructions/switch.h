@@ -15,7 +15,7 @@ namespace luisa::compute::xir {
 // { merge_block }
 //
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API SwitchInst final : public Instruction {
+class LC_XIR_API SwitchInst final : public DerivedInstruction<DerivedInstructionTag::SWITCH> {
 
 public:
     using case_value_type = int;
@@ -29,9 +29,6 @@ private:
 
 public:
     explicit SwitchInst(Pool *pool, Value *value = nullptr) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::SWITCH;
-    }
 
     void set_value(Value *value) noexcept;
     void set_default_block(BasicBlock *block) noexcept;

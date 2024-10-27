@@ -21,7 +21,7 @@ class BasicBlock;
 // { merge_block }
 //
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API LoopInst final : public Instruction {
+class LC_XIR_API LoopInst final : public DerivedInstruction<DerivedInstructionTag::LOOP> {
 
 public:
     static constexpr size_t operand_index_prepare_block = 0u;
@@ -32,9 +32,6 @@ public:
 
 public:
     explicit LoopInst(Pool *pool) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::LOOP;
-    }
 
     void set_cond(Value *cond) noexcept;
     void set_prepare_block(BasicBlock *block) noexcept;

@@ -5,16 +5,13 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API ReturnInst final : public Instruction {
+class LC_XIR_API ReturnInst final : public DerivedInstruction<DerivedInstructionTag::RETURN> {
 
 public:
     static constexpr size_t operand_index_return_value = 0u;
 
 public:
     explicit ReturnInst(Pool *pool, Value *value = nullptr) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::RETURN;
-    }
 
     // nullptr for void return
     void set_return_value(Value *value) noexcept;

@@ -17,11 +17,11 @@ public:
     [[nodiscard]] virtual DerivedMetadataTag derived_metadata_tag() const noexcept = 0;
 };
 
-template<DerivedMetadataTag tag>
-class LC_XIR_API DerivedMetadata : public Metadata {
+template<DerivedMetadataTag tag, typename Base = Metadata>
+class LC_XIR_API DerivedMetadata : public Base {
 
 public:
-    using Metadata::Metadata;
+    using Base::Base;
 
     [[nodiscard]] static constexpr auto
     static_derived_metadata_tag() noexcept {

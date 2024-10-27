@@ -4,7 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API RayQueryInst final : public Instruction {
+class LC_XIR_API RayQueryInst final : public DerivedInstruction<DerivedInstructionTag::RAY_QUERY> {
 
 public:
     static constexpr size_t operand_index_query_object = 0u;
@@ -14,9 +14,7 @@ public:
 
 public:
     explicit RayQueryInst(Pool *pool, Value *query_object = nullptr) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::RAY_QUERY;
-    }
+
     void set_query_object(Value *query_object) noexcept;
     void set_on_surface_candidate_block(BasicBlock *block) noexcept;
     void set_on_procedural_candidate_block(BasicBlock *block) noexcept;

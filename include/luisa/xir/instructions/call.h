@@ -4,7 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API CallInst final : public Instruction {
+class LC_XIR_API CallInst final : public DerivedInstruction<DerivedInstructionTag::CALL> {
 
 public:
     static constexpr size_t operand_index_callee = 0u;
@@ -14,9 +14,6 @@ public:
     explicit CallInst(Pool *pool, const Type *type = nullptr,
                       Value *callee = nullptr,
                       luisa::span<Value *const> arguments = {}) noexcept;
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::CALL;
-    }
     [[nodiscard]] auto callee() noexcept { return operand(operand_index_callee); }
     [[nodiscard]] auto callee() const noexcept { return operand(operand_index_callee); }
     [[nodiscard]] auto argument(size_t index) noexcept { return operand(operand_index_argument_offset + index); }

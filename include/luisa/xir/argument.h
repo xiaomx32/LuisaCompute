@@ -22,21 +22,8 @@ public:
     [[nodiscard]] const Function *parent_function() const noexcept { return _parent_function; }
 };
 
-class LC_XIR_API ValueArgument final : public Argument {
-public:
-    using Argument::Argument;
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept override {
-        return DerivedValueTag::VALUE_ARGUMENT;
-    }
-};
-
-class LC_XIR_API ReferenceArgument final : public Argument {
-public:
-    using Argument::Argument;
-    [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept override {
-        return DerivedValueTag::REFERENCE_ARGUMENT;
-    }
-};
+using ValueArgument = DerivedValue<DerivedValueTag::VALUE_ARGUMENT, Argument>;
+using ReferenceArgument = DerivedValue<DerivedValueTag::REFERENCE_ARGUMENT, Argument>;
 
 using ArgumentList = InlineIntrusiveList<Argument>;
 

@@ -3,7 +3,7 @@
 namespace luisa::compute::xir {
 
 BasicBlock::BasicBlock(Pool *pool) noexcept
-    : Value{pool, nullptr}, _instructions{pool} {
+    : DerivedValue{pool, nullptr}, _instructions{pool} {
     _instructions.head_sentinel()->_set_parent_block(this);
     _instructions.tail_sentinel()->_set_parent_block(this);
 }

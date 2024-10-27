@@ -3,6 +3,6 @@
 namespace luisa::compute::xir {
 
 BreakInst::BreakInst(Pool *pool) noexcept
-    : Instruction{pool, nullptr} {}
+    : DerivedInstruction{pool, nullptr} {}
 
 }// namespace luisa::compute::xir

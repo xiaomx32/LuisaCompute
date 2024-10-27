@@ -4,7 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API StoreInst final : public Instruction {
+class LC_XIR_API StoreInst final : public DerivedInstruction<DerivedInstructionTag::STORE> {
 
 public:
     static constexpr size_t operand_index_variable = 0u;
@@ -13,10 +13,6 @@ public:
 public:
     explicit StoreInst(Pool *pool, Value *variable = nullptr,
                        Value *value = nullptr) noexcept;
-
-    [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
-        return DerivedInstructionTag::STORE;
-    }
 
     [[nodiscard]] auto variable() noexcept { return operand(operand_index_variable); }
     [[nodiscard]] auto variable() const noexcept { return operand(operand_index_variable); }

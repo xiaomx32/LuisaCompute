@@ -6,7 +6,7 @@
 namespace luisa::compute::xir {
 
 BranchInst::BranchInst(Pool *pool, Value *cond) noexcept
-    : Instruction{pool, nullptr} {
+    : DerivedInstruction{pool, nullptr} {
     auto true_block = static_cast<Value *>(nullptr);
     auto false_block = static_cast<Value *>(nullptr);
     auto merge_block = static_cast<Value *>(nullptr);
