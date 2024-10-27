@@ -424,7 +424,6 @@ public:
             reinterpret_cast<Buffer const *>(cmd->handle()),
             cmd->offset(),
             cmd->size());
-        cmd->call_callback();
         bd->Upload(bf, cmd->data());
     }
 
@@ -629,7 +628,6 @@ public:
         auto bfView = bd->GetCB()->GetAlloc()->GetTempUploadBuffer(copyInfo.alignedBufferSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
         auto uploadBuffer = static_cast<UploadBuffer const *>(bfView.buffer);
         if (copyInfo.bufferSize == copyInfo.alignedBufferSize) {
-            cmd->call_callback();
             uploadBuffer->CopyData(
                 bfView.offset,
                 {reinterpret_cast<uint8_t const *>(cmd->data()),
@@ -637,7 +635,6 @@ public:
         } else {
             size_t bufferOffset = bfView.offset;
             size_t leftedSize = copyInfo.bufferSize;
-            cmd->call_callback();
             auto dataPtr = reinterpret_cast<uint8_t const *>(cmd->data());
             while (leftedSize > 0) {
                 uploadBuffer->CopyData(

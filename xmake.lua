@@ -32,6 +32,12 @@ set_values(true, false)
 set_default(true)
 set_showmenu(true)
 option_end()
+
+option("dx_cuda_interop")
+set_values(true, false)
+set_default(false)
+set_showmenu(true)
+option_end()
 -- enable Vulkan backend
 option("vk_backend")
 set_values(true, false)
