@@ -34,19 +34,52 @@ public:
     }
 };
 
-class MetadataList : public IntrusiveForwardList<Metadata> {
+using MetadataList = IntrusiveForwardList<Metadata>;
+
+namespace detail {
+[[nodiscard]] LC_XIR_API Metadata *metadata_find(DerivedMetadataTag tag, MetadataList &list) noexcept;
+[[nodiscard]] LC_XIR_API Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept;
+LC_XIR_API void metadata_set_or_create_name(Pool *pool, MetadataList &list, luisa::string_view name) noexcept;
+LC_XIR_API void metadata_set_or_create_location(Pool *pool, MetadataList &list, const luisa::filesystem::path &file, int line, int column) noexcept;
+LC_XIR_API void metadata_add_comment(Pool *pool, MetadataList &list, luisa::string_view comment) noexcept;
+}// namespace detail
+
+template<typename Parent>
+class MetadataMixin {
 
 private:
-    Pool *_pool;
+    MetadataList _metadata_list;
+
+private:
+    [[nodiscard]] Pool *_get_pool_from_parent() noexcept {
+        return static_cast<Parent *>(this)->pool();
+    }
+
+protected:
+    MetadataMixin() noexcept = default;
+    ~MetadataMixin() noexcept = default;
 
 public:
-    explicit MetadataList(Pool *pool) noexcept;
-    [[nodiscard]] Metadata *find(DerivedMetadataTag tag) noexcept;
-    [[nodiscard]] const Metadata *find(DerivedMetadataTag tag) const noexcept;
-    [[nodiscard]] Metadata *find_or_create(DerivedMetadataTag tag) noexcept;
-    void set_name(luisa::string_view name) noexcept;
-    void set_location(const luisa::filesystem::path &file, int line, int column) noexcept;
-    void add_comment(luisa::string_view comment) noexcept;
+    [[nodiscard]] auto &metadata_list() noexcept { return _metadata_list; }
+    [[nodiscard]] auto &metadata_list() const noexcept { return _metadata_list; }
+    [[nodiscard]] auto find_metadata(DerivedMetadataTag tag) noexcept -> Metadata * {
+        return detail::metadata_find(tag, _metadata_list);
+    }
+    [[nodiscard]] auto find_metadata(DerivedMetadataTag tag) const noexcept -> const Metadata * {
+        return detail::metadata_find(tag, const_cast<MetadataList &>(_metadata_list));
+    }
+    [[nodiscard]] auto find_or_create_metadata(DerivedMetadataTag tag) noexcept {
+        return detail::metadata_find_or_create(_get_pool_from_parent(), tag, _metadata_list);
+    }
+    void set_name(std::string_view name) noexcept {
+        detail::metadata_set_or_create_name(_get_pool_from_parent(), _metadata_list, name);
+    }
+    void set_location(const std::filesystem::path &file, int line, int column) noexcept {
+        detail::metadata_set_or_create_location(_get_pool_from_parent(), _metadata_list, file, line, column);
+    }
+    void add_comment(std::string_view comment) noexcept {
+        detail::metadata_add_comment(_get_pool_from_parent(), _metadata_list, comment);
+    }
 };
 
 }// namespace luisa::compute::xir

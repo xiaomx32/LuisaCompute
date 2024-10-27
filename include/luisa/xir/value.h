@@ -19,12 +19,11 @@ enum struct DerivedValueTag {
     REFERENCE_ARGUMENT,
 };
 
-class LC_XIR_API Value : public PooledObject {
+class LC_XIR_API Value : public PooledObject, public MetadataMixin<Value> {
 
 private:
     const Type *_type = nullptr;
     UseList _use_list;
-    MetadataList _metadata_list;
 
 public:
     explicit Value(Pool *pool, const Type *type = nullptr) noexcept;
@@ -36,8 +35,6 @@ public:
     [[nodiscard]] auto type() const noexcept { return _type; }
     [[nodiscard]] auto &use_list() noexcept { return _use_list; }
     [[nodiscard]] auto &use_list() const noexcept { return _use_list; }
-    [[nodiscard]] auto &metadata_list() noexcept { return _metadata_list; }
-    [[nodiscard]] auto &metadata_list() const noexcept { return _metadata_list; }
 };
 
 template<DerivedValueTag tag, typename Base = Value>

@@ -7,12 +7,11 @@ namespace luisa::compute::xir {
 
 class Constant;
 
-class LC_XIR_API Module {
+class LC_XIR_API Module : public MetadataMixin<Module> {
 
 private:
     Pool _pool;
     FunctionList _functions;
-    MetadataList _metadata_list;
 
 public:
     Module() noexcept;
@@ -32,8 +31,6 @@ public:
     [[nodiscard]] auto pool() const noexcept { return &_pool; }
     [[nodiscard]] auto &functions() noexcept { return _functions; }
     [[nodiscard]] auto &functions() const noexcept { return _functions; }
-    [[nodiscard]] auto &metadata_list() noexcept { return _metadata_list; }
-    [[nodiscard]] auto &metadata_list() const noexcept { return _metadata_list; }
 };
 
 }// namespace luisa::compute::xir
