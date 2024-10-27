@@ -15,10 +15,7 @@ Metadata *metadata_find(DerivedMetadataTag tag, MetadataList &list) noexcept {
     return nullptr;
 }
 
-Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept {
-    if (auto m = metadata_find(tag, list); m != nullptr) {
-        return m;
-    }
+Metadata *metadata_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept {
     switch (tag) {
 #define LUISA_XIR_MAKE_METADATA_CREATE_CASE(type)   \
     case type##MD::static_derived_metadata_tag(): { \
@@ -35,6 +32,11 @@ Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataLi
                               static_cast<uint32_t>(tag));
 }
 
+Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept {
+    if (auto m = metadata_find(tag, list)) { return m; }
+    return metadata_create(pool, tag, list);
+}
+
 void metadata_set_or_create_name(Pool *pool, MetadataList &list,
                                  luisa::string_view name) noexcept {
     auto m = static_cast<NameMD *>(metadata_find_or_create(pool, DerivedMetadataTag::NAME, list));
@@ -49,8 +51,8 @@ void metadata_set_or_create_location(Pool *pool, MetadataList &list,
 
 void metadata_add_comment(Pool *pool, MetadataList &list,
                           luisa::string_view comment) noexcept {
-    auto m = pool->create<CommentMD>(luisa::string{comment});
-    m->add_to_list(list);
+    auto m = static_cast<CommentMD *>(metadata_create(pool, DerivedMetadataTag::COMMENT, list));
+    m->set_comment(comment);
 }
 
 }// namespace luisa::compute::xir::detail

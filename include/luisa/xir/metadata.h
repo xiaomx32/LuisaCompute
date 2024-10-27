@@ -38,6 +38,7 @@ using MetadataList = IntrusiveForwardList<Metadata>;
 
 namespace detail {
 [[nodiscard]] LC_XIR_API Metadata *metadata_find(DerivedMetadataTag tag, MetadataList &list) noexcept;
+[[nodiscard]] LC_XIR_API Metadata *metadata_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept;
 [[nodiscard]] LC_XIR_API Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept;
 LC_XIR_API void metadata_set_or_create_name(Pool *pool, MetadataList &list, luisa::string_view name) noexcept;
 LC_XIR_API void metadata_set_or_create_location(Pool *pool, MetadataList &list, const luisa::filesystem::path &file, int line) noexcept;
@@ -68,6 +69,9 @@ public:
     [[nodiscard]] auto find_metadata(DerivedMetadataTag tag) const noexcept -> const Metadata * {
         return detail::metadata_find(tag, const_cast<MetadataList &>(_metadata_list));
     }
+    [[nodiscard]] auto create_metadata(DerivedMetadataTag tag) noexcept {
+        return detail::metadata_create(_get_pool_from_parent(), tag, _metadata_list);
+    }
     [[nodiscard]] auto find_or_create_metadata(DerivedMetadataTag tag) noexcept {
         return detail::metadata_find_or_create(_get_pool_from_parent(), tag, _metadata_list);
     }
@@ -78,6 +82,10 @@ public:
     template<typename T>
     [[nodiscard]] auto find_metadata() const noexcept {
         return static_cast<const T *>(find_metadata(T::static_derived_metadata_tag()));
+    }
+    template<typename T>
+    [[nodiscard]] auto create_metadata() noexcept {
+        return static_cast<T *>(create_metadata(T::static_derived_metadata_tag()));
     }
     template<typename T>
     [[nodiscard]] auto find_or_create_metadata() noexcept {

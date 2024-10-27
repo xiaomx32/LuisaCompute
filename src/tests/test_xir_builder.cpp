@@ -33,6 +33,7 @@ int main() {
     b.set_insertion_point(outline_body);
     auto switch_ = b.switch_(coord_x);
     switch_->add_comment("switch on x coordinate");
+    switch_->add_comment("if (x == 0) { goto case 0; } else { goto default; }");
     auto switch_case_0 = switch_->create_case_block(0);
     switch_case_0->add_comment("switch case 0");
     b.set_insertion_point(switch_case_0);
