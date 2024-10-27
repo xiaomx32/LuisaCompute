@@ -1406,9 +1406,12 @@ template<typename T>
     result.m2[0] = srt.sx;
     result.m2[1] = srt.sy;
     result.m2[2] = srt.sz;
-    result.m3[0] = srt.tx;
-    result.m3[1] = srt.ty;
-    result.m3[2] = srt.tz;
+    result.m3[0] = srt.a;
+    result.m3[1] = srt.b;
+    result.m3[2] = srt.c;
+    result.m4[0] = srt.tx;
+    result.m4[1] = srt.ty;
+    result.m4[2] = srt.tz;
     return result;
 }
 
@@ -1441,9 +1444,12 @@ __device__ void lc_accel_set_instance_motion_srt(LCAccel accel, lc_uint inst_ind
     data.qy = srt.m1[1];
     data.qz = srt.m1[2];
     data.qw = srt.m1[3];
-    data.tx = srt.m3[0];
-    data.ty = srt.m3[1];
-    data.tz = srt.m3[2];
+    data.a = srt.m3[0];
+    data.b = srt.m3[1];
+    data.c = srt.m3[2];
+    data.tx = srt.m4[0];
+    data.ty = srt.m4[1];
+    data.tz = srt.m4[2];
     *lc_instance_motion_data<LCSRTData>(accel, inst_index, key_index) = data;
 }
 
