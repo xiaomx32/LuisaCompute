@@ -46,11 +46,6 @@ public:
             _handle, _storage, _level, _size, data);
     }
 
-    [[nodiscard]] auto copy_from(const void *data, luisa::move_only_function<void(void *)> &&upload_callback) const noexcept {
-        return luisa::make_unique<TextureUploadCommand>(
-            _handle, _storage, _level, _size, data, uint3(0u), std::move(upload_callback));
-    }
-
     template<typename T>
     [[nodiscard]] auto copy_from(const Image<T> &src) const noexcept {
         return copy_from(src.view());
