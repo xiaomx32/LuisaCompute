@@ -20,9 +20,16 @@ Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataLi
         return m;
     }
     switch (tag) {
-        case DerivedMetadataTag::NAME: return pool->create<NameMD>();
-        case DerivedMetadataTag::LOCATION: return pool->create<LocationMD>();
-        case DerivedMetadataTag::COMMENT: return pool->create<CommentMD>();
+#define LUISA_XIR_MAKE_METADATA_CREATE_CASE(type)   \
+    case type##MD::static_derived_metadata_tag(): { \
+        auto m = pool->create<type##MD>();          \
+        m->add_to_list(list);                       \
+        return m;                                   \
+    }
+        LUISA_XIR_MAKE_METADATA_CREATE_CASE(Name)
+        LUISA_XIR_MAKE_METADATA_CREATE_CASE(Location)
+        LUISA_XIR_MAKE_METADATA_CREATE_CASE(Comment)
+#undef LUISA_XIR_MAKE_METADATA_CREATE_CASE
     }
     LUISA_ERROR_WITH_LOCATION("Unknown derived metadata tag 0x{:x}.",
                               static_cast<uint32_t>(tag));
@@ -35,12 +42,9 @@ void metadata_set_or_create_name(Pool *pool, MetadataList &list,
 }
 
 void metadata_set_or_create_location(Pool *pool, MetadataList &list,
-                                     const luisa::filesystem::path &file,
-                                     int line, int column) noexcept {
+                                     const luisa::filesystem::path &file, int line) noexcept {
     auto m = static_cast<LocationMD *>(metadata_find_or_create(pool, DerivedMetadataTag::LOCATION, list));
-    m->set_file(file);
-    m->set_line(line);
-    m->set_column(column);
+    m->set_location(file, line);
 }
 
 void metadata_add_comment(Pool *pool, MetadataList &list,

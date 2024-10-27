@@ -5,16 +5,23 @@ using namespace luisa::compute;
 
 int main() {
     auto module = xir::Module{};
+    module.add_comment("My very simple test module.");
+    module.set_name("TestModule");
     auto u32_zero = module.create_constant(0u);
     auto f32_one = module.create_constant(1.f);
     auto bool_false = module.create_constant(false);
+    bool_false->add_comment("bool constant false");
 
     auto b = xir::Builder{};
 
     auto f = module.create_callable(Type::of<float>());
+    f->set_name("callable_function");
+    f->set_location(__FILE__, __LINE__);
+    f->add_comment("This is a callable function.");
     auto x = f->create_value_argument(Type::of<float>());
     auto y = f->create_value_argument(Type::of<float>());
     auto ray = f->create_value_argument(Type::of<Ray>());
+    ray->add_comment("This is a ray...");
 
     b.set_insertion_point(f->body());
     auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
@@ -25,7 +32,9 @@ int main() {
     auto outline_body = outline->create_body_block();
     b.set_insertion_point(outline_body);
     auto switch_ = b.switch_(coord_x);
+    switch_->add_comment("switch on x coordinate");
     auto switch_case_0 = switch_->create_case_block(0);
+    switch_case_0->add_comment("switch case 0");
     b.set_insertion_point(switch_case_0);
     auto cond0 = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
     auto switch_default = switch_->create_default_block();

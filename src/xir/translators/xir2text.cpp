@@ -22,6 +22,9 @@
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/unreachable.h>
+#include <luisa/xir/metadata/comment.h>
+#include <luisa/xir/metadata/location.h>
+#include <luisa/xir/metadata/name.h>
 #include <luisa/xir/translators/xir2text.h>
 
 namespace luisa::compute::xir {
@@ -49,6 +52,10 @@ private:
         auto [iter, not_existed] = _value_uid_map.try_emplace(value, next_uid);
         if (not_existed && value->derived_value_tag() == DerivedValueTag::CONSTANT) {
             auto t = _type_ident(value->type());
+            if (!value->metadata_list().empty()) {
+                _emit_metadata_list(_prelude, value->metadata_list());
+                _prelude << "\n";
+            }
             _prelude << "const %" << iter->second << ": " << t << " = ";
             _emit_const(value->type(), static_cast<const Constant *>(value)->data());
             _prelude << ";\n\n";
@@ -121,27 +128,23 @@ private:
         for (int i = 0; i < indent; i++) { _main << "    "; }
     }
 
-    void _emit_string_escaped(luisa::string_view s) noexcept {
-        _main << "\"";
+    static void _emit_string_escaped(StringScratch &ss, luisa::string_view s) noexcept {
+        ss << "\"";
         for (auto c : s) {
             if (isprint(c)) {
                 switch (c) {
-                    case '\n': _main << "\\n"; break;
-                    case '\r': _main << "\\r"; break;
-                    case '\t': _main << "\\t"; break;
-                    case '\"': _main << "\\\""; break;
-                    case '\\': _main << "\\\\"; break;
-                    default: {
-                        const char s[2] = {c, '\0'};
-                        _main << s;
-                        break;
-                    }
+                    case '\n': ss << "\\n"; break;
+                    case '\r': ss << "\\r"; break;
+                    case '\t': ss << "\\t"; break;
+                    case '\"': ss << "\\\""; break;
+                    case '\\': ss << "\\\\"; break;
+                    default: ss << luisa::string_view{&c, 1}; break;
                 }
             } else {
-                _main << "\\x" << (c >> 4u) << (c & 0x0fu);
+                ss << "\\x" << (c >> 4u) << (c & 0x0fu);
             }
         }
-        _main << "\"";
+        ss << "\"";
     }
 
     void _emit_operands(const Instruction *inst) noexcept {
@@ -266,12 +269,17 @@ private:
 
     void _emit_print_inst(const PrintInst *inst) noexcept {
         _main << "print ";
-        _emit_string_escaped(inst->format());
+        _emit_string_escaped(_main, inst->format());
         _main << " ";
         _emit_operands(inst);
     }
 
     void _emit_instruction(const Instruction *inst, int indent) noexcept {
+        if (!inst->metadata_list().empty()) {
+            _emit_indent(indent);
+            _emit_metadata_list(_main, inst->metadata_list());
+            _main << "\n";
+        }
         _emit_indent(indent);
         if (auto t = inst->type()) {
             _main << _value_ident(inst) << ": " << _type_ident(t) << " = ";
@@ -342,6 +350,10 @@ private:
         if (b == nullptr) {
             _main << "null";
         } else {
+            if (!b->metadata_list().empty()) {
+                _emit_metadata_list(_main, b->metadata_list());
+                _main << " ";
+            }
             _main << _value_ident(b) << ": {\n";
             for (auto &&inst : b->instructions()) {
                 _emit_instruction(&inst, indent + 1);
@@ -352,6 +364,10 @@ private:
     }
 
     void _emit_function(const Function *f) noexcept {
+        if (!f->metadata_list().empty()) {
+            _emit_metadata_list(_main, f->metadata_list());
+            _main << "\n";
+        }
         switch (f->function_tag()) {
             case FunctionTag::KERNEL: _main << "kernel " << _value_ident(f); break;
             case FunctionTag::CALLABLE: _main << "callable " << _value_ident(f) << ": " << _type_ident(f->type()); break;
@@ -360,6 +376,11 @@ private:
         // TODO: metadata
         if (!f->arguments().empty()) { _main << "\n"; }
         for (auto arg : f->arguments()) {
+            if (!arg->metadata_list().empty()) {
+                _emit_indent(1);
+                _emit_metadata_list(_main, arg->metadata_list());
+                _main << "\n";
+            }
             _emit_indent(1);
             _main << _value_ident(arg) << ": ";
             if (arg->derived_value_tag() == DerivedValueTag::REFERENCE_ARGUMENT) {
@@ -373,6 +394,10 @@ private:
     }
 
     void _emit_module(const Module *module) noexcept {
+        if (!module->metadata_list().empty()) {
+            _emit_metadata_list(_prelude, module->metadata_list());
+            _prelude << "\n";
+        }
         _prelude << "module;\n\n";// TODO: metadata
         for (auto &f : module->functions()) {
             static_cast<void>(_value_uid(&f));
@@ -380,6 +405,45 @@ private:
         for (auto &f : module->functions()) {
             _emit_function(&f);
         }
+    }
+
+    static void _emit_name_metadata(StringScratch &s, const NameMD &m) noexcept {
+        s << "name = " << m.name();
+    }
+
+    static void _emit_location_metadata(StringScratch &s, const LocationMD &m) noexcept {
+        s << "location = (";
+        _emit_string_escaped(s, m.file().string());
+        s << ", " << m.line() << ")";
+    }
+
+    static void _emit_comment_metadata(StringScratch &s, const CommentMD &m) noexcept {
+        s << "comment = ";
+        _emit_string_escaped(s, m.comment());
+    }
+
+    static void _emit_metadata_list(StringScratch &s, const MetadataList &m) noexcept {
+        s << "[";
+        for (auto &item : m) {
+            switch (item.derived_metadata_tag()) {
+                case DerivedMetadataTag::NAME:
+                    _emit_name_metadata(s, static_cast<const NameMD &>(item));
+                    break;
+                case DerivedMetadataTag::LOCATION:
+                    _emit_location_metadata(s, static_cast<const LocationMD &>(item));
+                    break;
+                case DerivedMetadataTag::COMMENT:
+                    _emit_comment_metadata(s, static_cast<const CommentMD &>(item));
+                    break;
+                default: LUISA_NOT_IMPLEMENTED();
+            }
+            s << ", ";
+        }
+        if (!m.empty()) {
+            s.pop_back();
+            s.pop_back();
+        }
+        s << "]";
     }
 
 public:
