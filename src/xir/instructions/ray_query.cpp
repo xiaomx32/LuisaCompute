@@ -4,8 +4,8 @@
 
 namespace luisa::compute::xir {
 
-RayQueryInst::RayQueryInst(Pool *pool, Value *query_object, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+RayQueryInst::RayQueryInst(Pool *pool, Value *query_object) noexcept
+    : Instruction{pool, nullptr} {
     auto on_surface_candidate_block = static_cast<Value *>(nullptr);
     auto on_procedural_candidate_block = static_cast<Value *>(nullptr);
     auto merge_block = static_cast<Value *>(nullptr);
@@ -33,20 +33,20 @@ void RayQueryInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
-BasicBlock *RayQueryInst::create_on_surface_candidate_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *RayQueryInst::create_on_surface_candidate_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_on_surface_candidate_block(block);
     return block;
 }
 
-BasicBlock *RayQueryInst::create_on_procedural_candidate_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *RayQueryInst::create_on_procedural_candidate_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_on_procedural_candidate_block(block);
     return block;
 }
 
-BasicBlock *RayQueryInst::create_merge_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *RayQueryInst::create_merge_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_merge_block(block);
     return block;
 }

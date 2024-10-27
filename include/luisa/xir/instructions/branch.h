@@ -25,8 +25,7 @@ public:
     static constexpr size_t operand_index_merge_block = 3u;
 
 public:
-    explicit BranchInst(Pool *pool, Value *cond = nullptr,
-                        const Name *name = nullptr) noexcept;
+    explicit BranchInst(Pool *pool, Value *cond = nullptr) noexcept;
 
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::BRANCH;
@@ -37,9 +36,9 @@ public:
     void set_false_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_true_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_false_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_true_block() noexcept;
+    BasicBlock *create_false_block() noexcept;
+    BasicBlock *create_merge_block() noexcept;
 
     [[nodiscard]] Value *cond() noexcept;
     [[nodiscard]] const Value *cond() const noexcept;

@@ -29,8 +29,7 @@ struct ConstPhiIncomingUse {
 class LC_XIR_API PhiInst final : public Instruction {
 public:
     explicit PhiInst(Pool *pool, const Type *type = nullptr,
-                     luisa::span<const PhiIncoming> incomings = {},
-                     const Name *name = nullptr) noexcept;
+                     luisa::span<const PhiIncoming> incomings = {}) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::PHI;
     }

@@ -16,8 +16,8 @@ private:
 
 public:
     explicit CastInst(Pool *pool, const Type *target_type = nullptr,
-                      CastOp op = CastOp::STATIC_CAST, Value *value = nullptr,
-                      const Name *name = nullptr) noexcept;
+                      CastOp op = CastOp::STATIC_CAST,
+                      Value *value = nullptr) noexcept;
 
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::CAST;

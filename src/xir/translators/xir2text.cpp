@@ -9,7 +9,6 @@
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
-#include <luisa/xir/instructions/comment.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
 #include <luisa/xir/instructions/intrinsic.h>
@@ -59,8 +58,7 @@ private:
 
     [[nodiscard]] auto _value_ident(const Value *value) noexcept {
         auto uid = _value_uid(value);
-        return value->name() ? luisa::format("%{}({})", uid, value->name()->string()) :
-                               luisa::format("%{}", uid);
+        return luisa::format("%{}", uid);
     }
 
     [[nodiscard]] auto _struct_uid(const Type *type) noexcept {
@@ -144,11 +142,6 @@ private:
             }
         }
         _main << "\"";
-    }
-
-    void _emit_comment_inst(const CommentInst *inst) noexcept {
-        _main << "comment ";
-        _emit_string_escaped(inst->comment());
     }
 
     void _emit_operands(const Instruction *inst) noexcept {
@@ -286,9 +279,6 @@ private:
         switch (inst->derived_instruction_tag()) {
             case DerivedInstructionTag::SENTINEL:
                 LUISA_ERROR_WITH_LOCATION("Unexpected sentinel instruction.");
-            case DerivedInstructionTag::COMMENT:
-                _emit_comment_inst(static_cast<const CommentInst *>(inst));
-                break;
             case DerivedInstructionTag::UNREACHABLE:
                 _main << "unreachable";
                 break;
@@ -383,12 +373,7 @@ private:
     }
 
     void _emit_module(const Module *module) noexcept {
-        if (module->name()) {
-            _prelude << "module " << module->name()->string() << ";\n\n";
-        } else {
-            _prelude << "module;\n\n";
-        }
-        // TODO: metadata
+        _prelude << "module;\n\n";// TODO: metadata
         for (auto &f : module->functions()) {
             static_cast<void>(_value_uid(&f));
         }

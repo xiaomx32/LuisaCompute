@@ -115,10 +115,6 @@ StoreInst *Builder::store(Value *variable, Value *value) noexcept {
     return _create_and_append_instruction<StoreInst>(variable, value);
 }
 
-CommentInst *Builder::comment(luisa::string text) noexcept {
-    return _create_and_append_instruction<CommentInst>(std::move(text));
-}
-
 OutlineInst *Builder::outline() noexcept {
     return _create_and_append_instruction<OutlineInst>();
 }

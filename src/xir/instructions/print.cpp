@@ -7,9 +7,8 @@
 namespace luisa::compute::xir {
 
 PrintInst::PrintInst(Pool *pool, luisa::string format,
-                     luisa::span<Value *const> operands,
-                     const Name *name) noexcept
-    : Instruction{pool, nullptr, name},
+                     luisa::span<Value *const> operands) noexcept
+    : Instruction{pool, nullptr},
       _format{std::move(format)} { set_operands(operands); }
 
 }// namespace luisa::compute::xir

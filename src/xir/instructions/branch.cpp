@@ -5,8 +5,8 @@
 
 namespace luisa::compute::xir {
 
-BranchInst::BranchInst(Pool *pool, Value *cond, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+BranchInst::BranchInst(Pool *pool, Value *cond) noexcept
+    : Instruction{pool, nullptr} {
     auto true_block = static_cast<Value *>(nullptr);
     auto false_block = static_cast<Value *>(nullptr);
     auto merge_block = static_cast<Value *>(nullptr);
@@ -36,20 +36,20 @@ void BranchInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
-BasicBlock *BranchInst::create_true_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *BranchInst::create_true_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_true_block(block);
     return block;
 }
 
-BasicBlock *BranchInst::create_false_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *BranchInst::create_false_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_false_block(block);
     return block;
 }
 
-BasicBlock *BranchInst::create_merge_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *BranchInst::create_merge_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_merge_block(block);
     return block;
 }

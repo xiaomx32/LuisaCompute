@@ -20,7 +20,7 @@ private:
     void _set_parent_value(Value *parent_value) noexcept;
 
 public:
-    explicit BasicBlock(Pool *pool, const Name *name = nullptr) noexcept;
+    explicit BasicBlock(Pool *pool) noexcept;
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
         return DerivedValueTag::BASIC_BLOCK;
     }

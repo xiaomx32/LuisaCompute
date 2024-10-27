@@ -12,8 +12,7 @@ public:
 
 public:
     explicit StoreInst(Pool *pool, Value *variable = nullptr,
-                       Value *value = nullptr,
-                       const Name *name = nullptr) noexcept;
+                       Value *value = nullptr) noexcept;
 
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::STORE;

@@ -3,8 +3,8 @@
 
 namespace luisa::compute::xir {
 
-OutlineInst::OutlineInst(Pool *pool, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+OutlineInst::OutlineInst(Pool *pool) noexcept
+    : Instruction{pool, nullptr} {
     set_operand_count(2u);
 }
 
@@ -34,14 +34,14 @@ const BasicBlock *OutlineInst::merge_block() const noexcept {
     return const_cast<OutlineInst *>(this)->merge_block();
 }
 
-BasicBlock *OutlineInst::create_body_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *OutlineInst::create_body_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_body_block(block);
     return block;
 }
 
-BasicBlock *OutlineInst::create_merge_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *OutlineInst::create_merge_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_merge_block(block);
     return block;
 }

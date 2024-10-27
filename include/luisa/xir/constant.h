@@ -18,8 +18,7 @@ private:
 
 public:
     explicit Constant(Pool *pool, const Type *type,
-                      const void *data = nullptr,
-                      const Name *name = nullptr) noexcept;
+                      const void *data = nullptr) noexcept;
     ~Constant() noexcept override;
 
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {

@@ -7,7 +7,6 @@
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
-#include <luisa/xir/instructions/comment.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
 #include <luisa/xir/instructions/intrinsic.h>
@@ -84,8 +83,6 @@ public:
 
     LoadInst *load(const Type *type, Value *variable) noexcept;
     StoreInst *store(Value *variable, Value *value) noexcept;
-
-    CommentInst *comment(luisa::string text) noexcept;
 
     OutlineInst *outline() noexcept;
     RayQueryInst *ray_query(Value *query_object) noexcept;

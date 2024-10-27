@@ -19,8 +19,7 @@ private:
 
 public:
     explicit Function(Pool *pool, FunctionTag tag,
-                      const Type *type = nullptr,
-                      const Name *name = nullptr) noexcept;
+                      const Type *type = nullptr) noexcept;
 
     [[nodiscard]] auto function_tag() const noexcept { return _function_tag; }
     [[nodiscard]] DerivedValueTag derived_value_tag() const noexcept final {
@@ -34,9 +33,9 @@ public:
     void replace_argument(Argument *old_argument, Argument *new_argument) noexcept;
     void replace_argument(size_t index, Argument *argument) noexcept;
 
-    Argument *create_argument(const Type *type, bool by_ref, const Name *name = nullptr) noexcept;
-    ValueArgument *create_value_argument(const Type *type, const Name *name = nullptr) noexcept;
-    ReferenceArgument *create_reference_argument(const Type *type, const Name *name = nullptr) noexcept;
+    Argument *create_argument(const Type *type, bool by_ref) noexcept;
+    ValueArgument *create_value_argument(const Type *type) noexcept;
+    ReferenceArgument *create_reference_argument(const Type *type) noexcept;
 
     [[nodiscard]] BasicBlock *body() noexcept { return _body; }
     [[nodiscard]] const BasicBlock *body() const noexcept { return _body; }

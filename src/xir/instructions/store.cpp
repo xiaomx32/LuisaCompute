@@ -3,9 +3,8 @@
 
 namespace luisa::compute::xir {
 
-StoreInst::StoreInst(Pool *pool, Value *variable,
-                     Value *value, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+StoreInst::StoreInst(Pool *pool, Value *variable, Value *value) noexcept
+    : Instruction{pool, nullptr} {
     auto oprands = std::array{variable, value};
     LUISA_DEBUG_ASSERT(oprands[operand_index_variable] == variable, "Unexpected operand index.");
     LUISA_DEBUG_ASSERT(oprands[operand_index_value] == value, "Unexpected operand index.");

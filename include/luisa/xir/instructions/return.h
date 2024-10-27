@@ -11,8 +11,7 @@ public:
     static constexpr size_t operand_index_return_value = 0u;
 
 public:
-    explicit ReturnInst(Pool *pool, Value *value = nullptr,
-                        const Name *name = nullptr) noexcept;
+    explicit ReturnInst(Pool *pool, Value *value = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::RETURN;
     }

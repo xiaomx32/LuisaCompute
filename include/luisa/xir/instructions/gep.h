@@ -13,8 +13,8 @@ public:
 
 public:
     explicit GEPInst(Pool *pool, const Type *type = nullptr,
-                     Value *base = nullptr, luisa::span<Value *const> indices = {},
-                     const Name *name = nullptr) noexcept;
+                     Value *base = nullptr,
+                     luisa::span<Value *const> indices = {}) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::GEP;
     }

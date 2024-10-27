@@ -3,9 +3,8 @@
 
 namespace luisa::compute::xir {
 
-Function::Function(Pool *pool, FunctionTag tag, const Type *type, const Name *name) noexcept
-    : Super{pool, type, name},
-      _body{pool->create<BasicBlock>()},
+Function::Function(Pool *pool, FunctionTag tag, const Type *type) noexcept
+    : Super{pool, type}, _body{pool->create<BasicBlock>()},
       _function_tag{tag} { _body->_set_parent_value(this); }
 
 void Function::add_argument(Argument *argument) noexcept {
@@ -54,19 +53,19 @@ void Function::replace_argument(size_t index, Argument *argument) noexcept {
     _arguments[index] = argument;
 }
 
-Argument *Function::create_argument(const Type *type, bool by_ref, const Name *name) noexcept {
-    return by_ref ? static_cast<Argument *>(create_reference_argument(type, name)) :
-                    static_cast<Argument *>(create_value_argument(type, name));
+Argument *Function::create_argument(const Type *type, bool by_ref) noexcept {
+    return by_ref ? static_cast<Argument *>(create_reference_argument(type)) :
+                    static_cast<Argument *>(create_value_argument(type));
 }
 
-ValueArgument *Function::create_value_argument(const Type *type, const Name *name) noexcept {
-    auto argument = pool()->create<ValueArgument>(type, this, name);
+ValueArgument *Function::create_value_argument(const Type *type) noexcept {
+    auto argument = pool()->create<ValueArgument>(type, this);
     add_argument(argument);
     return argument;
 }
 
-ReferenceArgument *Function::create_reference_argument(const Type *type, const Name *name) noexcept {
-    auto argument = pool()->create<ReferenceArgument>(type, this, name);
+ReferenceArgument *Function::create_reference_argument(const Type *type) noexcept {
+    auto argument = pool()->create<ReferenceArgument>(type, this);
     add_argument(argument);
     return argument;
 }

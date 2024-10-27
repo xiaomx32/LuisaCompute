@@ -1,5 +1,6 @@
 #pragma once
 
+#include <luisa/core/stl/string.h>
 #include <luisa/xir/instruction.h>
 
 namespace luisa::compute::xir {
@@ -11,8 +12,7 @@ private:
 
 public:
     explicit PrintInst(Pool *pool, luisa::string format = {},
-                       luisa::span<Value *const> operands = {},
-                       const Name *name = nullptr) noexcept;
+                       luisa::span<Value *const> operands = {}) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::PRINT;
     }

@@ -210,7 +210,6 @@
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
-#include <luisa/xir/instructions/comment.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
 #include <luisa/xir/instructions/intrinsic.h>
@@ -225,9 +224,10 @@
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/unreachable.h>
 #include <luisa/xir/metadata.h>
+#include <luisa/xir/metadata/comment.h>
 #include <luisa/xir/metadata/location.h>
+#include <luisa/xir/metadata/name.h>
 #include <luisa/xir/module.h>
-#include <luisa/xir/name.h>
 #include <luisa/xir/pool.h>
 #include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/translators/xir2text.h>

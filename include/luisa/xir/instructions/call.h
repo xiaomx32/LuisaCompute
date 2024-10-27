@@ -13,8 +13,7 @@ public:
 public:
     explicit CallInst(Pool *pool, const Type *type = nullptr,
                       Value *callee = nullptr,
-                      luisa::span<Value *const> arguments = {},
-                      const Name *name = nullptr) noexcept;
+                      luisa::span<Value *const> arguments = {}) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::CALL;
     }

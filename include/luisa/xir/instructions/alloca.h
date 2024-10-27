@@ -16,8 +16,7 @@ private:
 
 public:
     explicit AllocaInst(Pool *pool, const Type *type = nullptr,
-                        AllocSpace space = AllocSpace::LOCAL,
-                        const Name *name = nullptr) noexcept;
+                        AllocSpace space = AllocSpace::LOCAL) noexcept;
 
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::ALLOCA;

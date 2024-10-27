@@ -7,6 +7,7 @@ int main() {
     auto module = xir::Module{};
     auto u32_zero = module.create_constant(0u);
     auto f32_one = module.create_constant(1.f);
+    auto bool_false = module.create_constant(false);
 
     auto b = xir::Builder{};
 
@@ -23,21 +24,28 @@ int main() {
     auto outline = b.outline();
     auto outline_body = outline->create_body_block();
     b.set_insertion_point(outline_body);
-    auto cond = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
+    auto switch_ = b.switch_(coord_x);
+    auto switch_case_0 = switch_->create_case_block(0);
+    b.set_insertion_point(switch_case_0);
+    auto cond0 = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
+    auto switch_default = switch_->create_default_block();
+    auto switch_merge = switch_->create_merge_block();
+    b.set_insertion_point(switch_merge);
+    auto cond = b.phi(Type::of<bool>());
+    cond->add_incoming(cond0, switch_case_0);
+    cond->add_incoming(bool_false, switch_default);
     auto outline_merge = outline->create_merge_block();
     b.set_insertion_point(outline_merge);
     auto branch = b.if_(cond);
     auto true_block = branch->create_true_block();
     b.set_insertion_point(true_block);
     auto rq = b.alloca_local(Type::of<RayQueryAll>());
-    b.comment("hello, world!");
     b.print("({} + {}) * {} = {}", {x, y, y, mul});
     auto merge = branch->create_merge_block();
     b.set_insertion_point(merge);
     b.return_(mul);
 
     auto k = module.create_kernel();
-    k->set_name(module.create_name("test_kernel"));
     auto buffer = k->create_value_argument(Type::of<Buffer<float>>());
     b.set_insertion_point(k->body());
     auto va = b.alloca_local(Type::of<float>());
@@ -49,6 +57,8 @@ int main() {
     b.return_void();
 
     auto dummy = module.create_callable(nullptr);
+    b.set_insertion_point(dummy->body());
+    b.return_void();
 
     LUISA_INFO("IR:\n{}", xir::translate_to_text(module));
 }

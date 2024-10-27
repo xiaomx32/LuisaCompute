@@ -4,8 +4,8 @@
 
 namespace luisa::compute::xir {
 
-SwitchInst::SwitchInst(Pool *pool, Value *value, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+SwitchInst::SwitchInst(Pool *pool, Value *value) noexcept
+    : Instruction{pool, nullptr} {
     auto merge_block = static_cast<Value *>(nullptr);
     auto default_block = static_cast<Value *>(nullptr);
     auto operands = std::array{value, merge_block, default_block};
@@ -27,20 +27,20 @@ void SwitchInst::set_merge_block(BasicBlock *block) noexcept {
     set_operand(operand_index_merge_block, block);
 }
 
-BasicBlock *SwitchInst::create_default_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *SwitchInst::create_default_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_default_block(block);
     return block;
 }
 
-BasicBlock *SwitchInst::create_merge_block(const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *SwitchInst::create_merge_block() noexcept {
+    auto block = pool()->create<BasicBlock>();
     set_merge_block(block);
     return block;
 }
 
-BasicBlock *SwitchInst::create_case_block(case_value_type value, const Name *name) noexcept {
-    auto block = pool()->create<BasicBlock>(name);
+BasicBlock *SwitchInst::create_case_block(case_value_type value) noexcept {
+    auto block = pool()->create<BasicBlock>();
     add_case(value, block);
     return block;
 }

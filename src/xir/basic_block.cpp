@@ -2,8 +2,8 @@
 
 namespace luisa::compute::xir {
 
-BasicBlock::BasicBlock(Pool *pool, const Name *name) noexcept
-    : Value{pool, nullptr, name}, _instructions{pool} {
+BasicBlock::BasicBlock(Pool *pool) noexcept
+    : Value{pool, nullptr}, _instructions{pool} {
     _instructions.head_sentinel()->_set_parent_block(this);
     _instructions.tail_sentinel()->_set_parent_block(this);
 }

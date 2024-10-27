@@ -13,8 +13,7 @@ public:
     static constexpr size_t operand_index_merge_block = 3u;
 
 public:
-    explicit RayQueryInst(Pool *pool, Value *query_object = nullptr,
-                          const Name *name = nullptr) noexcept;
+    explicit RayQueryInst(Pool *pool, Value *query_object = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::RAY_QUERY;
     }
@@ -23,9 +22,9 @@ public:
     void set_on_procedural_candidate_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_on_surface_candidate_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_on_procedural_candidate_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_on_surface_candidate_block() noexcept;
+    BasicBlock *create_on_procedural_candidate_block() noexcept;
+    BasicBlock *create_merge_block() noexcept;
 
     [[nodiscard]] Value *query_object() noexcept;
     [[nodiscard]] BasicBlock *on_surface_candidate_block() noexcept;

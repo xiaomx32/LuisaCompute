@@ -13,12 +13,12 @@ public:
     static constexpr size_t operand_index_merge_block = 1u;
 
 public:
-    explicit OutlineInst(Pool *pool, const Name *name = nullptr) noexcept;
+    explicit OutlineInst(Pool *pool) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::OUTLINE;
     }
-    BasicBlock *create_body_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
+    BasicBlock *create_body_block() noexcept;
+    BasicBlock *create_merge_block() noexcept;
     void set_body_block(BasicBlock *body_block) noexcept;
     void set_merge_block(BasicBlock *merge_block) noexcept;
     [[nodiscard]] BasicBlock *body_block() noexcept;

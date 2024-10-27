@@ -28,8 +28,7 @@ private:
     luisa::vector<case_value_type> _case_values;
 
 public:
-    explicit SwitchInst(Pool *pool, Value *value = nullptr,
-                        const Name *name = nullptr) noexcept;
+    explicit SwitchInst(Pool *pool, Value *value = nullptr) noexcept;
     [[nodiscard]] DerivedInstructionTag derived_instruction_tag() const noexcept override {
         return DerivedInstructionTag::SWITCH;
     }
@@ -38,9 +37,9 @@ public:
     void set_default_block(BasicBlock *block) noexcept;
     void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_default_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_merge_block(const Name *name = nullptr) noexcept;
-    BasicBlock *create_case_block(case_value_type value, const Name *name = nullptr) noexcept;
+    BasicBlock *create_default_block() noexcept;
+    BasicBlock *create_merge_block() noexcept;
+    BasicBlock *create_case_block(case_value_type value) noexcept;
 
     void set_case_count(size_t count) noexcept;
     [[nodiscard]] size_t case_count() const noexcept;

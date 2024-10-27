@@ -10,7 +10,6 @@ enum struct DerivedInstructionTag {
 
     /* utility instructions */
     SENTINEL,// sentinels in instruction list
-    COMMENT, // comments
 
     /* control flow instructions */
     UNREACHABLE,// basic block terminator: unreachable
@@ -34,7 +33,7 @@ enum struct DerivedInstructionTag {
     CAST,     // type casts
     PRINT,    // kernel print
 
-    OUTLINE,
+    OUTLINE,  // mark that the body might be outlined (e.g., for faster compilation)
     AUTO_DIFF,// automatic differentiation
     RAY_QUERY,// ray queries
 };
@@ -52,8 +51,7 @@ protected:
     [[nodiscard]] bool _should_add_self_to_operand_use_lists() const noexcept override;
 
 public:
-    explicit Instruction(Pool *pool, const Type *type = nullptr,
-                         const Name *name = nullptr) noexcept;
+    explicit Instruction(Pool *pool, const Type *type = nullptr) noexcept;
     [[nodiscard]] virtual DerivedInstructionTag derived_instruction_tag() const noexcept {
         return DerivedInstructionTag::SENTINEL;
     }

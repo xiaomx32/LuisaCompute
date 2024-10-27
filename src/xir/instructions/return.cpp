@@ -2,8 +2,8 @@
 
 namespace luisa::compute::xir {
 
-ReturnInst::ReturnInst(Pool *pool, Value *value, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {
+ReturnInst::ReturnInst(Pool *pool, Value *value) noexcept
+    : Instruction{pool, nullptr} {
     set_operands(std::array{value});
 }
 

@@ -8,7 +8,6 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instruction.cpp
         metadata.cpp
         module.cpp
-        name.cpp
         pool.cpp
         use.cpp
         user.cpp
@@ -20,7 +19,6 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/break.cpp
         instructions/call.cpp
         instructions/cast.cpp
-        instructions/comment.cpp
         instructions/continue.cpp
         instructions/gep.cpp
         instructions/intrinsic.cpp
@@ -36,6 +34,8 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # derived metadata
         metadata/location.cpp
+        metadata/comment.cpp
+        metadata/name.cpp
 
         # translators
         translators/xir2text.cpp

@@ -3,8 +3,8 @@
 
 namespace luisa::compute::xir {
 
-Instruction::Instruction(Pool *pool, const Type *type, const Name *name) noexcept
-    : Super{pool, type, name} {}
+Instruction::Instruction(Pool *pool, const Type *type) noexcept
+    : Super{pool, type} {}
 
 void Instruction::_set_parent_block(BasicBlock *block) noexcept {
     _parent_block = block;

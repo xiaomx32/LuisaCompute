@@ -2,7 +2,7 @@
 
 namespace luisa::compute::xir {
 
-BreakInst::BreakInst(Pool *pool, const Name *name) noexcept
-    : Instruction{pool, nullptr, name} {}
+BreakInst::BreakInst(Pool *pool) noexcept
+    : Instruction{pool, nullptr} {}
 
 }// namespace luisa::compute::xir
