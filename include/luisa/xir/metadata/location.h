@@ -5,7 +5,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API LocationMD : public Metadata {
+class LC_XIR_API LocationMD : public DerivedMetadata<DerivedMetadataTag::LOCATION> {
 
 private:
     luisa::filesystem::path _file;
@@ -15,9 +15,6 @@ private:
 public:
     explicit LocationMD(Pool *pool, luisa::filesystem::path file = {},
                         int line = -1, int column = -1) noexcept;
-    [[nodiscard]] DerivedMetadataTag derived_metadata_tag() const noexcept override {
-        return DerivedMetadataTag::LOCATION;
-    }
     void set_file(luisa::filesystem::path file) noexcept { _file = std::move(file); }
     void set_line(int line) noexcept { _line = line; }
     void set_column(int column) noexcept { _column = column; }

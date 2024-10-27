@@ -5,7 +5,7 @@
 
 namespace luisa::compute::xir {
 
-Module::Module() noexcept = default;
+Module::Module() noexcept : _metadata_list{&_pool} {}
 
 Function *Module::create_kernel() noexcept {
     auto f = pool()->create<Function>(FunctionTag::KERNEL, nullptr);
