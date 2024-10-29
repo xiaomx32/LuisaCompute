@@ -20,7 +20,7 @@ jobs:
           sudo apt-get update
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
-          sudo ./llvm.sh all
+          sudo ./llvm.sh 18 all
           sudo apt-get -y install build-essential wget cmake ninja-build uuid-dev libxinerama-dev libxcursor-dev libxi-dev libvulkan-dev
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: "Setup CUDA"
@@ -42,8 +42,8 @@ jobs:
             export LUISA_CXX=g++
             export LUISA_FLAGS=""
           else
-            export LUISA_CC=clang
-            export LUISA_CXX=clang++
+            export LUISA_CC=clang-18
+            export LUISA_CXX=clang++-18
             export LUISA_FLAGS="-stdlib=libc++"
           fi
           cmake -S . -B build -G Ninja -D LUISA_COMPUTE_ENABLE_RUST=OFF -D LUISA_COMPUTE_ENABLE_REMOTE=OFF -D LUISA_COMPUTE_ENABLE_CPU=OFF -D CMAKE_BUILD_TYPE=${{ matrix.config }} -D CMAKE_C_COMPILER=${LUISA_CC} -D CMAKE_CXX_COMPILER=${LUISA_CXX} -D CMAKE_CXX_FLAGS="${LUISA_FLAGS}"
