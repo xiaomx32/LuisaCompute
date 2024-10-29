@@ -1,8 +1,10 @@
 #pragma once
 
+#include <luisa/runtime/rhi/curve_basis.h>
+#include <luisa/runtime/rhi/resource.h>
+#include <luisa/runtime/rhi/command.h>
 #include <luisa/runtime/device.h>
 #include <luisa/runtime/buffer.h>
-#include <luisa/runtime/rhi/curve_basis.h>
 
 namespace luisa::compute {
 
