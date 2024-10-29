@@ -4,6 +4,8 @@
 #include <luisa/core/spin_mutex.h>
 #include <luisa/core/basic_types.h>
 #include <luisa/core/stl/unordered_map.h>
+#include <luisa/runtime/rhi/resource.h>
+#include <luisa/runtime/rhi/command.h>
 
 namespace luisa::compute {
 
