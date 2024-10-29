@@ -26,7 +26,7 @@ jobs:
       - name: "Configure and Build"
         run: |
           xmake lua setup.lua
-          xmake f -p linux -a x86_64 --toolchain=${{ matrix.toolchain }} -m ${{ matrix.config }} --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --enable_mimalloc=false --check -c
+          xmake f -p linux -a x86_64 --toolchain=${{ matrix.toolchain }} -m ${{ matrix.config }} --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --enable_mimalloc=false --check -c -y
           xmake --jobs=16
 
   build-macos:
@@ -51,7 +51,7 @@ jobs:
             export PATH=/usr/local/opt/llvm/bin:$PATH
           fi
           xmake lua setup.lua
-          xmake f -p macosx --toolchain=llvm -m ${{ matrix.config }} --mm=clang --mxx=clang++ --metal_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --enable_mimalloc=false --check -c
+          xmake f -p macosx --toolchain=llvm -m ${{ matrix.config }} --mm=clang --mxx=clang++ --metal_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --enable_mimalloc=false --check -c -y
           xmake -v
 
   build-windows:
@@ -91,8 +91,8 @@ jobs:
         run: |
           xmake lua setup.lua ../luisa_compute_sdks
           if "${{ matrix.compiler }}" == "llvm" (
-            xmake f -p windows -a x64 --toolchain=llvm --sdk="C:/Program Files/LLVM" -m ${{ matrix.config }} --dx_backend=true --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --sdk_dir=../luisa_compute_sdks --check -c
+            xmake f -p windows -a x64 --toolchain=llvm --sdk="C:/Program Files/LLVM" -m ${{ matrix.config }} --dx_backend=true --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --sdk_dir=../luisa_compute_sdks --check -c -y
           ) else (
-            xmake f -p windows -a x64 --toolchain=${{ matrix.compiler }} -m ${{ matrix.config }} --dx_backend=true --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --sdk_dir=../luisa_compute_sdks --check -c
+            xmake f -p windows -a x64 --toolchain=${{ matrix.compiler }} -m ${{ matrix.config }} --dx_backend=true --cuda_backend=true --enable_dsl=true --enable_gui=true --enable_unity_build=false --enable_tests=true --sdk_dir=../luisa_compute_sdks --check -c -y
           )
           xmake
