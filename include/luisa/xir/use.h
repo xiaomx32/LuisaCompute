@@ -7,7 +7,7 @@ namespace luisa::compute::xir {
 class Value;
 class User;
 
-class LC_XIR_API Use : public IntrusiveForwardNode<Use> {
+class LC_XIR_API Use final : public IntrusiveForwardNode<Use> {
 
 private:
     User *_user;

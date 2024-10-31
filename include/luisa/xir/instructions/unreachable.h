@@ -5,7 +5,7 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API UnreachableInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::UNREACHABLE> {
+class UnreachableInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::UNREACHABLE> {
 public:
     using DerivedTerminatorInstruction::DerivedTerminatorInstruction;
 };

@@ -4,7 +4,6 @@
 #include <luisa/xir/pool.h>
 
 namespace luisa::compute::xir {
-
 template<typename T, typename Base>
 class IntrusiveNode;
 

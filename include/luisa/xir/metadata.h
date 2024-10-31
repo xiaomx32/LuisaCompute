@@ -11,7 +11,7 @@ enum struct DerivedMetadataTag {
     COMMENT,
 };
 
-class LC_XIR_API Metadata : public IntrusiveForwardNode<Metadata> {
+class Metadata : public IntrusiveForwardNode<Metadata> {
 public:
     using Super::Super;
     [[nodiscard]] virtual DerivedMetadataTag derived_metadata_tag() const noexcept = 0;
@@ -49,7 +49,7 @@ template<typename Parent>
 class MetadataMixin {
 
 private:
-    MetadataList _metadata_list;
+    MetadataList _metadata_list{};
 
 private:
     [[nodiscard]] Pool *_get_pool_from_parent() noexcept {
