@@ -155,26 +155,25 @@ public:
 };
 
 namespace detail {
-LC_XIR_API void merge_instruction_mixin_check_merge_block_overwrite(
-    const BasicBlock *merge_block, bool overwrite_existing) noexcept;
+LC_XIR_API void instruction_merge_mixin_check_overwrite(const BasicBlock *merge_block, bool overwrite_existing) noexcept;
 }// namespace detail
 
 template<typename Parent>
-class MergeInstructionMixin {
+class InstructionMergeMixin {
 
 private:
     BasicBlock *_merge_block{nullptr};
 
 protected:
-    MergeInstructionMixin() noexcept = default;
-    ~MergeInstructionMixin() noexcept = default;
+    InstructionMergeMixin() noexcept = default;
+    ~InstructionMergeMixin() noexcept = default;
 
 public:
     void set_merge_block(BasicBlock *block) noexcept { _merge_block = block; }
     [[nodiscard]] BasicBlock *merge_block() noexcept { return _merge_block; }
     [[nodiscard]] const BasicBlock *merge_block() const noexcept { return _merge_block; }
     BasicBlock *create_merge_block(bool overwrite_existing = false) noexcept {
-        detail::merge_instruction_mixin_check_merge_block_overwrite(_merge_block, overwrite_existing);
+        detail::instruction_merge_mixin_check_overwrite(_merge_block, overwrite_existing);
         auto self = static_cast<Parent *>(this);
         auto block = self->pool()->template create<BasicBlock>();
         set_merge_block(block);

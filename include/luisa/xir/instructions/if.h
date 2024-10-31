@@ -17,7 +17,7 @@ class BasicBlock;
 //
 // Note: this instruction must be the terminator of a basic block.
 class IfInst final : public DerivedConditionalBranchInstruction<DerivedInstructionTag::IF>,
-                     public MergeInstructionMixin<IfInst> {
+                     public InstructionMergeMixin<IfInst> {
 public:
     using DerivedConditionalBranchInstruction::DerivedConditionalBranchInstruction;
 };

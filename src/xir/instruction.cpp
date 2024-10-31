@@ -5,8 +5,8 @@
 namespace luisa::compute::xir {
 
 namespace detail {
-void merge_instruction_mixin_check_merge_block_overwrite(const BasicBlock *merge_block,
-                                                         bool overwrite_existing) noexcept {
+void instruction_merge_mixin_check_overwrite(const BasicBlock *merge_block,
+                                             bool overwrite_existing) noexcept {
     LUISA_ASSERT(merge_block == nullptr || overwrite_existing,
                  "Merge block already exists.");
 }
