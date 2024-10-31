@@ -19,7 +19,8 @@ enum struct DerivedValueTag {
     REFERENCE_ARGUMENT,
 };
 
-class LC_XIR_API Value : public PooledObject, public MetadataMixin<Value> {
+class LC_XIR_API Value : public PooledObject,
+                         public MetadataMixin<Value> {
 
 private:
     const Type *_type = nullptr;

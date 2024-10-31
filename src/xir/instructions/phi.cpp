@@ -4,87 +4,63 @@
 
 namespace luisa::compute::xir {
 
-PhiInst::PhiInst(Pool *pool, const Type *type,
-                 luisa::span<const PhiIncoming> incomings) noexcept
-    : DerivedInstruction{pool, type} { set_incomings(incomings); }
-
-void PhiInst::set_incomings(luisa::span<const PhiIncoming> incomings) noexcept {
-    set_incoming_count(incomings.size());
-    for (auto i = 0u; i < incomings.size(); i++) {
-        set_incoming(i, incomings[i].value, incomings[i].block);
-    }
-}
+PhiInst::PhiInst(Pool *pool, const Type *type) noexcept
+    : DerivedInstruction{pool, type} {}
 
 void PhiInst::set_incoming_count(size_t count) noexcept {
-    set_operand_count(count * 2);
+    set_operand_count(count);
+    _incoming_blocks.resize(count);
 }
 
 void PhiInst::set_incoming(size_t index, Value *value, BasicBlock *block) noexcept {
     LUISA_DEBUG_ASSERT(index < incoming_count(), "Phi incoming index out of range.");
-    set_operand(index * 2 + 0, value);
-    set_operand(index * 2 + 1, block);
+    set_operand(index, value);
+    _incoming_blocks[index] = block;
 }
 
 void PhiInst::add_incoming(Value *value, BasicBlock *block) noexcept {
     add_operand(value);
-    add_operand(block);
+    _incoming_blocks.emplace_back(block);
 }
 
 void PhiInst::insert_incoming(size_t index, Value *value, BasicBlock *block) noexcept {
-    insert_operand(index * 2 + 0, value);
-    insert_operand(index * 2 + 1, block);
+    insert_operand(index, value);
+    _incoming_blocks.insert(_incoming_blocks.begin() + index, block);
 }
 
 void PhiInst::remove_incoming(size_t index) noexcept {
     if (index < incoming_count()) {
-        remove_operand(index * 2 + 1);
-        remove_operand(index * 2 + 0);
+        remove_operand(index);
+        _incoming_blocks.erase(_incoming_blocks.begin() + index);
     }
 }
 
 size_t PhiInst::incoming_count() const noexcept {
-    LUISA_DEBUG_ASSERT(operand_count() % 2 == 0, "Invalid phi operand count.");
-    return operand_count() / 2;
+    return operand_count();
 }
 
 PhiIncoming PhiInst::incoming(size_t index) noexcept {
     LUISA_DEBUG_ASSERT(index < incoming_count(), "Phi incoming index out of range.");
-    auto value = operand(index * 2 + 0);
-    auto block = static_cast<BasicBlock *>(operand(index * 2 + 1));
+    auto value = operand(index);
+    auto block = _incoming_blocks[index];
     return {value, block};
 }
 
 ConstPhiIncoming PhiInst::incoming(size_t index) const noexcept {
-    LUISA_DEBUG_ASSERT(index < incoming_count(), "Phi incoming index out of range.");
-    auto value = operand(index * 2 + 0);
-    auto block = static_cast<const BasicBlock *>(operand(index * 2 + 1));
-    return {value, block};
+    auto incoming = const_cast<PhiInst *>(this)->incoming(index);
+    return {incoming.value, incoming.block};
 }
 
 PhiIncomingUse PhiInst::incoming_use(size_t index) noexcept {
     LUISA_DEBUG_ASSERT(index < incoming_count(), "Phi incoming index out of range.");
-    auto value = operand_use(index * 2 + 0);
-    auto block = operand_use(index * 2 + 1);
+    auto value = operand_use(index);
+    auto block = _incoming_blocks[index];
     return {value, block};
 }
 
 ConstPhiIncomingUse PhiInst::incoming_use(size_t index) const noexcept {
-    LUISA_DEBUG_ASSERT(index < incoming_count(), "Phi incoming index out of range.");
-    auto value = operand_use(index * 2 + 0);
-    auto block = operand_use(index * 2 + 1);
-    return {value, block};
-}
-
-luisa::span<PhiIncomingUse> PhiInst::incoming_uses() noexcept {
-    auto n = incoming_count();
-    auto uses = operand_uses();
-    return {reinterpret_cast<PhiIncomingUse *>(uses.data()), n};
-}
-
-luisa::span<const ConstPhiIncomingUse> PhiInst::incoming_uses() const noexcept {
-    auto n = incoming_count();
-    auto uses = operand_uses();
-    return {reinterpret_cast<const ConstPhiIncomingUse *>(uses.data()), n};
+    auto incoming = const_cast<PhiInst *>(this)->incoming_use(index);
+    return {incoming.value, incoming.block};
 }
 
 }// namespace luisa::compute::xir

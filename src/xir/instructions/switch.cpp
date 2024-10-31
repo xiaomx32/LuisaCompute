@@ -5,10 +5,9 @@
 namespace luisa::compute::xir {
 
 SwitchInst::SwitchInst(Pool *pool, Value *value) noexcept
-    : DerivedInstruction{pool, nullptr} {
-    auto merge_block = static_cast<Value *>(nullptr);
+    : DerivedTerminatorInstruction{pool} {
     auto default_block = static_cast<Value *>(nullptr);
-    auto operands = std::array{value, merge_block, default_block};
+    auto operands = std::array{value, default_block};
     LUISA_DEBUG_ASSERT(operands[operand_index_value] == value, "Unexpected operand index.");
     set_operands(operands);
 }
@@ -18,31 +17,21 @@ void SwitchInst::set_value(Value *value) noexcept {
 }
 
 void SwitchInst::set_default_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(default_block(), block);
     set_operand(operand_index_default_block, block);
 }
 
-void SwitchInst::set_merge_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(merge_block(), block);
-    set_operand(operand_index_merge_block, block);
-}
-
-BasicBlock *SwitchInst::create_default_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_default_block(block);
-    return block;
-}
-
-BasicBlock *SwitchInst::create_merge_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_merge_block(block);
-    return block;
+BasicBlock *SwitchInst::create_default_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(default_block() == nullptr || overwrite_existing,
+                 "Default block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_default_block(new_block);
+    return new_block;
 }
 
 BasicBlock *SwitchInst::create_case_block(case_value_type value) noexcept {
-    auto block = pool()->create<BasicBlock>();
-    add_case(value, block);
-    return block;
+    auto new_block = pool()->create<BasicBlock>();
+    add_case(value, new_block);
+    return new_block;
 }
 
 void SwitchInst::set_case(size_t index, case_value_type value, BasicBlock *block) noexcept {
@@ -67,7 +56,6 @@ void SwitchInst::set_case_value(size_t index, case_value_type value) noexcept {
 }
 
 void SwitchInst::set_case_block(size_t index, BasicBlock *block) noexcept {
-    _replace_owned_basic_block(case_block(index), block);
     set_operand(operand_index_case_block_offset + index, block);
 }
 
@@ -84,7 +72,6 @@ void SwitchInst::insert_case(size_t index, case_value_type value, BasicBlock *bl
 
 void SwitchInst::remove_case(size_t index) noexcept {
     if (index < case_count()) {
-        _replace_owned_basic_block(case_block(index), nullptr);
         _case_values.erase(_case_values.cbegin() + index);
         remove_operand(operand_index_case_block_offset + index);
     }
@@ -122,14 +109,6 @@ Value *SwitchInst::value() noexcept {
 
 const Value *SwitchInst::value() const noexcept {
     return operand(operand_index_value);
-}
-
-BasicBlock *SwitchInst::merge_block() noexcept {
-    return static_cast<BasicBlock *>(operand(operand_index_merge_block));
-}
-
-const BasicBlock *SwitchInst::merge_block() const noexcept {
-    return const_cast<SwitchInst *>(this)->merge_block();
 }
 
 BasicBlock *SwitchInst::default_block() noexcept {

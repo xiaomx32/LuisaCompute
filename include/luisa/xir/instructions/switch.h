@@ -15,14 +15,14 @@ namespace luisa::compute::xir {
 // { merge_block }
 //
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API SwitchInst final : public DerivedInstruction<DerivedInstructionTag::SWITCH> {
+class LC_XIR_API SwitchInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::SWITCH>,
+                                    public MergeInstructionMixin<SwitchInst> {
 
 public:
     using case_value_type = int;
     static constexpr size_t operand_index_value = 0u;
-    static constexpr size_t operand_index_merge_block = 1u;
-    static constexpr size_t operand_index_default_block = 2u;
-    static constexpr size_t operand_index_case_block_offset = 3u;
+    static constexpr size_t operand_index_default_block = 1u;
+    static constexpr size_t operand_index_case_block_offset = 2u;
 
 private:
     luisa::vector<case_value_type> _case_values;
@@ -32,10 +32,8 @@ public:
 
     void set_value(Value *value) noexcept;
     void set_default_block(BasicBlock *block) noexcept;
-    void set_merge_block(BasicBlock *block) noexcept;
 
-    BasicBlock *create_default_block() noexcept;
-    BasicBlock *create_merge_block() noexcept;
+    BasicBlock *create_default_block(bool overwrite_existing = false) noexcept;
     BasicBlock *create_case_block(case_value_type value) noexcept;
 
     void set_case_count(size_t count) noexcept;
@@ -58,9 +56,6 @@ public:
 
     [[nodiscard]] Value *value() noexcept;
     [[nodiscard]] const Value *value() const noexcept;
-
-    [[nodiscard]] BasicBlock *merge_block() noexcept;
-    [[nodiscard]] const BasicBlock *merge_block() const noexcept;
 
     [[nodiscard]] BasicBlock *default_block() noexcept;
     [[nodiscard]] const BasicBlock *default_block() const noexcept;

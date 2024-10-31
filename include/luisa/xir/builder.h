@@ -9,6 +9,7 @@
 #include <luisa/xir/instructions/cast.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
+#include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/instructions/load.h>
 #include <luisa/xir/instructions/loop.h>
@@ -26,32 +27,34 @@ namespace luisa::compute::xir {
 class LC_XIR_API Builder {
 
 private:
+    Pool *_pool;
     Instruction *_insertion_point = nullptr;
 
 private:
     void _check_valid_insertion_point() const noexcept;
-    [[nodiscard]] Pool *_pool_from_insertion_point() const noexcept;
 
     template<typename T, typename... Args>
     [[nodiscard]] auto _create_and_append_instruction(Args &&...args) noexcept {
-        auto pool = _pool_from_insertion_point();
-        auto inst = pool->create<T>(std::forward<Args>(args)...);
+        auto inst = _pool->create<T>(std::forward<Args>(args)...);
         _insertion_point->insert_after_self(inst);
         set_insertion_point(inst);
         return inst;
     }
 
 public:
-    Builder() noexcept;
+    explicit Builder(Pool *pool) noexcept;
     void set_insertion_point(Instruction *insertion_point) noexcept;
     void set_insertion_point(BasicBlock *block) noexcept;
     [[nodiscard]] auto insertion_point() noexcept -> Instruction * { return _insertion_point; }
     [[nodiscard]] auto insertion_point() const noexcept -> const Instruction * { return _insertion_point; }
 
 public:
-    BranchInst *if_(Value *cond) noexcept;
+    IfInst *if_(Value *cond) noexcept;
     SwitchInst *switch_(Value *value) noexcept;
     LoopInst *loop() noexcept;
+
+    BranchInst *br(BasicBlock *target = nullptr) noexcept;
+    ConditionalBranchInst *cond_br(Value *cond, BasicBlock *true_target = nullptr, BasicBlock *false_target = nullptr) noexcept;
 
     BreakInst *break_() noexcept;
     ContinueInst *continue_() noexcept;

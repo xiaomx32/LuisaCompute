@@ -13,7 +13,7 @@ struct PhiIncoming {
 
 struct PhiIncomingUse {
     Use *value;
-    Use *block;
+    BasicBlock *block;
 };
 
 struct ConstPhiIncoming {
@@ -23,14 +23,16 @@ struct ConstPhiIncoming {
 
 struct ConstPhiIncomingUse {
     const Use *value;
-    const Use *block;
+    const BasicBlock *block;
 };
 
 class LC_XIR_API PhiInst final : public DerivedInstruction<DerivedInstructionTag::PHI> {
+
+private:
+    luisa::vector<BasicBlock *> _incoming_blocks;
+
 public:
-    explicit PhiInst(Pool *pool, const Type *type = nullptr,
-                     luisa::span<const PhiIncoming> incomings = {}) noexcept;
-    void set_incomings(luisa::span<const PhiIncoming> incomings) noexcept;
+    explicit PhiInst(Pool *pool, const Type *type = nullptr) noexcept;
     void set_incoming_count(size_t count) noexcept;
     void set_incoming(size_t index, Value *value, BasicBlock *block) noexcept;
     void add_incoming(Value *value, BasicBlock *block) noexcept;
@@ -41,8 +43,10 @@ public:
     [[nodiscard]] ConstPhiIncoming incoming(size_t index) const noexcept;
     [[nodiscard]] PhiIncomingUse incoming_use(size_t index) noexcept;
     [[nodiscard]] ConstPhiIncomingUse incoming_use(size_t index) const noexcept;
-    [[nodiscard]] luisa::span<PhiIncomingUse> incoming_uses() noexcept;
-    [[nodiscard]] luisa::span<const ConstPhiIncomingUse> incoming_uses() const noexcept;
+    [[nodiscard]] auto incoming_value_uses() noexcept { return operand_uses(); }
+    [[nodiscard]] auto incoming_value_uses() const noexcept { return operand_uses(); }
+    [[nodiscard]] auto incoming_blocks() noexcept { return luisa::span{_incoming_blocks}; }
+    [[nodiscard]] auto incoming_blocks() const noexcept { return luisa::span{_incoming_blocks}; }
 };
 
 }// namespace luisa::compute::xir

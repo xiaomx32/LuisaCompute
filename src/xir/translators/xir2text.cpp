@@ -6,6 +6,7 @@
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/branch.h>
+#include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
@@ -157,8 +158,8 @@ private:
         }
     }
 
-    void _emit_branch_inst(const BranchInst *inst, int indent) noexcept {
-        _main << "if " << _value_ident(inst->cond()) << ", then ";
+    void _emit_if_inst(const IfInst *inst, int indent) noexcept {
+        _main << "if " << _value_ident(inst->condition()) << ", then ";
         _emit_basic_block(inst->true_block(), indent);
         _main << ", else ";
         _emit_basic_block(inst->false_block(), indent);
@@ -182,7 +183,7 @@ private:
     void _emit_loop_inst(const LoopInst *inst, int indent) noexcept {
         _main << "loop prepare ";
         _emit_basic_block(inst->prepare_block(), indent);
-        _main << ", " << _value_ident(inst->cond()) << ", body ";
+        _main << ", body ";
         _emit_basic_block(inst->body_block(), indent);
         _main << ", update ";
         _emit_basic_block(inst->update_block(), indent);
@@ -192,7 +193,7 @@ private:
 
     void _emit_outline_inst(const OutlineInst *inst, int indent) noexcept {
         _main << "outline body ";
-        _emit_basic_block(inst->body_block(), indent);
+        _emit_basic_block(inst->target_block(), indent);
         _main << ", merge ";
         _emit_basic_block(inst->merge_block(), indent);
     }
@@ -216,11 +217,12 @@ private:
 
     void _emit_phi_inst(const PhiInst *inst) noexcept {
         _main << "phi";
-        for (auto incoming : inst->incoming_uses()) {
-            _main << " (" << _value_ident(incoming.value->value()) << ", "
-                  << _value_ident(incoming.block->value()) << "),";
+        for (auto i = 0u; i < inst->incoming_count(); i++) {
+            auto incoming = inst->incoming(i);
+            _main << " (" << _value_ident(incoming.value) << ", "
+                  << _value_ident(incoming.block) << "),";
         }
-        if (!inst->incoming_uses().empty()) { _main.pop_back(); }
+        if (inst->incoming_count() != 0u) { _main.pop_back(); }
     }
 
     void _emit_alloca_inst(const AllocaInst *inst) noexcept {
@@ -274,6 +276,21 @@ private:
         _emit_operands(inst);
     }
 
+    void _emit_branch_inst(const BranchInst *inst) noexcept {
+        LUISA_DEBUG_ASSERT(inst->target_block() != nullptr,
+                           "Branch target block must not be null.");
+        _main << "br " << _value_ident(inst->target_block());
+    }
+
+    void _emit_conditional_branch_inst(const ConditionalBranchInst *inst) noexcept {
+        LUISA_DEBUG_ASSERT(inst->true_block() != nullptr && inst->false_block() != nullptr,
+                           "Conditional branch target blocks must not be null.");
+        _main << "cond_br "
+              << _value_ident(inst->condition()) << ", "
+              << _value_ident(inst->true_block()) << ", "
+              << _value_ident(inst->false_block());
+    }
+
     void _emit_instruction(const Instruction *inst, int indent) noexcept {
         if (!inst->metadata_list().empty()) {
             _emit_indent(indent);
@@ -290,8 +307,8 @@ private:
             case DerivedInstructionTag::UNREACHABLE:
                 _main << "unreachable";
                 break;
-            case DerivedInstructionTag::BRANCH:
-                _emit_branch_inst(static_cast<const BranchInst *>(inst), indent);
+            case DerivedInstructionTag::IF:
+                _emit_if_inst(static_cast<const IfInst *>(inst), indent);
                 break;
             case DerivedInstructionTag::SWITCH:
                 _emit_switch_inst(static_cast<const SwitchInst *>(inst), indent);
@@ -338,10 +355,16 @@ private:
             case DerivedInstructionTag::OUTLINE:
                 _emit_outline_inst(static_cast<const OutlineInst *>(inst), indent);
                 break;
-            case DerivedInstructionTag::AUTO_DIFF:
+            case DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
+            case DerivedInstructionTag::RAY_QUERY:
                 _emit_ray_query_inst(static_cast<const RayQueryInst *>(inst), indent);
                 break;
-            case DerivedInstructionTag::RAY_QUERY: LUISA_NOT_IMPLEMENTED();
+            case DerivedInstructionTag::BRANCH:
+                _emit_branch_inst(static_cast<const BranchInst *>(inst));
+                break;
+            case DerivedInstructionTag::CONDITIONAL_BRANCH:
+                _emit_conditional_branch_inst(static_cast<const ConditionalBranchInst *>(inst));
+                break;
         }
         _main << ";\n";
     }
@@ -389,7 +412,7 @@ private:
             _main << _type_ident(arg->type()) << ";\n";
         }
         _main << "), body ";
-        _emit_basic_block(f->body(), 0);
+        _emit_basic_block(f->body_block(), 0);
         _main << ";\n\n";
     }
 

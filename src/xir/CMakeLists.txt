@@ -15,16 +15,12 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # derived instructions
         instructions/alloca.cpp
-        instructions/branch.cpp
-        instructions/break.cpp
         instructions/call.cpp
         instructions/cast.cpp
-        instructions/continue.cpp
         instructions/gep.cpp
         instructions/intrinsic.cpp
         instructions/load.cpp
         instructions/loop.cpp
-        instructions/outline.cpp
         instructions/phi.cpp
         instructions/print.cpp
         instructions/ray_query.cpp

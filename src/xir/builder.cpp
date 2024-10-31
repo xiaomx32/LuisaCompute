@@ -8,15 +8,11 @@ void Builder::_check_valid_insertion_point() const noexcept {
     LUISA_ASSERT(_insertion_point != nullptr, "Invalid insertion point.");
 }
 
-Pool *Builder::_pool_from_insertion_point() const noexcept {
-    _check_valid_insertion_point();
-    return _insertion_point->pool();
-}
+Builder::Builder(Pool *pool) noexcept
+    : _pool{pool} {}
 
-Builder::Builder() noexcept = default;
-
-BranchInst *Builder::if_(Value *cond) noexcept {
-    return _create_and_append_instruction<BranchInst>(cond);
+IfInst *Builder::if_(Value *cond) noexcept {
+    return _create_and_append_instruction<IfInst>(cond);
 }
 
 SwitchInst *Builder::switch_(Value *value) noexcept {
@@ -25,6 +21,19 @@ SwitchInst *Builder::switch_(Value *value) noexcept {
 
 LoopInst *Builder::loop() noexcept {
     return _create_and_append_instruction<LoopInst>();
+}
+
+BranchInst *Builder::br(BasicBlock *target) noexcept {
+    auto inst = _create_and_append_instruction<BranchInst>();
+    inst->set_target_block(target);
+    return inst;
+}
+
+ConditionalBranchInst *Builder::cond_br(Value *cond, BasicBlock *true_target, BasicBlock *false_target) noexcept {
+    auto inst = _create_and_append_instruction<ConditionalBranchInst>(cond);
+    inst->set_true_target(true_target);
+    inst->set_false_target(false_target);
+    return inst;
 }
 
 BreakInst *Builder::break_() noexcept {
@@ -60,7 +69,9 @@ IntrinsicInst *Builder::call(const Type *type, IntrinsicOp op, std::initializer_
 }
 
 PhiInst *Builder::phi(const Type *type, std::initializer_list<PhiIncoming> incomings) noexcept {
-    return _create_and_append_instruction<PhiInst>(type, luisa::span{incomings.begin(), incomings.end()});
+    auto inst = _create_and_append_instruction<PhiInst>(type);
+    for (auto incoming : incomings) { inst->add_incoming(incoming.value, incoming.block); }
+    return inst;
 }
 
 PrintInst *Builder::print(luisa::string format, std::initializer_list<Value *> values) noexcept {
@@ -96,7 +107,9 @@ CastInst *Builder::bit_cast_(const Type *type, Value *value) noexcept {
 }
 
 PhiInst *Builder::phi(const Type *type, luisa::span<const PhiIncoming> incomings) noexcept {
-    return _create_and_append_instruction<PhiInst>(type, incomings);
+    auto inst = _create_and_append_instruction<PhiInst>(type);
+    for (auto incoming : incomings) { inst->add_incoming(incoming.value, incoming.block); }
+    return inst;
 }
 
 PrintInst *Builder::print(luisa::string format, luisa::span<Value *const> values) noexcept {
@@ -124,6 +137,8 @@ RayQueryInst *Builder::ray_query(Value *query_object) noexcept {
 }
 
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {
+    LUISA_ASSERT(insertion_point == nullptr || insertion_point->pool() == _pool,
+                 "Instruction does not belong to the same pool as the builder.");
     _insertion_point = insertion_point;
 }
 

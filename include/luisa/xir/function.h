@@ -14,7 +14,7 @@ class LC_XIR_API Function : public IntrusiveForwardNode<Function, DerivedValue<D
 
 private:
     FunctionTag _function_tag;
-    BasicBlock *_body;
+    BasicBlock *_body_block{nullptr};
     luisa::vector<Argument *> _arguments;
 
 public:
@@ -34,8 +34,11 @@ public:
     ValueArgument *create_value_argument(const Type *type) noexcept;
     ReferenceArgument *create_reference_argument(const Type *type) noexcept;
 
-    [[nodiscard]] BasicBlock *body() noexcept { return _body; }
-    [[nodiscard]] const BasicBlock *body() const noexcept { return _body; }
+    void set_body_block(BasicBlock *block) noexcept;
+    BasicBlock *create_body_block(bool overwrite_existing = false) noexcept;
+
+    [[nodiscard]] BasicBlock *body_block() noexcept { return _body_block; }
+    [[nodiscard]] const BasicBlock *body_block() const noexcept { return _body_block; }
 
     [[nodiscard]] auto &arguments() noexcept { return _arguments; }
     [[nodiscard]] auto &arguments() const noexcept { return _arguments; }

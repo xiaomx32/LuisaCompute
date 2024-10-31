@@ -5,9 +5,9 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API BreakInst final : public DerivedInstruction<DerivedInstructionTag::BREAK> {
+class BreakInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::BREAK> {
 public:
-    explicit BreakInst(Pool *pool) noexcept;
+    using DerivedTerminatorInstruction::DerivedTerminatorInstruction;
 };
 
 }// namespace luisa::compute::xir

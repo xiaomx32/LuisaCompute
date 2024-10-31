@@ -28,11 +28,6 @@ const Value *User::operand(size_t index) const noexcept {
     return operand_use(index)->value();
 }
 
-void User::_replace_owned_basic_block(BasicBlock *old_block, BasicBlock *new_block) noexcept {
-    if (old_block) { old_block->_set_parent_value(nullptr); }
-    if (new_block) { new_block->_set_parent_value(this); }
-}
-
 void User::set_operand_count(size_t n) noexcept {
     if (n < _operands.size()) {// remove redundant operands
         for (auto i = n; i < _operands.size(); i++) {

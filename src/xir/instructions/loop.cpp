@@ -6,64 +6,44 @@
 namespace luisa::compute::xir {
 
 LoopInst::LoopInst(Pool *pool) noexcept
-    : DerivedInstruction{pool, nullptr} {
-    auto prepare = static_cast<Value *>(nullptr);
-    auto cond = static_cast<Value *>(nullptr);
-    auto body = static_cast<Value *>(nullptr);
-    auto update = static_cast<Value *>(nullptr);
-    auto merge = static_cast<Value *>(nullptr);
-    auto operands = std::array{prepare, cond, body, update, merge};
-    set_operands(operands);
-}
-
-void LoopInst::set_cond(Value *cond) noexcept {
-    LUISA_DEBUG_ASSERT(cond == nullptr || cond->type() == Type::of<bool>(),
-                       "Loop condition must be a boolean value.");
-    set_operand(operand_index_cond, cond);
+    : DerivedTerminatorInstruction{pool} {
+    set_operands(std::array{static_cast<Value *>(nullptr)});
 }
 
 void LoopInst::set_prepare_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(prepare_block(), block);
     set_operand(operand_index_prepare_block, block);
 }
 
 void LoopInst::set_body_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(body_block(), block);
-    set_operand(operand_index_body_block, block);
+    _body_block = block;
 }
 
 void LoopInst::set_update_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(update_block(), block);
-    set_operand(operand_index_update_block, block);
+    _update_block = block;
 }
 
-void LoopInst::set_merge_block(BasicBlock *block) noexcept {
-    _replace_owned_basic_block(merge_block(), block);
-    set_operand(operand_index_merge_block, block);
+BasicBlock *LoopInst::create_prepare_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(prepare_block() == nullptr || overwrite_existing,
+                 "Prepare block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_prepare_block(new_block);
+    return new_block;
 }
 
-BasicBlock *LoopInst::create_prepare_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_prepare_block(block);
-    return block;
+BasicBlock *LoopInst::create_body_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(body_block() == nullptr || overwrite_existing,
+                 "Body block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_body_block(new_block);
+    return new_block;
 }
 
-BasicBlock *LoopInst::create_body_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_body_block(block);
-    return block;
-}
-
-BasicBlock *LoopInst::create_update_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_update_block(block);
-    return block;
-}
-
-BasicBlock *LoopInst::create_merge_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
-    set_merge_block(block);
-    return block;
+BasicBlock *LoopInst::create_update_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(update_block() == nullptr || overwrite_existing,
+                 "Update block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_update_block(new_block);
+    return new_block;
 }
 
 BasicBlock *LoopInst::prepare_block() noexcept {
@@ -74,36 +54,20 @@ const BasicBlock *LoopInst::prepare_block() const noexcept {
     return const_cast<LoopInst *>(this)->prepare_block();
 }
 
-Value *LoopInst::cond() noexcept {
-    return operand(operand_index_cond);
-}
-
-const Value *LoopInst::cond() const noexcept {
-    return operand(operand_index_cond);
-}
-
 BasicBlock *LoopInst::body_block() noexcept {
-    return static_cast<BasicBlock *>(operand(operand_index_body_block));
+    return _body_block;
 }
 
 const BasicBlock *LoopInst::body_block() const noexcept {
-    return const_cast<LoopInst *>(this)->body_block();
+    return _body_block;
 }
 
 BasicBlock *LoopInst::update_block() noexcept {
-    return static_cast<BasicBlock *>(operand(operand_index_update_block));
+    return _update_block;
 }
 
 const BasicBlock *LoopInst::update_block() const noexcept {
-    return const_cast<LoopInst *>(this)->update_block();
-}
-
-BasicBlock *LoopInst::merge_block() noexcept {
-    return static_cast<BasicBlock *>(operand(operand_index_merge_block));
-}
-
-const BasicBlock *LoopInst::merge_block() const noexcept {
-    return const_cast<LoopInst *>(this)->merge_block();
+    return _update_block;
 }
 
 }// namespace luisa::compute::xir

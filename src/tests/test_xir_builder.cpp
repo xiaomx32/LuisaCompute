@@ -4,6 +4,7 @@ using namespace luisa;
 using namespace luisa::compute;
 
 int main() {
+
     auto module = xir::Module{};
     module.add_comment("My very simple test module.");
     module.set_name("TestModule");
@@ -12,24 +13,25 @@ int main() {
     auto bool_false = module.create_constant(false);
     bool_false->add_comment("bool constant false");
 
-    auto b = xir::Builder{};
+    auto b = xir::Builder{module.pool()};
 
     auto f = module.create_callable(Type::of<float>());
     f->set_name("callable_function");
     f->set_location(__FILE__, __LINE__);
     f->add_comment("This is a callable function.");
+
     auto x = f->create_value_argument(Type::of<float>());
     auto y = f->create_value_argument(Type::of<float>());
     auto ray = f->create_value_argument(Type::of<Ray>());
     ray->add_comment("This is a ray...");
 
-    b.set_insertion_point(f->body());
+    b.set_insertion_point(f->create_body_block());
     auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
     auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
     auto coord = b.call(Type::of<uint3>(), xir::IntrinsicOp::DISPATCH_ID, {});
     auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, u32_zero});
     auto outline = b.outline();
-    auto outline_body = outline->create_body_block();
+    auto outline_body = outline->create_target_block();
     b.set_insertion_point(outline_body);
     auto switch_ = b.switch_(coord_x);
     switch_->add_comment("switch on x coordinate");
@@ -57,7 +59,7 @@ int main() {
 
     auto k = module.create_kernel();
     auto buffer = k->create_value_argument(Type::of<Buffer<float>>());
-    b.set_insertion_point(k->body());
+    b.set_insertion_point(k->create_body_block());
     auto va = b.alloca_local(Type::of<float>());
     auto vb = b.alloca_local(Type::of<float>());
     b.store(va, f32_one);
@@ -67,7 +69,7 @@ int main() {
     b.return_void();
 
     auto dummy = module.create_callable(nullptr);
-    b.set_insertion_point(dummy->body());
+    b.set_insertion_point(dummy->create_body_block());
     b.return_void();
 
     LUISA_INFO("IR:\n{}", xir::translate_to_text(module));

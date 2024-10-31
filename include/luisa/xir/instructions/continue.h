@@ -5,9 +5,9 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API ContinueInst final : public DerivedInstruction<DerivedInstructionTag::CONTINUE> {
+class ContinueInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::CONTINUE> {
 public:
-    explicit ContinueInst(Pool *pool) noexcept;
+    using DerivedTerminatorInstruction::DerivedTerminatorInstruction;
 };
 
 }// namespace luisa::compute::xir

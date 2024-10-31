@@ -1,7 +1,16 @@
 #include <luisa/core/logging.h>
+#include <luisa/xir/basic_block.h>
 #include <luisa/xir/instruction.h>
 
 namespace luisa::compute::xir {
+
+namespace detail {
+void merge_instruction_mixin_check_merge_block_overwrite(const BasicBlock *merge_block,
+                                                         bool overwrite_existing) noexcept {
+    LUISA_ASSERT(merge_block == nullptr || overwrite_existing,
+                 "Merge block already exists.");
+}
+}// namespace detail
 
 Instruction::Instruction(Pool *pool, const Type *type) noexcept
     : Super{pool, type} {}
@@ -53,6 +62,94 @@ void Instruction::replace_self_with(Instruction *node) noexcept {
     replace_all_uses_with(node);
     insert_before_self(node);
     remove_self();
+}
+
+TerminatorInstruction::TerminatorInstruction(Pool *pool) noexcept
+    : Instruction{pool, nullptr} {}
+
+BranchTerminatorInstruction::BranchTerminatorInstruction(Pool *pool) noexcept
+    : TerminatorInstruction{pool} {
+    auto operands = std::array{static_cast<Value *>(nullptr)};
+    set_operands(operands);
+}
+
+void BranchTerminatorInstruction::set_target_block(BasicBlock *target) noexcept {
+    set_operand(operand_index_target, target);
+}
+
+BasicBlock *BranchTerminatorInstruction::create_target_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(target_block() == nullptr || overwrite_existing,
+                 "Target block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_target_block(new_block);
+    return new_block;
+}
+
+BasicBlock *BranchTerminatorInstruction::target_block() noexcept {
+    return static_cast<BasicBlock *>(operand(operand_index_target));
+}
+
+const BasicBlock *BranchTerminatorInstruction::target_block() const noexcept {
+    return const_cast<BranchTerminatorInstruction *>(this)->target_block();
+}
+
+ConditionalBranchTerminatorInstruction::ConditionalBranchTerminatorInstruction(Pool *pool, Value *condition) noexcept
+    : TerminatorInstruction{pool} {
+    auto operands = std::array{condition, static_cast<Value *>(nullptr), static_cast<Value *>(nullptr)};
+    LUISA_DEBUG_ASSERT(operands[operand_index_condition] == condition, "Unexpected operand index.");
+    set_operands(operands);
+}
+
+void ConditionalBranchTerminatorInstruction::set_condition(Value *condition) noexcept {
+    set_operand(operand_index_condition, condition);
+}
+
+void ConditionalBranchTerminatorInstruction::set_true_target(BasicBlock *target) noexcept {
+    set_operand(operand_index_true_target, target);
+}
+
+void ConditionalBranchTerminatorInstruction::set_false_target(BasicBlock *target) noexcept {
+    set_operand(operand_index_false_target, target);
+}
+
+BasicBlock *ConditionalBranchTerminatorInstruction::create_true_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(true_block() == nullptr || overwrite_existing,
+                 "True block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_true_target(new_block);
+    return new_block;
+}
+
+BasicBlock *ConditionalBranchTerminatorInstruction::create_false_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(false_block() == nullptr || overwrite_existing,
+                 "False block already exists.");
+    auto new_block = pool()->create<BasicBlock>();
+    set_false_target(new_block);
+    return new_block;
+}
+
+Value *ConditionalBranchTerminatorInstruction::condition() noexcept {
+    return operand(operand_index_condition);
+}
+
+const Value *ConditionalBranchTerminatorInstruction::condition() const noexcept {
+    return operand(operand_index_condition);
+}
+
+BasicBlock *ConditionalBranchTerminatorInstruction::true_block() noexcept {
+    return static_cast<BasicBlock *>(operand(operand_index_true_target));
+}
+
+const BasicBlock *ConditionalBranchTerminatorInstruction::true_block() const noexcept {
+    return const_cast<ConditionalBranchTerminatorInstruction *>(this)->true_block();
+}
+
+BasicBlock *ConditionalBranchTerminatorInstruction::false_block() noexcept {
+    return static_cast<BasicBlock *>(operand(operand_index_false_target));
+}
+
+const BasicBlock *ConditionalBranchTerminatorInstruction::false_block() const noexcept {
+    return const_cast<ConditionalBranchTerminatorInstruction *>(this)->false_block();
 }
 
 }// namespace luisa::compute::xir
