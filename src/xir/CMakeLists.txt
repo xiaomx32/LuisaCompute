@@ -34,6 +34,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         metadata/name.cpp
 
         # translators
+        translators/ast2xir.cpp
         translators/xir2text.cpp
 )
 

@@ -18,8 +18,9 @@ public:
     Module() noexcept;
 
     void add_function(Function *function) noexcept;
-    [[nodiscard]] Function *create_kernel() noexcept;
-    [[nodiscard]] Function *create_callable(const Type *ret_type) noexcept;
+    [[nodiscard]] KernelFunction *create_kernel() noexcept;
+    [[nodiscard]] CallableFunction *create_callable(const Type *ret_type) noexcept;
+    [[nodiscard]] ExternalFunction *create_external_function(const Type *ret_type) noexcept;
     [[nodiscard]] auto &functions() noexcept { return _functions; }
     [[nodiscard]] auto &functions() const noexcept { return _functions; }
 

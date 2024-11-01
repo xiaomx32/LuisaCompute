@@ -11,7 +11,6 @@ namespace luisa::compute::xir {
 
 enum struct DerivedValueTag {
     FUNCTION,
-    EXTERNAL_FUNCTION,
     BASIC_BLOCK,
     INSTRUCTION,
     CONSTANT,

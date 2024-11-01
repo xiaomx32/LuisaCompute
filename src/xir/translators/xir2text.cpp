@@ -402,11 +402,12 @@ private:
             _emit_metadata_list(_main, f->metadata_list());
             _main << "\n";
         }
-        switch (f->function_tag()) {
-            case FunctionTag::KERNEL: _main << "kernel " << _value_ident(f); break;
-            case FunctionTag::CALLABLE: _main << "callable " << _value_ident(f) << ": " << _type_ident(f->type()); break;
+        switch (f->derived_function_tag()) {
+            case DerivedFunctionTag::KERNEL: _main << "kernel " << _value_ident(f); break;
+            case DerivedFunctionTag::CALLABLE: _main << "callable " << _value_ident(f) << ": " << _type_ident(f->type()); break;
+            case DerivedFunctionTag::EXTERNAL: _main << "external " << _value_ident(f) << ": " << _type_ident(f->type()); break;
         }
-        _main << " = (";
+        _main << " (";
         // TODO: metadata
         if (!f->arguments().empty()) { _main << "\n"; }
         for (auto arg : f->arguments()) {
@@ -424,8 +425,12 @@ private:
             _emit_use_debug_info(_main, arg->use_list());
             _main << "\n";
         }
-        _main << "), body ";
-        _emit_basic_block(f->body_block(), 0);
+        _main << ")";
+        if (f->derived_function_tag() != DerivedFunctionTag::EXTERNAL) {
+            _main << " = define ";
+            auto def = static_cast<const FunctionDefinition *>(f);
+            _emit_basic_block(def->body_block(), 0);
+        }
         _main << ";";
         _emit_use_debug_info(_main, f->use_list());
         _main << "\n\n";

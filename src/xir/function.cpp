@@ -3,8 +3,7 @@
 
 namespace luisa::compute::xir {
 
-Function::Function(FunctionTag tag, const Type *type) noexcept
-    : Super{type}, _function_tag{tag} {}
+Function::Function(const Type *type) noexcept : Super{type} {}
 
 void Function::add_argument(Argument *argument) noexcept {
     argument->_set_parent_function(this);
@@ -69,16 +68,29 @@ ReferenceArgument *Function::create_reference_argument(const Type *type) noexcep
     return argument;
 }
 
-void Function::set_body_block(BasicBlock *block) noexcept {
+void FunctionDefinition::set_body_block(BasicBlock *block) noexcept {
     _body_block = block;
 }
 
-BasicBlock *Function::create_body_block(bool overwrite_existing) noexcept {
+BasicBlock *FunctionDefinition::create_body_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(_body_block == nullptr || overwrite_existing,
                  "Body block already exists.");
     auto new_block = Pool::current()->create<BasicBlock>();
     set_body_block(new_block);
     return new_block;
+}
+
+KernelFunction::KernelFunction(luisa::uint3 block_size) noexcept {
+    set_block_size(block_size);
+}
+
+void KernelFunction::set_block_size(luisa::uint3 size) noexcept {
+    auto thread_count = size.x * size.y * size.z;
+    LUISA_ASSERT(thread_count >= 32u &&
+                     thread_count <= 1024u &&
+                     thread_count % 32u == 0u,
+                 "Invalid block size: {}.", size);
+    _block_size = size;
 }
 
 }// namespace luisa::compute::xir

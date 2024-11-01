@@ -7,14 +7,20 @@ namespace luisa::compute::xir {
 
 Module::Module() noexcept = default;
 
-Function *Module::create_kernel() noexcept {
-    auto f = Pool::current()->create<Function>(FunctionTag::KERNEL, nullptr);
+KernelFunction *Module::create_kernel() noexcept {
+    auto f = Pool::current()->create<KernelFunction>();
     add_function(f);
     return f;
 }
 
-Function *Module::create_callable(const Type *ret_type) noexcept {
-    auto f = Pool::current()->create<Function>(FunctionTag::CALLABLE, ret_type);
+CallableFunction *Module::create_callable(const Type *ret_type) noexcept {
+    auto f = Pool::current()->create<CallableFunction>(ret_type);
+    add_function(f);
+    return f;
+}
+
+ExternalFunction *Module::create_external_function(const Type *ret_type) noexcept {
+    auto f = Pool::current()->create<ExternalFunction>(ret_type);
     add_function(f);
     return f;
 }
