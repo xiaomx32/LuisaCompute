@@ -29,6 +29,7 @@ private:
 public:
     explicit Value(const Type *type = nullptr) noexcept;
     [[nodiscard]] virtual DerivedValueTag derived_value_tag() const noexcept = 0;
+    [[nodiscard]] virtual bool is_user() const noexcept { return false; }
 
     void replace_all_uses_with(Value *value) noexcept;
     virtual void set_type(const Type *type) noexcept;

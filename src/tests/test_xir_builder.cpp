@@ -75,5 +75,5 @@ int main() {
     b.set_insertion_point(dummy->create_body_block());
     b.return_void();
 
-    LUISA_INFO("IR:\n{}", xir::translate_to_text(module));
+    LUISA_INFO("IR:\n{}", xir::translate_to_text(module, true));
 }

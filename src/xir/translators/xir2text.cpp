@@ -37,6 +37,7 @@ private:
     StringScratch _main;
     luisa::unordered_map<const Value *, uint> _value_uid_map;
     luisa::unordered_map<const Type *, uint> _struct_uid_map;
+    bool _debug_info{false};
 
 private:
     [[nodiscard]] auto _value_uid(const Value *value) noexcept {
@@ -110,6 +111,15 @@ private:
         for (int i = 0; i < indent; i++) { _main << "    "; }
     }
 
+    void _emit_use_debug_info(StringScratch &ss, const UseList &uses) noexcept {
+        if (_debug_info && !uses.empty()) {
+            ss << "// users:";
+            for (auto &&u : uses) {
+                ss << " " << _value_ident(u.user());
+            }
+        }
+    }
+
     void _emit_constant(const Constant *c) noexcept {
         auto t = _type_ident(c->type());
         auto v = _value_ident(c);
@@ -117,13 +127,15 @@ private:
             _emit_metadata_list(_prelude, c->metadata_list());
             _prelude << "\n";
         }
-        _prelude << "const %" << v << ": " << t << " = ";
+        _prelude << "const " << v << ": " << t << " = ";
         auto size = c->type()->size();
         for (auto i = 0u; i < size; i++) {
             auto x = static_cast<const uint8_t *>(c->data())[i];
             _prelude << luisa::format("{:02x}", static_cast<uint>(x));
         }
-        _prelude << ";\n\n";
+        _prelude << ";";
+        _emit_use_debug_info(_prelude, c->use_list());
+        _prelude << "\n\n";
     }
 
     static void _emit_string_escaped(StringScratch &ss, luisa::string_view s) noexcept {
@@ -295,9 +307,7 @@ private:
             _main << "\n";
         }
         _emit_indent(indent);
-        if (auto t = inst->type()) {
-            _main << _value_ident(inst) << ": " << _type_ident(t) << " = ";
-        }
+        _main << _value_ident(inst) << ": " << _type_ident(inst->type()) << " = ";
         switch (inst->derived_instruction_tag()) {
             case DerivedInstructionTag::SENTINEL:
                 LUISA_ERROR_WITH_LOCATION("Unexpected sentinel instruction.");
@@ -363,7 +373,9 @@ private:
                 _emit_conditional_branch_inst(static_cast<const ConditionalBranchInst *>(inst));
                 break;
         }
-        _main << ";\n";
+        _main << ";";
+        _emit_use_debug_info(_main, inst->use_list());
+        _main << "\n";
     }
 
     void _emit_basic_block(const BasicBlock *b, int indent) noexcept {
@@ -374,7 +386,9 @@ private:
                 _emit_metadata_list(_main, b->metadata_list());
                 _main << " ";
             }
-            _main << _value_ident(b) << ": {\n";
+            _main << _value_ident(b) << ": {";
+            _emit_use_debug_info(_main, b->use_list());
+            _main << "\n";
             for (auto &&inst : b->instructions()) {
                 _emit_instruction(&inst, indent + 1);
             }
@@ -406,11 +420,15 @@ private:
             if (arg->derived_value_tag() == DerivedValueTag::REFERENCE_ARGUMENT) {
                 _main << "&";
             }
-            _main << _type_ident(arg->type()) << ";\n";
+            _main << _type_ident(arg->type()) << ";";
+            _emit_use_debug_info(_main, arg->use_list());
+            _main << "\n";
         }
         _main << "), body ";
         _emit_basic_block(f->body_block(), 0);
-        _main << ";\n\n";
+        _main << ";";
+        _emit_use_debug_info(_main, f->use_list());
+        _main << "\n\n";
     }
 
     void _emit_module(const Module *module) noexcept {
@@ -464,17 +482,19 @@ private:
 
 public:
     XIR2TextTranslator() noexcept : _prelude{1_k}, _main{4_k} {}
-    [[nodiscard]] luisa::string emit(const Module &module) noexcept {
+    [[nodiscard]] luisa::string emit(const Module &module, bool debug_info) noexcept {
         _prelude.clear();
         _main.clear();
         _value_uid_map.clear();
+        _struct_uid_map.clear();
+        _debug_info = debug_info;
         _emit_module(&module);
         return _prelude.string() + _main.string();
     }
 };
 
-luisa::string translate_to_text(const Module &module) noexcept {
-    return XIR2TextTranslator{}.emit(module);
+luisa::string translate_to_text(const Module &module, bool debug_info) noexcept {
+    return XIR2TextTranslator{}.emit(module, debug_info);
 }
 
 }// namespace luisa::compute::xir

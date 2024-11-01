@@ -17,6 +17,7 @@ protected:
 
 public:
     using Value::Value;
+    [[nodiscard]] bool is_user() const noexcept final { return true; }
 
     void set_operand_count(size_t n) noexcept;
     void set_operand(size_t index, Value *value) noexcept;
