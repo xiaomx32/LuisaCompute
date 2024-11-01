@@ -31,7 +31,7 @@ public:
     template<typename T>
     [[nodiscard]] T &as() noexcept {
         _check_reinterpret_cast_type_size(sizeof(T));
-        return *reinterpret_cast<T *>(data());
+        return *static_cast<T *>(data());
     }
 
     template<typename T>
