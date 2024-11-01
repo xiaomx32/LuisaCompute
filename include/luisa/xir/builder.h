@@ -75,6 +75,9 @@ public:
     CastInst *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
+    Value *static_cast_if_necessary(const Type *type, Value *value) noexcept;
+    Value *bit_cast_if_necessary(const Type *type, Value *value) noexcept;
+
     PhiInst *phi(const Type *type, luisa::span<const PhiIncoming> incomings = {}) noexcept;
     PhiInst *phi(const Type *type, std::initializer_list<PhiIncoming> incomings) noexcept;
 

@@ -28,7 +28,7 @@ private:
     Current _current;
 
 private:
-    Value *_translate_expression(Builder &b, const Expression *expr) noexcept {
+    Value *_translate_expression(Builder &b, const Expression *expr, bool load_lval) noexcept {
         return nullptr;
     }
 
@@ -46,7 +46,7 @@ private:
     }
 
     void _translate_switch_stmt(Builder &b, const SwitchStmt *ast_switch, luisa::span<const Statement *const> cdr) noexcept {
-        auto value = _translate_expression(b, ast_switch->expression());
+        auto value = _translate_expression(b, ast_switch->expression(), true);
         auto inst = _commented(b.switch_(value));
         auto merge_block = inst->create_merge_block();
         auto case_break_removed = [](auto stmt_span) noexcept {
@@ -107,20 +107,18 @@ private:
     }
 
     void _translate_if_stmt(Builder &b, const IfStmt *ast_if, luisa::span<const Statement *const> cdr) noexcept {
-        auto cond = _translate_expression(b, ast_if->condition());
+        auto cond = _translate_expression(b, ast_if->condition(), true);
         auto inst = _commented(b.if_(cond));
-        auto true_block = inst->create_true_block();
-        auto false_block = inst->create_false_block();
         auto merge_block = inst->create_merge_block();
         // true branch
         {
-            b.set_insertion_point(true_block);
+            b.set_insertion_point(inst->create_true_block());
             _translate_statements(b, ast_if->true_branch()->statements());
             if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
         }
         // false branch
         {
-            b.set_insertion_point(false_block);
+            b.set_insertion_point(inst->create_false_block());
             _translate_statements(b, ast_if->false_branch()->statements());
             if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
         }
@@ -130,15 +128,76 @@ private:
     }
 
     void _translate_loop_stmt(Builder &b, const LoopStmt *ast_loop, luisa::span<const Statement *const> cdr) noexcept {
-        // TODO
+        // TODO: pattern match while loops
+        auto inst = _commented(b.loop());
+        auto merge_block = inst->create_merge_block();
+        // body block
+        {
+            b.set_insertion_point(inst->create_prepare_block());
+            _translate_statements(b, ast_loop->body()->statements());
+            if (!b.is_insertion_point_terminator()) { b.br(inst->prepare_block()); }
+        }
+        // merge block
+        b.set_insertion_point(merge_block);
+        _translate_statements(b, cdr);
     }
 
     void _translate_for_stmt(Builder &b, const ForStmt *ast_for, luisa::span<const Statement *const> cdr) noexcept {
-        // TODO
+        auto var = _translate_expression(b, ast_for->variable(), false);
+        auto inst = _commented(b.loop());
+        auto merge_block = inst->create_merge_block();
+        auto prepare_block = inst->create_prepare_block();
+        auto body_block = inst->create_body_block();
+        auto update_block = inst->create_update_block();
+        // prepare block
+        {
+            b.set_insertion_point(prepare_block);
+            auto cond = _translate_expression(b, ast_for->condition(), true);
+            b.cond_br(cond, body_block, merge_block);
+        }
+        // body block
+        {
+            b.set_insertion_point(body_block);
+            _translate_statements(b, ast_for->body()->statements());
+            if (!b.is_insertion_point_terminator()) { b.br(update_block); }
+        }
+        // update block
+        {
+            b.set_insertion_point(update_block);
+            auto t = ast_for->variable()->type();
+            // var += step
+            auto step = _translate_expression(b, ast_for->step(), true);
+            auto cast_step = b.static_cast_if_necessary(t, step);
+            auto prev = b.load(t, var);
+            auto next = b.call(t, IntrinsicOp::BINARY_ADD, {prev, cast_step});
+            b.store(var, next);
+            // jump back to prepare block
+            b.br(prepare_block);
+        }
+        // merge block
+        b.set_insertion_point(merge_block);
+        _translate_statements(b, cdr);
     }
 
     void _translate_ray_query_stmt(Builder &b, const RayQueryStmt *ast_ray_query, luisa::span<const Statement *const> cdr) noexcept {
-        // TODO
+        auto query_object = _translate_expression(b, ast_ray_query->query(), false);
+        auto inst = _commented(b.ray_query(query_object));
+        auto merge_block = inst->create_merge_block();
+        // on surface candidate block
+        {
+            b.set_insertion_point(inst->create_on_surface_candidate_block());
+            _translate_statements(b, ast_ray_query->on_triangle_candidate()->statements());
+            if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
+        }
+        // on procedural candidate block
+        {
+            b.set_insertion_point(inst->create_on_procedural_candidate_block());
+            _translate_statements(b, ast_ray_query->on_procedural_candidate()->statements());
+            if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
+        }
+        // merge block
+        b.set_insertion_point(merge_block);
+        _translate_statements(b, cdr);
     }
 
     void _translate_statements(Builder &b, luisa::span<const Statement *const> stmts) noexcept {
@@ -156,7 +215,7 @@ private:
             }
             case Statement::Tag::RETURN: {
                 if (auto ast_expr = static_cast<const ReturnStmt *>(car)->expression()) {
-                    auto value = _translate_expression(b, ast_expr);
+                    auto value = _translate_expression(b, ast_expr, true);
                     _commented(b.return_(value));
                 } else {
                     _commented(b.return_void());
@@ -176,7 +235,7 @@ private:
             }
             case Statement::Tag::EXPR: {
                 auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
-                _commented(_translate_expression(b, ast_expr));
+                _commented(_translate_expression(b, ast_expr, false));
                 _translate_statements(b, cdr);
                 break;
             }
@@ -189,9 +248,9 @@ private:
             case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
             case Statement::Tag::ASSIGN: {
                 auto assign = static_cast<const AssignStmt *>(car);
-                auto lhs = _translate_expression(b, assign->lhs());
-                auto rhs = _translate_expression(b, assign->rhs());
-                _commented(b.store(lhs, rhs));
+                auto variable = _translate_expression(b, assign->lhs(), false);
+                auto value = _translate_expression(b, assign->rhs(), true);
+                _commented(b.store(variable, value));
                 _translate_statements(b, cdr);
                 break;
             }
@@ -215,7 +274,7 @@ private:
                 auto ast_print = static_cast<const PrintStmt *>(car);
                 luisa::fixed_vector<Value *, 16u> args;
                 for (auto ast_arg : ast_print->arguments()) {
-                    args.emplace_back(_translate_expression(b, ast_arg));
+                    args.emplace_back(_translate_expression(b, ast_arg, true));
                 }
                 _commented(b.print(luisa::string{ast_print->format()}, args));
                 _translate_statements(b, cdr);

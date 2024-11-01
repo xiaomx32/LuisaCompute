@@ -105,6 +105,14 @@ CastInst *Builder::bit_cast_(const Type *type, Value *value) noexcept {
     return _create_and_append_instruction<CastInst>(type, CastOp::BITWISE_CAST, value);
 }
 
+Value *Builder::static_cast_if_necessary(const Type *type, Value *value) noexcept {
+    return value->type() == type ? value : static_cast_(type, value);
+}
+
+Value *Builder::bit_cast_if_necessary(const Type *type, Value *value) noexcept {
+    return value->type() == type ? value : bit_cast_(type, value);
+}
+
 PhiInst *Builder::phi(const Type *type, luisa::span<const PhiIncoming> incomings) noexcept {
     auto inst = _create_and_append_instruction<PhiInst>(type);
     for (auto incoming : incomings) { inst->add_incoming(incoming.value, incoming.block); }
