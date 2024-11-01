@@ -47,6 +47,11 @@ public:
     [[nodiscard]] auto insertion_point() noexcept -> Instruction * { return _insertion_point; }
     [[nodiscard]] auto insertion_point() const noexcept -> const Instruction * { return _insertion_point; }
 
+    [[nodiscard]] auto is_insertion_point_terminator() const noexcept {
+        return _insertion_point != nullptr &&
+               _insertion_point->is_terminator();
+    }
+
 public:
     IfInst *if_(Value *cond) noexcept;
     SwitchInst *switch_(Value *value) noexcept;

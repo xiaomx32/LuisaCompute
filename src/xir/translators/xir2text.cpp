@@ -498,7 +498,7 @@ public:
     }
 };
 
-luisa::string translate_to_text(const Module &module, bool debug_info) noexcept {
+luisa::string xir_to_text_translate(const Module &module, bool debug_info) noexcept {
     return XIR2TextTranslator{}.emit(module, debug_info);
 }
 
