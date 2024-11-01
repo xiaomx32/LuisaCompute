@@ -7,14 +7,12 @@ namespace luisa::compute::xir {
 Value::Value(const Type *type) noexcept : _type{type} {}
 
 void Value::replace_all_uses_with(Value *value) noexcept {
-    luisa::fixed_vector<Use *, 16u> uses;
-    for (auto &&use : _use_list) {
-        LUISA_DEBUG_ASSERT(use.value() == this,
-                           "Use value mismatch.");
-        uses.emplace_back(&use);
-    }
-    for (auto &&use : uses) {
-        use->set_value(value, true);
+    while (!_use_list.empty()) {
+        auto use = &_use_list.front();
+        LUISA_DEBUG_ASSERT(use->value() == this, "Invalid use.");
+        use->remove_self();
+        use->set_value(value);
+        if (value) { use->add_to_list(value->use_list()); }
     }
 }
 

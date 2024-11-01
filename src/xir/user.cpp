@@ -7,7 +7,7 @@ namespace luisa::compute::xir {
 void User::set_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index < _operands.size(), "Index out of range.");
     LUISA_DEBUG_ASSERT(_operands[index] != nullptr && _operands[index]->user() == this, "Invalid operand.");
-    _operands[index]->set_value(value, _should_add_self_to_operand_use_lists());
+    _set_operand_use_value(_operands[index], value);
 }
 
 Use *User::operand_use(size_t index) noexcept {
@@ -28,10 +28,20 @@ const Value *User::operand(size_t index) const noexcept {
     return operand_use(index)->value();
 }
 
+void User::_set_operand_use_value(Use *use, Value *value) const noexcept {
+    if (use->value() != value) {
+        if (use->value()) { use->remove_self(); }
+        use->set_value(value);
+        if (value && _should_add_self_to_operand_use_lists()) {
+            use->add_to_list(value->use_list());
+        }
+    }
+}
+
 void User::set_operand_count(size_t n) noexcept {
     if (n < _operands.size()) {// remove redundant operands
         for (auto i = n; i < _operands.size(); i++) {
-            operand_use(i)->reset_value();
+            _set_operand_use_value(_operands[i], nullptr);
         }
         _operands.resize(n);
     } else {// create new operands
@@ -52,20 +62,20 @@ void User::set_operands(luisa::span<Value *const> operands) noexcept {
 
 void User::add_operand(Value *value) noexcept {
     auto use = Pool::current()->create<Use>(this);
-    use->set_value(value, _should_add_self_to_operand_use_lists());
+    _set_operand_use_value(use, value);
     _operands.emplace_back(use);
 }
 
 void User::insert_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index <= _operands.size(), "Index out of range.");
     auto use = Pool::current()->create<Use>(this);
-    use->set_value(value, _should_add_self_to_operand_use_lists());
+    _set_operand_use_value(use, value);
     _operands.insert(_operands.cbegin() + index, use);
 }
 
 void User::remove_operand(size_t index) noexcept {
     if (index < _operands.size()) {
-        _operands[index]->reset_value();
+        _set_operand_use_value(_operands[index], nullptr);
         _operands.erase(_operands.cbegin() + index);
     }
 }

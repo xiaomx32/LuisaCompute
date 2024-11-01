@@ -39,29 +39,26 @@ private:
     luisa::unordered_map<const Type *, uint> _struct_uid_map;
 
 private:
-    void _emit_const(const Type *type, const void *data) noexcept {
-        auto size = type->size();
+    void _emit_constant(const Constant *c) noexcept {
+        auto t = _type_ident(c->type());
+        auto v = _value_ident(c);
+        if (!c->metadata_list().empty()) {
+            _emit_metadata_list(_prelude, c->metadata_list());
+            _prelude << "\n";
+        }
+        _prelude << "const %" << v << ": " << t << " = ";
+        auto size = c->type()->size();
         for (auto i = 0u; i < size; i++) {
-            auto x = static_cast<const uint8_t *>(data)[i];
+            auto x = static_cast<const uint8_t *>(c->data())[i];
             _prelude << luisa::format("{:02x}", static_cast<uint>(x));
         }
+        _prelude << ";\n\n";
     }
 
     [[nodiscard]] auto _value_uid(const Value *value) noexcept {
         LUISA_ASSERT(value != nullptr, "Value must not be null.");
         auto next_uid = static_cast<uint>(_value_uid_map.size());
-        auto [iter, not_existed] = _value_uid_map.try_emplace(value, next_uid);
-        if (not_existed && value->derived_value_tag() == DerivedValueTag::CONSTANT) {
-            auto t = _type_ident(value->type());
-            if (!value->metadata_list().empty()) {
-                _emit_metadata_list(_prelude, value->metadata_list());
-                _prelude << "\n";
-            }
-            _prelude << "const %" << iter->second << ": " << t << " = ";
-            _emit_const(value->type(), static_cast<const Constant *>(value)->data());
-            _prelude << ";\n\n";
-        }
-        return iter->second;
+        return _value_uid_map.try_emplace(value, next_uid).first->second;
     }
 
     [[nodiscard]] auto _value_ident(const Value *value) noexcept {
@@ -422,12 +419,8 @@ private:
             _prelude << "\n";
         }
         _prelude << "module;\n\n";// TODO: metadata
-        for (auto &f : module->functions()) {
-            static_cast<void>(_value_uid(&f));
-        }
-        for (auto &f : module->functions()) {
-            _emit_function(&f);
-        }
+        for (auto &c : module->constants()) { _emit_constant(&c); }
+        for (auto &f : module->functions()) { _emit_function(&f); }
     }
 
     static void _emit_name_metadata(StringScratch &s, const NameMD &m) noexcept {
