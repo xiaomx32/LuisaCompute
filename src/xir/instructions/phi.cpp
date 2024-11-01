@@ -4,8 +4,8 @@
 
 namespace luisa::compute::xir {
 
-PhiInst::PhiInst(Pool *pool, const Type *type) noexcept
-    : DerivedInstruction{pool, type} {}
+PhiInst::PhiInst(const Type *type) noexcept
+    : DerivedInstruction{type} {}
 
 void PhiInst::set_incoming_count(size_t count) noexcept {
     set_operand_count(count);

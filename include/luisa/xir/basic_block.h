@@ -14,7 +14,7 @@ private:
     InstructionList _instructions;
 
 public:
-    explicit BasicBlock(Pool *pool) noexcept;
+    BasicBlock() noexcept;
     [[nodiscard]] auto &instructions() noexcept { return _instructions; }
     [[nodiscard]] auto &instructions() const noexcept { return _instructions; }
 };

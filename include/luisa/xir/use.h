@@ -14,7 +14,7 @@ private:
     Value *_value = nullptr;
 
 public:
-    Use(Pool *pool, User *user) noexcept;
+    explicit Use(User *user) noexcept;
     void reset_value() noexcept;
     void set_value(Value *value, bool add_to_use_list) noexcept;
     [[nodiscard]] auto value() noexcept { return _value; }

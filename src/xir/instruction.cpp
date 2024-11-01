@@ -4,16 +4,7 @@
 
 namespace luisa::compute::xir {
 
-namespace detail {
-void instruction_merge_mixin_check_overwrite(const BasicBlock *merge_block,
-                                             bool overwrite_existing) noexcept {
-    LUISA_ASSERT(merge_block == nullptr || overwrite_existing,
-                 "Merge block already exists.");
-}
-}// namespace detail
-
-Instruction::Instruction(Pool *pool, const Type *type) noexcept
-    : Super{pool, type} {}
+Instruction::Instruction(const Type *type) noexcept : Super{type} {}
 
 void Instruction::_set_parent_block(BasicBlock *block) noexcept {
     _parent_block = block;
@@ -64,11 +55,10 @@ void Instruction::replace_self_with(Instruction *node) noexcept {
     remove_self();
 }
 
-TerminatorInstruction::TerminatorInstruction(Pool *pool) noexcept
-    : Instruction{pool, nullptr} {}
+TerminatorInstruction::TerminatorInstruction() noexcept
+    : Instruction{nullptr} {}
 
-BranchTerminatorInstruction::BranchTerminatorInstruction(Pool *pool) noexcept
-    : TerminatorInstruction{pool} {
+BranchTerminatorInstruction::BranchTerminatorInstruction() noexcept {
     auto operands = std::array{static_cast<Value *>(nullptr)};
     set_operands(operands);
 }
@@ -80,7 +70,7 @@ void BranchTerminatorInstruction::set_target_block(BasicBlock *target) noexcept 
 BasicBlock *BranchTerminatorInstruction::create_target_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(target_block() == nullptr || overwrite_existing,
                  "Target block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_target_block(new_block);
     return new_block;
 }
@@ -93,10 +83,9 @@ const BasicBlock *BranchTerminatorInstruction::target_block() const noexcept {
     return const_cast<BranchTerminatorInstruction *>(this)->target_block();
 }
 
-ConditionalBranchTerminatorInstruction::ConditionalBranchTerminatorInstruction(Pool *pool, Value *condition) noexcept
-    : TerminatorInstruction{pool} {
+ConditionalBranchTerminatorInstruction::ConditionalBranchTerminatorInstruction(Value *condition) noexcept {
     auto operands = std::array{condition, static_cast<Value *>(nullptr), static_cast<Value *>(nullptr)};
-    LUISA_DEBUG_ASSERT(operands[operand_index_condition] == condition, "Unexpected operand index.");
+    LUISA_DEBUG_ASSERT(operands[operand_index_condition] == condition, "Condition operand mismatch.");
     set_operands(operands);
 }
 
@@ -115,7 +104,7 @@ void ConditionalBranchTerminatorInstruction::set_false_target(BasicBlock *target
 BasicBlock *ConditionalBranchTerminatorInstruction::create_true_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(true_block() == nullptr || overwrite_existing,
                  "True block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_true_target(new_block);
     return new_block;
 }
@@ -123,7 +112,7 @@ BasicBlock *ConditionalBranchTerminatorInstruction::create_true_block(bool overw
 BasicBlock *ConditionalBranchTerminatorInstruction::create_false_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(false_block() == nullptr || overwrite_existing,
                  "False block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_false_target(new_block);
     return new_block;
 }
@@ -150,6 +139,14 @@ BasicBlock *ConditionalBranchTerminatorInstruction::false_block() noexcept {
 
 const BasicBlock *ConditionalBranchTerminatorInstruction::false_block() const noexcept {
     return const_cast<ConditionalBranchTerminatorInstruction *>(this)->false_block();
+}
+
+BasicBlock *InstructionMergeMixin::create_merge_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(merge_block() == nullptr || overwrite_existing,
+                 "Merge block already exists.");
+    auto block = Pool::current()->create<BasicBlock>();
+    set_merge_block(block);
+    return block;
 }
 
 }// namespace luisa::compute::xir

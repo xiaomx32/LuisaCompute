@@ -2,8 +2,7 @@
 
 namespace luisa::compute::xir {
 
-ReturnInst::ReturnInst(Pool *pool, Value *value) noexcept
-    : DerivedTerminatorInstruction{pool} {
+ReturnInst::ReturnInst(Value *value) noexcept {
     set_operands(std::array{value});
 }
 

@@ -15,7 +15,7 @@ private:
     AllocSpace _space;
 
 public:
-    explicit AllocaInst(Pool *pool, const Type *type = nullptr,
+    explicit AllocaInst(const Type *type = nullptr,
                         AllocSpace space = AllocSpace::LOCAL) noexcept;
     void set_space(AllocSpace space) noexcept;
     [[nodiscard]] auto space() const noexcept { return _space; }

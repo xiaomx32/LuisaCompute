@@ -4,23 +4,26 @@
 #include <luisa/xir/metadata/comment.h>
 #include <luisa/xir/metadata.h>
 
-namespace luisa::compute::xir::detail {
+namespace luisa::compute::xir {
 
-Metadata *metadata_find(DerivedMetadataTag tag, MetadataList &list) noexcept {
-    for (auto &m : list) {
-        if (m.derived_metadata_tag() == tag) {
-            return &m;
-        }
+Metadata *MetadataMixin::find_metadata(DerivedMetadataTag tag) noexcept {
+    for (auto &m : _metadata_list) {
+        if (m.derived_metadata_tag() == tag) { return &m; }
     }
     return nullptr;
 }
 
-Metadata *metadata_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept {
+const Metadata *MetadataMixin::find_metadata(DerivedMetadataTag tag) const noexcept {
+    return const_cast<MetadataMixin *>(this)->find_metadata(tag);
+}
+
+Metadata *MetadataMixin::create_metadata(DerivedMetadataTag tag) noexcept {
+    auto pool = Pool::current();
     switch (tag) {
 #define LUISA_XIR_MAKE_METADATA_CREATE_CASE(type)   \
     case type##MD::static_derived_metadata_tag(): { \
         auto m = pool->create<type##MD>();          \
-        m->add_to_list(list);                       \
+        m->add_to_list(_metadata_list);             \
         return m;                                   \
     }
         LUISA_XIR_MAKE_METADATA_CREATE_CASE(Name)
@@ -32,27 +35,24 @@ Metadata *metadata_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list
                               static_cast<uint32_t>(tag));
 }
 
-Metadata *metadata_find_or_create(Pool *pool, DerivedMetadataTag tag, MetadataList &list) noexcept {
-    if (auto m = metadata_find(tag, list)) { return m; }
-    return metadata_create(pool, tag, list);
+Metadata *MetadataMixin::find_or_create_metadata(DerivedMetadataTag tag) noexcept {
+    if (auto m = find_metadata(tag); m != nullptr) { return m; }
+    return create_metadata(tag);
 }
 
-void metadata_set_or_create_name(Pool *pool, MetadataList &list,
-                                 luisa::string_view name) noexcept {
-    auto m = static_cast<NameMD *>(metadata_find_or_create(pool, DerivedMetadataTag::NAME, list));
+void MetadataMixin::set_name(std::string_view name) noexcept {
+    auto m = find_or_create_metadata<NameMD>();
     m->set_name(name);
 }
 
-void metadata_set_or_create_location(Pool *pool, MetadataList &list,
-                                     const luisa::filesystem::path &file, int line) noexcept {
-    auto m = static_cast<LocationMD *>(metadata_find_or_create(pool, DerivedMetadataTag::LOCATION, list));
+void MetadataMixin::set_location(const std::filesystem::path &file, int line) noexcept {
+    auto m = find_or_create_metadata<LocationMD>();
     m->set_location(file, line);
 }
 
-void metadata_add_comment(Pool *pool, MetadataList &list,
-                          luisa::string_view comment) noexcept {
-    auto m = static_cast<CommentMD *>(metadata_create(pool, DerivedMetadataTag::COMMENT, list));
+void MetadataMixin::add_comment(std::string_view comment) noexcept {
+    auto m = create_metadata<CommentMD>();
     m->set_comment(comment);
 }
 
-}// namespace luisa::compute::xir::detail
+}// namespace luisa::compute::xir

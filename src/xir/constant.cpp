@@ -4,8 +4,8 @@
 
 namespace luisa::compute::xir {
 
-Constant::Constant(Pool *pool, const Type *type, const void *data) noexcept
-    : DerivedValue{pool, type} {
+Constant::Constant(const Type *type, const void *data) noexcept
+    : Super{type} {
     LUISA_ASSERT(type != nullptr, "Constant type must be specified.");
     if (!_is_small()) {
         _large = luisa::allocate_with_allocator<std::byte>(type->size());

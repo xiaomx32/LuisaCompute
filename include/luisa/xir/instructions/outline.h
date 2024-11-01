@@ -7,7 +7,7 @@ namespace luisa::compute::xir {
 class BasicBlock;
 
 class OutlineInst final : public DerivedBranchInstruction<DerivedInstructionTag::OUTLINE>,
-                          public InstructionMergeMixin<OutlineInst> {
+                          public InstructionMergeMixin {
 public:
     using DerivedBranchInstruction::DerivedBranchInstruction;
 };

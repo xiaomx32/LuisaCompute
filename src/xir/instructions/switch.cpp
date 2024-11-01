@@ -4,8 +4,7 @@
 
 namespace luisa::compute::xir {
 
-SwitchInst::SwitchInst(Pool *pool, Value *value) noexcept
-    : DerivedTerminatorInstruction{pool} {
+SwitchInst::SwitchInst(Value *value) noexcept {
     auto default_block = static_cast<Value *>(nullptr);
     auto operands = std::array{value, default_block};
     LUISA_DEBUG_ASSERT(operands[operand_index_value] == value, "Unexpected operand index.");
@@ -23,13 +22,13 @@ void SwitchInst::set_default_block(BasicBlock *block) noexcept {
 BasicBlock *SwitchInst::create_default_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(default_block() == nullptr || overwrite_existing,
                  "Default block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_default_block(new_block);
     return new_block;
 }
 
 BasicBlock *SwitchInst::create_case_block(case_value_type value) noexcept {
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     add_case(value, new_block);
     return new_block;
 }

@@ -2,10 +2,10 @@
 
 namespace luisa::compute::xir {
 
-LoadInst::LoadInst(Pool *pool, const Type *type, Value *variable) noexcept
-    : DerivedInstruction{pool, type} {
-    auto oprands = std::array{variable};
-    set_operands(oprands);
+LoadInst::LoadInst(const Type *type, Value *variable) noexcept
+    : DerivedInstruction{type} {
+    auto operands = std::array{variable};
+    set_operands(operands);
 }
 
 Value *LoadInst::variable() noexcept {

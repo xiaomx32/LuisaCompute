@@ -4,8 +4,7 @@
 
 namespace luisa::compute::xir {
 
-Value::Value(Pool *pool, const Type *type) noexcept
-    : PooledObject{pool}, _type{type} {}
+Value::Value(const Type *type) noexcept : _type{type} {}
 
 void Value::replace_all_uses_with(Value *value) noexcept {
     luisa::fixed_vector<Use *, 16u> uses;

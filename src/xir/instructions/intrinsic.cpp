@@ -9,9 +9,9 @@
 
 namespace luisa::compute::xir {
 
-IntrinsicInst::IntrinsicInst(Pool *pool, const Type *type, IntrinsicOp op,
+IntrinsicInst::IntrinsicInst(const Type *type, IntrinsicOp op,
                              luisa::span<Value *const> operands) noexcept
-    : DerivedInstruction{pool, type}, _op{op} { set_operands(operands); }
+    : DerivedInstruction{type}, _op{op} { set_operands(operands); }
 
 luisa::string to_string(IntrinsicOp op) noexcept {
     switch (op) {

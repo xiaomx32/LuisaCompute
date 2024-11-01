@@ -3,8 +3,8 @@
 
 namespace luisa::compute::xir {
 
-Function::Function(Pool *pool, FunctionTag tag, const Type *type) noexcept
-    : Super{pool, type}, _function_tag{tag} {}
+Function::Function(FunctionTag tag, const Type *type) noexcept
+    : Super{type}, _function_tag{tag} {}
 
 void Function::add_argument(Argument *argument) noexcept {
     argument->_set_parent_function(this);
@@ -58,13 +58,13 @@ Argument *Function::create_argument(const Type *type, bool by_ref) noexcept {
 }
 
 ValueArgument *Function::create_value_argument(const Type *type) noexcept {
-    auto argument = pool()->create<ValueArgument>(type, this);
+    auto argument = Pool::current()->create<ValueArgument>(type, this);
     add_argument(argument);
     return argument;
 }
 
 ReferenceArgument *Function::create_reference_argument(const Type *type) noexcept {
-    auto argument = pool()->create<ReferenceArgument>(type, this);
+    auto argument = Pool::current()->create<ReferenceArgument>(type, this);
     add_argument(argument);
     return argument;
 }
@@ -76,7 +76,7 @@ void Function::set_body_block(BasicBlock *block) noexcept {
 BasicBlock *Function::create_body_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(_body_block == nullptr || overwrite_existing,
                  "Body block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_body_block(new_block);
     return new_block;
 }

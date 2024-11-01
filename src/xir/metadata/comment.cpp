@@ -2,8 +2,8 @@
 
 namespace luisa::compute::xir {
 
-CommentMD::CommentMD(Pool *pool, luisa::string comment) noexcept
-    : DerivedMetadata{pool}, _comment{std::move(comment)} {}
+CommentMD::CommentMD(luisa::string comment) noexcept
+    : _comment{std::move(comment)} {}
 
 void CommentMD::set_comment(luisa::string_view comment) noexcept {
     _comment = comment;

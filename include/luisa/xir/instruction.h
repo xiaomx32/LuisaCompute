@@ -53,7 +53,7 @@ protected:
     [[nodiscard]] bool _should_add_self_to_operand_use_lists() const noexcept override;
 
 public:
-    explicit Instruction(Pool *pool, const Type *type = nullptr) noexcept;
+    explicit Instruction(const Type *type = nullptr) noexcept;
     [[nodiscard]] virtual DerivedInstructionTag derived_instruction_tag() const noexcept {
         return DerivedInstructionTag::SENTINEL;
     }
@@ -72,7 +72,7 @@ using InstructionList = InlineIntrusiveList<Instruction>;
 
 class LC_XIR_API TerminatorInstruction : public Instruction {
 public:
-    explicit TerminatorInstruction(Pool *pool) noexcept;
+    TerminatorInstruction() noexcept;
     [[nodiscard]] bool is_terminator() noexcept final { return true; }
 };
 
@@ -84,7 +84,7 @@ public:
     static constexpr size_t derived_operand_index_offset = 1u;
 
 public:
-    explicit BranchTerminatorInstruction(Pool *pool) noexcept;
+    BranchTerminatorInstruction() noexcept;
 
     void set_target_block(BasicBlock *target) noexcept;
     BasicBlock *create_target_block(bool overwrite_existing = false) noexcept;
@@ -103,7 +103,7 @@ public:
     static constexpr size_t derived_operand_index_offset = 3u;
 
 public:
-    explicit ConditionalBranchTerminatorInstruction(Pool *pool, Value *condition = nullptr) noexcept;
+    explicit ConditionalBranchTerminatorInstruction(Value *condition = nullptr) noexcept;
 
     void set_condition(Value *condition) noexcept;
     void set_true_target(BasicBlock *target) noexcept;
@@ -154,12 +154,7 @@ public:
     using DerivedInstruction<tag, ConditionalBranchTerminatorInstruction>::DerivedInstruction;
 };
 
-namespace detail {
-LC_XIR_API void instruction_merge_mixin_check_overwrite(const BasicBlock *merge_block, bool overwrite_existing) noexcept;
-}// namespace detail
-
-template<typename Parent>
-class InstructionMergeMixin {
+class LC_XIR_API InstructionMergeMixin {
 
 private:
     BasicBlock *_merge_block{nullptr};
@@ -172,13 +167,7 @@ public:
     void set_merge_block(BasicBlock *block) noexcept { _merge_block = block; }
     [[nodiscard]] BasicBlock *merge_block() noexcept { return _merge_block; }
     [[nodiscard]] const BasicBlock *merge_block() const noexcept { return _merge_block; }
-    BasicBlock *create_merge_block(bool overwrite_existing = false) noexcept {
-        detail::instruction_merge_mixin_check_overwrite(_merge_block, overwrite_existing);
-        auto self = static_cast<Parent *>(this);
-        auto block = self->pool()->template create<BasicBlock>();
-        set_merge_block(block);
-        return block;
-    }
+    BasicBlock *create_merge_block(bool overwrite_existing = false) noexcept;
 };
 
 }// namespace luisa::compute::xir

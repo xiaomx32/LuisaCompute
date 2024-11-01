@@ -11,7 +11,7 @@ public:
     static constexpr size_t operand_index_return_value = 0u;
 
 public:
-    explicit ReturnInst(Pool *pool, Value *value = nullptr) noexcept;
+    explicit ReturnInst(Value *value = nullptr) noexcept;
 
     // nullptr for void return
     void set_return_value(Value *value) noexcept;

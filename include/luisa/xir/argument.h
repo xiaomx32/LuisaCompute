@@ -16,7 +16,7 @@ private:
     void _set_parent_function(Function *func) noexcept;
 
 public:
-    explicit Argument(Pool *pool, const Type *type = nullptr,
+    explicit Argument(const Type *type = nullptr,
                       Function *parent_function = nullptr) noexcept;
     [[nodiscard]] Function *parent_function() noexcept { return _parent_function; }
     [[nodiscard]] const Function *parent_function() const noexcept { return _parent_function; }

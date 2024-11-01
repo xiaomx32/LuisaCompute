@@ -4,7 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API Constant : public DerivedValue<DerivedValueTag::CONSTANT> {
+class LC_XIR_API Constant : public IntrusiveForwardNode<Constant, DerivedValue<DerivedValueTag::CONSTANT>> {
 
 private:
     union {
@@ -17,8 +17,7 @@ private:
     void _check_reinterpret_cast_type_size(size_t size) const noexcept;
 
 public:
-    explicit Constant(Pool *pool, const Type *type,
-                      const void *data = nullptr) noexcept;
+    explicit Constant(const Type *type, const void *data = nullptr) noexcept;
     ~Constant() noexcept override;
 
     [[noreturn]] void set_type(const Type *type) noexcept override {
@@ -40,5 +39,7 @@ public:
         return const_cast<Constant *>(this)->as<T>();
     }
 };
+
+using ConstantList = IntrusiveForwardList<Constant>;
 
 }// namespace luisa::compute::xir

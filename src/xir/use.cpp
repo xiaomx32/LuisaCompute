@@ -4,8 +4,7 @@
 
 namespace luisa::compute::xir {
 
-Use::Use(Pool *pool, User *user) noexcept
-    : Super{pool}, _user{user} {
+Use::Use(User *user) noexcept : _user{user} {
     LUISA_DEBUG_ASSERT(user != nullptr, "User must not be null.");
 }
 

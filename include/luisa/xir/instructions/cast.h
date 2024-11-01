@@ -15,7 +15,7 @@ private:
     CastOp _op;
 
 public:
-    explicit CastInst(Pool *pool, const Type *target_type = nullptr,
+    explicit CastInst(const Type *target_type = nullptr,
                       CastOp op = CastOp::STATIC_CAST,
                       Value *value = nullptr) noexcept;
 

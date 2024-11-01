@@ -32,7 +32,7 @@ private:
     luisa::vector<BasicBlock *> _incoming_blocks;
 
 public:
-    explicit PhiInst(Pool *pool, const Type *type = nullptr) noexcept;
+    explicit PhiInst(const Type *type = nullptr) noexcept;
     void set_incoming_count(size_t count) noexcept;
     void set_incoming(size_t index, Value *value, BasicBlock *block) noexcept;
     void add_incoming(Value *value, BasicBlock *block) noexcept;

@@ -5,7 +5,7 @@
 namespace luisa::compute::xir {
 
 class LC_XIR_API RayQueryInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::RAY_QUERY>,
-                                      public InstructionMergeMixin<RayQueryInst> {
+                                      public InstructionMergeMixin {
 
 public:
     static constexpr size_t operand_index_query_object = 0u;
@@ -13,7 +13,7 @@ public:
     static constexpr size_t operand_index_on_procedural_candidate_block = 2u;
 
 public:
-    explicit RayQueryInst(Pool *pool, Value *query_object = nullptr) noexcept;
+    explicit RayQueryInst(Value *query_object = nullptr) noexcept;
 
     void set_query_object(Value *query_object) noexcept;
     void set_on_surface_candidate_block(BasicBlock *block) noexcept;

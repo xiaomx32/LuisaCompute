@@ -11,8 +11,7 @@ public:
     static constexpr size_t operand_index_argument_offset = 1u;
 
 public:
-    explicit CallInst(Pool *pool, const Type *type = nullptr,
-                      Value *callee = nullptr,
+    explicit CallInst(const Type *type = nullptr, Value *callee = nullptr,
                       luisa::span<Value *const> arguments = {}) noexcept;
     [[nodiscard]] auto callee() noexcept { return operand(operand_index_callee); }
     [[nodiscard]] auto callee() const noexcept { return operand(operand_index_callee); }

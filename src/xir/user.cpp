@@ -37,7 +37,7 @@ void User::set_operand_count(size_t n) noexcept {
     } else {// create new operands
         _operands.reserve(n);
         for (auto i = _operands.size(); i < n; i++) {
-            auto use = pool()->create<Use>(this);
+            auto use = Pool::current()->create<Use>(this);
             _operands.emplace_back(use);
         }
     }
@@ -51,14 +51,14 @@ void User::set_operands(luisa::span<Value *const> operands) noexcept {
 }
 
 void User::add_operand(Value *value) noexcept {
-    auto use = pool()->create<Use>(this);
+    auto use = Pool::current()->create<Use>(this);
     use->set_value(value, _should_add_self_to_operand_use_lists());
     _operands.emplace_back(use);
 }
 
 void User::insert_operand(size_t index, Value *value) noexcept {
     LUISA_DEBUG_ASSERT(index <= _operands.size(), "Index out of range.");
-    auto use = pool()->create<Use>(this);
+    auto use = Pool::current()->create<Use>(this);
     use->set_value(value, _should_add_self_to_operand_use_lists());
     _operands.insert(_operands.cbegin() + index, use);
 }

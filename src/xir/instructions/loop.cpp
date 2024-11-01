@@ -5,8 +5,7 @@
 
 namespace luisa::compute::xir {
 
-LoopInst::LoopInst(Pool *pool) noexcept
-    : DerivedTerminatorInstruction{pool} {
+LoopInst::LoopInst() noexcept {
     set_operands(std::array{static_cast<Value *>(nullptr)});
 }
 
@@ -25,7 +24,7 @@ void LoopInst::set_update_block(BasicBlock *block) noexcept {
 BasicBlock *LoopInst::create_prepare_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(prepare_block() == nullptr || overwrite_existing,
                  "Prepare block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_prepare_block(new_block);
     return new_block;
 }
@@ -33,7 +32,7 @@ BasicBlock *LoopInst::create_prepare_block(bool overwrite_existing) noexcept {
 BasicBlock *LoopInst::create_body_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(body_block() == nullptr || overwrite_existing,
                  "Body block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_body_block(new_block);
     return new_block;
 }
@@ -41,7 +40,7 @@ BasicBlock *LoopInst::create_body_block(bool overwrite_existing) noexcept {
 BasicBlock *LoopInst::create_update_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(update_block() == nullptr || overwrite_existing,
                  "Update block already exists.");
-    auto new_block = pool()->create<BasicBlock>();
+    auto new_block = Pool::current()->create<BasicBlock>();
     set_update_block(new_block);
     return new_block;
 }

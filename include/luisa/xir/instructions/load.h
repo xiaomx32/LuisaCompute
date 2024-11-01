@@ -6,7 +6,7 @@ namespace luisa::compute::xir {
 
 class LC_XIR_API LoadInst final : public DerivedInstruction<DerivedInstructionTag::LOAD> {
 public:
-    explicit LoadInst(Pool *pool, const Type *type = nullptr,
+    explicit LoadInst(const Type *type = nullptr,
                       Value *variable = nullptr) noexcept;
 
     [[nodiscard]] Value *variable() noexcept;

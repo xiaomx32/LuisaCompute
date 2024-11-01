@@ -3,9 +3,8 @@
 
 namespace luisa::compute::xir {
 
-CastInst::CastInst(Pool *pool, const Type *target_type,
-                   CastOp op, Value *value) noexcept
-    : DerivedInstruction{pool, target_type}, _op{op} {
+CastInst::CastInst(const Type *target_type, CastOp op, Value *value) noexcept
+    : DerivedInstruction{target_type}, _op{op} {
     auto operands = std::array{value};
     set_operands(operands);
 }

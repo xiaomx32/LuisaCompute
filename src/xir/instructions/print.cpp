@@ -6,9 +6,9 @@
 
 namespace luisa::compute::xir {
 
-PrintInst::PrintInst(Pool *pool, luisa::string format,
+PrintInst::PrintInst(luisa::string format,
                      luisa::span<Value *const> operands) noexcept
-    : DerivedInstruction{pool, nullptr},
+    : DerivedInstruction{nullptr},
       _format{std::move(format)} { set_operands(operands); }
 
 }// namespace luisa::compute::xir

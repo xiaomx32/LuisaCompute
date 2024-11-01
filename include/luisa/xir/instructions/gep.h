@@ -12,8 +12,7 @@ public:
     static constexpr size_t operand_index_index_offset = 1u;
 
 public:
-    explicit GEPInst(Pool *pool, const Type *type = nullptr,
-                     Value *base = nullptr,
+    explicit GEPInst(const Type *type = nullptr, Value *base = nullptr,
                      luisa::span<Value *const> indices = {}) noexcept;
     [[nodiscard]] auto base() noexcept { return operand(operand_index_base); }
     [[nodiscard]] auto base() const noexcept { return operand(operand_index_base); }

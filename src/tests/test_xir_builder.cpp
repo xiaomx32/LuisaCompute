@@ -5,6 +5,9 @@ using namespace luisa::compute;
 
 int main() {
 
+    xir::Pool pool;
+    xir::PoolGuard guard{&pool};
+
     auto module = xir::Module{};
     module.add_comment("My very simple test module.");
     module.set_name("TestModule");
@@ -13,7 +16,7 @@ int main() {
     auto bool_false = module.create_constant(false);
     bool_false->add_comment("bool constant false");
 
-    auto b = xir::Builder{module.pool()};
+    auto b = xir::Builder{};
 
     auto f = module.create_callable(Type::of<float>());
     f->set_name("callable_function");

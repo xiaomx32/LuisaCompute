@@ -18,9 +18,7 @@ private:
     luisa::vector<Argument *> _arguments;
 
 public:
-    explicit Function(Pool *pool, FunctionTag tag,
-                      const Type *type = nullptr) noexcept;
-
+    explicit Function(FunctionTag tag, const Type *type = nullptr) noexcept;
     [[nodiscard]] auto function_tag() const noexcept { return _function_tag; }
 
     void add_argument(Argument *argument) noexcept;

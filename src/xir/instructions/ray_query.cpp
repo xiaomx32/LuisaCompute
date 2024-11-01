@@ -4,8 +4,7 @@
 
 namespace luisa::compute::xir {
 
-RayQueryInst::RayQueryInst(Pool *pool, Value *query_object) noexcept
-    : DerivedTerminatorInstruction{pool} {
+RayQueryInst::RayQueryInst(Value *query_object) noexcept {
     auto on_surface_candidate_block = static_cast<Value *>(nullptr);
     auto on_procedural_candidate_block = static_cast<Value *>(nullptr);
     auto operands = std::array{query_object, on_surface_candidate_block, on_procedural_candidate_block};
@@ -26,13 +25,13 @@ void RayQueryInst::set_on_procedural_candidate_block(BasicBlock *block) noexcept
 }
 
 BasicBlock *RayQueryInst::create_on_surface_candidate_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
+    auto block = Pool::current()->create<BasicBlock>();
     set_on_surface_candidate_block(block);
     return block;
 }
 
 BasicBlock *RayQueryInst::create_on_procedural_candidate_block() noexcept {
-    auto block = pool()->create<BasicBlock>();
+    auto block = Pool::current()->create<BasicBlock>();
     set_on_procedural_candidate_block(block);
     return block;
 }

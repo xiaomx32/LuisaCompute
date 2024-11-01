@@ -27,7 +27,6 @@ namespace luisa::compute::xir {
 class LC_XIR_API Builder {
 
 private:
-    Pool *_pool;
     Instruction *_insertion_point = nullptr;
 
 private:
@@ -35,14 +34,14 @@ private:
 
     template<typename T, typename... Args>
     [[nodiscard]] auto _create_and_append_instruction(Args &&...args) noexcept {
-        auto inst = _pool->create<T>(std::forward<Args>(args)...);
+        auto inst = Pool::current()->create<T>(std::forward<Args>(args)...);
         _insertion_point->insert_after_self(inst);
         set_insertion_point(inst);
         return inst;
     }
 
 public:
-    explicit Builder(Pool *pool) noexcept;
+    Builder() noexcept;
     void set_insertion_point(Instruction *insertion_point) noexcept;
     void set_insertion_point(BasicBlock *block) noexcept;
     [[nodiscard]] auto insertion_point() noexcept -> Instruction * { return _insertion_point; }

@@ -8,8 +8,7 @@ void Builder::_check_valid_insertion_point() const noexcept {
     LUISA_ASSERT(_insertion_point != nullptr, "Invalid insertion point.");
 }
 
-Builder::Builder(Pool *pool) noexcept
-    : _pool{pool} {}
+Builder::Builder() noexcept = default;
 
 IfInst *Builder::if_(Value *cond) noexcept {
     return _create_and_append_instruction<IfInst>(cond);
@@ -137,8 +136,6 @@ RayQueryInst *Builder::ray_query(Value *query_object) noexcept {
 }
 
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {
-    LUISA_ASSERT(insertion_point == nullptr || insertion_point->pool() == _pool,
-                 "Instruction does not belong to the same pool as the builder.");
     _insertion_point = insertion_point;
 }
 

@@ -20,14 +20,14 @@ enum struct DerivedValueTag {
 };
 
 class LC_XIR_API Value : public PooledObject,
-                         public MetadataMixin<Value> {
+                         public MetadataMixin {
 
 private:
     const Type *_type = nullptr;
     UseList _use_list;
 
 public:
-    explicit Value(Pool *pool, const Type *type = nullptr) noexcept;
+    explicit Value(const Type *type = nullptr) noexcept;
     [[nodiscard]] virtual DerivedValueTag derived_value_tag() const noexcept = 0;
 
     void replace_all_uses_with(Value *value) noexcept;

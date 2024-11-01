@@ -6,7 +6,7 @@ namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
 class LC_XIR_API LoopInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::LOOP>,
-                                  public InstructionMergeMixin<LoopInst> {
+                                  public InstructionMergeMixin {
 
 public:
     static constexpr size_t operand_index_prepare_block = 0u;
@@ -16,7 +16,7 @@ private:
     BasicBlock *_update_block{nullptr};
 
 public:
-    explicit LoopInst(Pool *pool) noexcept;
+    LoopInst() noexcept;
 
     void set_prepare_block(BasicBlock *block) noexcept;
     void set_body_block(BasicBlock *block) noexcept;

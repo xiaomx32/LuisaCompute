@@ -306,7 +306,7 @@ private:
     IntrinsicOp _op;
 
 public:
-    explicit IntrinsicInst(Pool *pool, const Type *type = nullptr,
+    explicit IntrinsicInst(const Type *type = nullptr,
                            IntrinsicOp op = IntrinsicOp::NOP,
                            luisa::span<Value *const> operands = {}) noexcept;
     [[nodiscard]] auto op() const noexcept { return _op; }

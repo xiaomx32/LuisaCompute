@@ -11,8 +11,7 @@ public:
     static constexpr size_t operand_index_value = 1u;
 
 public:
-    explicit StoreInst(Pool *pool, Value *variable = nullptr,
-                       Value *value = nullptr) noexcept;
+    explicit StoreInst(Value *variable = nullptr, Value *value = nullptr) noexcept;
 
     [[nodiscard]] auto variable() noexcept { return operand(operand_index_variable); }
     [[nodiscard]] auto variable() const noexcept { return operand(operand_index_variable); }
