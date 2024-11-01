@@ -39,22 +39,6 @@ private:
     luisa::unordered_map<const Type *, uint> _struct_uid_map;
 
 private:
-    void _emit_constant(const Constant *c) noexcept {
-        auto t = _type_ident(c->type());
-        auto v = _value_ident(c);
-        if (!c->metadata_list().empty()) {
-            _emit_metadata_list(_prelude, c->metadata_list());
-            _prelude << "\n";
-        }
-        _prelude << "const %" << v << ": " << t << " = ";
-        auto size = c->type()->size();
-        for (auto i = 0u; i < size; i++) {
-            auto x = static_cast<const uint8_t *>(c->data())[i];
-            _prelude << luisa::format("{:02x}", static_cast<uint>(x));
-        }
-        _prelude << ";\n\n";
-    }
-
     [[nodiscard]] auto _value_uid(const Value *value) noexcept {
         LUISA_ASSERT(value != nullptr, "Value must not be null.");
         auto next_uid = static_cast<uint>(_value_uid_map.size());
@@ -124,6 +108,22 @@ private:
 
     void _emit_indent(int indent) noexcept {
         for (int i = 0; i < indent; i++) { _main << "    "; }
+    }
+
+    void _emit_constant(const Constant *c) noexcept {
+        auto t = _type_ident(c->type());
+        auto v = _value_ident(c);
+        if (!c->metadata_list().empty()) {
+            _emit_metadata_list(_prelude, c->metadata_list());
+            _prelude << "\n";
+        }
+        _prelude << "const %" << v << ": " << t << " = ";
+        auto size = c->type()->size();
+        for (auto i = 0u; i < size; i++) {
+            auto x = static_cast<const uint8_t *>(c->data())[i];
+            _prelude << luisa::format("{:02x}", static_cast<uint>(x));
+        }
+        _prelude << ";\n\n";
     }
 
     static void _emit_string_escaped(StringScratch &ss, luisa::string_view s) noexcept {
