@@ -22,6 +22,10 @@ LoopInst *Builder::loop() noexcept {
     return _create_and_append_instruction<LoopInst>();
 }
 
+SimpleLoopInst *Builder::simple_loop() noexcept {
+    return _create_and_append_instruction<SimpleLoopInst>();
+}
+
 BranchInst *Builder::br(BasicBlock *target) noexcept {
     auto inst = _create_and_append_instruction<BranchInst>();
     inst->set_target_block(target);
@@ -35,12 +39,16 @@ ConditionalBranchInst *Builder::cond_br(Value *cond, BasicBlock *true_target, Ba
     return inst;
 }
 
-BreakInst *Builder::break_() noexcept {
-    return _create_and_append_instruction<BreakInst>();
+BreakInst *Builder::break_(BasicBlock *target_block) noexcept {
+    auto inst = _create_and_append_instruction<BreakInst>();
+    inst->set_target_block(target_block);
+    return inst;
 }
 
-ContinueInst *Builder::continue_() noexcept {
-    return _create_and_append_instruction<ContinueInst>();
+ContinueInst *Builder::continue_(BasicBlock *target_block) noexcept {
+    auto inst = _create_and_append_instruction<ContinueInst>();
+    inst->set_target_block(target_block);
+    return inst;
 }
 
 UnreachableInst *Builder::unreachable_() noexcept {

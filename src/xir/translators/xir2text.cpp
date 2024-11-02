@@ -167,6 +167,18 @@ private:
         }
     }
 
+    void _emit_break_inst(const BreakInst *inst) noexcept {
+        _main << "break " << _value_ident(inst->target_block());
+    }
+
+    void _emit_continue_inst(const ContinueInst *inst) noexcept {
+        _main << "continue " << _value_ident(inst->target_block());
+    }
+
+    void _emit_unreachable_inst(const UnreachableInst *inst) noexcept {
+        _main << "unreachable";
+    }
+
     void _emit_if_inst(const IfInst *inst, int indent) noexcept {
         _main << "if " << _value_ident(inst->condition()) << ", then ";
         _emit_basic_block(inst->true_block(), indent);
@@ -196,6 +208,13 @@ private:
         _emit_basic_block(inst->body_block(), indent);
         _main << ", update ";
         _emit_basic_block(inst->update_block(), indent);
+        _main << ", merge ";
+        _emit_basic_block(inst->merge_block(), indent);
+    }
+
+    void _emit_simple_loop_inst(const SimpleLoopInst *inst, int indent) noexcept {
+        _main << "simple_loop body ";
+        _emit_basic_block(inst->body_block(), indent);
         _main << ", merge ";
         _emit_basic_block(inst->merge_block(), indent);
     }
@@ -312,7 +331,7 @@ private:
             case DerivedInstructionTag::SENTINEL:
                 LUISA_ERROR_WITH_LOCATION("Unexpected sentinel instruction.");
             case DerivedInstructionTag::UNREACHABLE:
-                _main << "unreachable";
+                _emit_unreachable_inst(static_cast<const UnreachableInst *>(inst));
                 break;
             case DerivedInstructionTag::IF:
                 _emit_if_inst(static_cast<const IfInst *>(inst), indent);
@@ -323,11 +342,14 @@ private:
             case DerivedInstructionTag::LOOP:
                 _emit_loop_inst(static_cast<const LoopInst *>(inst), indent);
                 break;
+            case DerivedInstructionTag::SIMPLE_LOOP:
+                _emit_simple_loop_inst(static_cast<const SimpleLoopInst *>(inst), indent);
+                break;
             case DerivedInstructionTag::BREAK:
-                _main << "break";
+                _emit_break_inst(static_cast<const BreakInst *>(inst));
                 break;
             case DerivedInstructionTag::CONTINUE:
-                _main << "continue";
+                _emit_continue_inst(static_cast<const ContinueInst *>(inst));
                 break;
             case DerivedInstructionTag::RETURN:
                 _emit_return_inst(static_cast<const ReturnInst *>(inst));

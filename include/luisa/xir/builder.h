@@ -56,12 +56,13 @@ public:
     IfInst *if_(Value *cond) noexcept;
     SwitchInst *switch_(Value *value) noexcept;
     LoopInst *loop() noexcept;
+    SimpleLoopInst *simple_loop() noexcept;
 
     BranchInst *br(BasicBlock *target = nullptr) noexcept;
     ConditionalBranchInst *cond_br(Value *cond, BasicBlock *true_target = nullptr, BasicBlock *false_target = nullptr) noexcept;
 
-    BreakInst *break_() noexcept;
-    ContinueInst *continue_() noexcept;
+    BreakInst *break_(BasicBlock *target_block = nullptr) noexcept;
+    ContinueInst *continue_(BasicBlock *target_block = nullptr) noexcept;
     UnreachableInst *unreachable_() noexcept;
     ReturnInst *return_(Value *value) noexcept;
     ReturnInst *return_void() noexcept;

@@ -15,6 +15,7 @@ enum struct DerivedInstructionTag {
     IF,                // basic block terminator: conditional branches
     SWITCH,            // basic block terminator: switch branches
     LOOP,              // basic block terminator: loops
+    SIMPLE_LOOP,       // basic block terminator: simple (do-while) loops
     BRANCH,            // basic block terminator: unconditional branches
     CONDITIONAL_BRANCH,// basic block terminator: conditional branches
     UNREACHABLE,       // basic block terminator: unreachable

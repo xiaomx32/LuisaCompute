@@ -12,9 +12,15 @@ namespace luisa::compute::xir {
 class AST2XIRContext {
 
 public:
+    struct BreakContinueTarget {
+        BasicBlock *break_target{nullptr};
+        BasicBlock *continue_target{nullptr};
+    };
+
     struct Current {
         FunctionDefinition *f{nullptr};
         const ASTFunction *ast{nullptr};
+        BreakContinueTarget break_continue_target;
         luisa::unordered_map<Variable, Value *> variables;
         luisa::vector<const CommentStmt *> comments;
     };
@@ -32,7 +38,8 @@ private:
         return nullptr;
     }
 
-    auto _commented(auto inst) noexcept {
+    template<typename T>
+    auto _commented(T inst) noexcept {
         for (auto comment : _current.comments) {
             inst->add_comment(comment->comment());
         }
@@ -46,6 +53,8 @@ private:
     }
 
     void _translate_switch_stmt(Builder &b, const SwitchStmt *ast_switch, luisa::span<const Statement *const> cdr) noexcept {
+        // we do not support break/continue in switch statement
+        auto old_break_continue_target = std::exchange(_current.break_continue_target, {});
         auto value = _translate_expression(b, ast_switch->expression(), true);
         auto inst = _commented(b.switch_(value));
         auto merge_block = inst->create_merge_block();
@@ -102,6 +111,7 @@ private:
             b.set_insertion_point(inst->create_default_block());
             b.br(merge_block);
         }
+        _current.break_continue_target = old_break_continue_target;
         b.set_insertion_point(merge_block);
         _translate_statements(b, cdr);
     }
@@ -128,16 +138,21 @@ private:
     }
 
     void _translate_loop_stmt(Builder &b, const LoopStmt *ast_loop, luisa::span<const Statement *const> cdr) noexcept {
-        // TODO: pattern match while loops
-        auto inst = _commented(b.loop());
+        auto inst = _commented(b.simple_loop());
         auto merge_block = inst->create_merge_block();
+        auto body_block = inst->create_body_block();
+        auto old_break_continue_target = std::exchange(_current.break_continue_target, {});
         // body block
         {
-            b.set_insertion_point(inst->create_prepare_block());
+            _current.break_continue_target = {.break_target = merge_block,
+                                              .continue_target = body_block};
+            b.set_insertion_point(body_block);
             _translate_statements(b, ast_loop->body()->statements());
-            if (!b.is_insertion_point_terminator()) { b.br(inst->prepare_block()); }
+            if (!b.is_insertion_point_terminator()) { b.br(inst->body_block()); }
+            _current.break_continue_target = {};
         }
         // merge block
+        _current.break_continue_target = old_break_continue_target;
         b.set_insertion_point(merge_block);
         _translate_statements(b, cdr);
     }
@@ -149,6 +164,7 @@ private:
         auto prepare_block = inst->create_prepare_block();
         auto body_block = inst->create_body_block();
         auto update_block = inst->create_update_block();
+        auto old_break_continue_target = std::exchange(_current.break_continue_target, {});
         // prepare block
         {
             b.set_insertion_point(prepare_block);
@@ -157,9 +173,12 @@ private:
         }
         // body block
         {
+            _current.break_continue_target = {.break_target = merge_block,
+                                              .continue_target = update_block};
             b.set_insertion_point(body_block);
             _translate_statements(b, ast_for->body()->statements());
             if (!b.is_insertion_point_terminator()) { b.br(update_block); }
+            _current.break_continue_target = {};
         }
         // update block
         {
@@ -175,11 +194,14 @@ private:
             b.br(prepare_block);
         }
         // merge block
+        _current.break_continue_target = old_break_continue_target;
         b.set_insertion_point(merge_block);
         _translate_statements(b, cdr);
     }
 
     void _translate_ray_query_stmt(Builder &b, const RayQueryStmt *ast_ray_query, luisa::span<const Statement *const> cdr) noexcept {
+        // we do not support break/continue in ray query statement
+        auto old_break_continue_target = std::exchange(_current.break_continue_target, {});
         auto query_object = _translate_expression(b, ast_ray_query->query(), false);
         auto inst = _commented(b.ray_query(query_object));
         auto merge_block = inst->create_merge_block();
@@ -196,6 +218,7 @@ private:
             if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
         }
         // merge block
+        _current.break_continue_target = old_break_continue_target;
         b.set_insertion_point(merge_block);
         _translate_statements(b, cdr);
     }
@@ -206,11 +229,15 @@ private:
         auto cdr = stmts.subspan(1);
         switch (car->tag()) {
             case Statement::Tag::BREAK: {
-                _commented(b.break_());
+                auto break_target = _current.break_continue_target.break_target;
+                LUISA_ASSERT(break_target != nullptr, "Invalid break statement.");
+                _commented(b.break_(break_target));
                 break;
             }
             case Statement::Tag::CONTINUE: {
-                _commented(b.continue_());
+                auto continue_target = _current.break_continue_target.continue_target;
+                LUISA_ASSERT(continue_target != nullptr, "Invalid continue statement.");
+                _commented(b.continue_(continue_target));
                 break;
             }
             case Statement::Tag::RETURN: {

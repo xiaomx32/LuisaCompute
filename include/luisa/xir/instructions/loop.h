@@ -36,4 +36,17 @@ public:
     [[nodiscard]] const BasicBlock *update_block() const noexcept;
 };
 
+class LC_XIR_API SimpleLoopInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::SIMPLE_LOOP>,
+                                        public InstructionMergeMixin {
+public:
+    static constexpr size_t operand_index_body_block = 0u;
+
+public:
+    SimpleLoopInst() noexcept;
+    void set_body_block(BasicBlock *block) noexcept;
+    BasicBlock *create_body_block(bool overwrite_existing = false) noexcept;
+    [[nodiscard]] BasicBlock *body_block() noexcept;
+    [[nodiscard]] const BasicBlock *body_block() const noexcept;
+};
+
 }// namespace luisa::compute::xir

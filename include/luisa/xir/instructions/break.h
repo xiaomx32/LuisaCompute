@@ -5,9 +5,9 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class BreakInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::BREAK> {
+class BreakInst final : public DerivedBranchInstruction<DerivedInstructionTag::BREAK> {
 public:
-    using DerivedTerminatorInstruction::DerivedTerminatorInstruction;
+    using DerivedBranchInstruction::DerivedBranchInstruction;
 };
 
 }// namespace luisa::compute::xir

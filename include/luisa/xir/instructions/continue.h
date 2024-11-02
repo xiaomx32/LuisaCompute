@@ -5,9 +5,9 @@
 namespace luisa::compute::xir {
 
 // Note: this instruction must be the terminator of a basic block.
-class ContinueInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::CONTINUE> {
+class ContinueInst final : public DerivedBranchInstruction<DerivedInstructionTag::CONTINUE> {
 public:
-    using DerivedTerminatorInstruction::DerivedTerminatorInstruction;
+    using DerivedBranchInstruction::DerivedBranchInstruction;
 };
 
 }// namespace luisa::compute::xir

@@ -69,4 +69,28 @@ const BasicBlock *LoopInst::update_block() const noexcept {
     return _update_block;
 }
 
+SimpleLoopInst::SimpleLoopInst() noexcept {
+    set_operands(std::array{static_cast<Value *>(nullptr)});
+}
+
+void SimpleLoopInst::set_body_block(BasicBlock *block) noexcept {
+    set_operand(operand_index_body_block, block);
+}
+
+BasicBlock *SimpleLoopInst::create_body_block(bool overwrite_existing) noexcept {
+    LUISA_ASSERT(body_block() == nullptr || overwrite_existing,
+                 "Body block already exists.");
+    auto new_block = Pool::current()->create<BasicBlock>();
+    set_body_block(new_block);
+    return new_block;
+}
+
+BasicBlock *SimpleLoopInst::body_block() noexcept {
+    return static_cast<BasicBlock *>(operand(operand_index_body_block));
+}
+
+const BasicBlock *SimpleLoopInst::body_block() const noexcept {
+    return const_cast<SimpleLoopInst *>(this)->body_block();
+}
+
 }// namespace luisa::compute::xir
