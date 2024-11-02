@@ -359,13 +359,9 @@ public:
                 LUISA_NOT_IMPLEMENTED();
         }
         iter->second = def;
-        // save the context
-        auto old = _current;
-        {
-            _current = {.f = def, .ast = &f};
-            _translate_current_function();
-        }
-        // restore the context
+        // translate the function
+        auto old = std::exchange(_current, {.f = def, .ast = &f});
+        _translate_current_function();
         _current = old;
         return def;
     }
