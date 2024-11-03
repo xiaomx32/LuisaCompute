@@ -509,18 +509,18 @@ private:
 
 public:
     XIR2TextTranslator() noexcept : _prelude{1_k}, _main{4_k} {}
-    [[nodiscard]] luisa::string emit(const Module &module, bool debug_info) noexcept {
+    [[nodiscard]] luisa::string emit(const Module *module, bool debug_info) noexcept {
         _prelude.clear();
         _main.clear();
         _value_uid_map.clear();
         _struct_uid_map.clear();
         _debug_info = debug_info;
-        _emit_module(&module);
+        _emit_module(module);
         return _prelude.string() + _main.string();
     }
 };
 
-luisa::string xir_to_text_translate(const Module &module, bool debug_info) noexcept {
+luisa::string xir_to_text_translate(const Module *module, bool debug_info) noexcept {
     return XIR2TextTranslator{}.emit(module, debug_info);
 }
 

@@ -8,7 +8,8 @@ namespace luisa::compute::xir {
 
 class Constant;
 
-class LC_XIR_API Module : public MetadataMixin {
+class LC_XIR_API Module : public PooledObject,
+                          public MetadataMixin {
 
 private:
     FunctionList _functions;

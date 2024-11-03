@@ -189,6 +189,11 @@ public:
         _head_sentinel._next = &_tail_sentinel;
         _tail_sentinel._prev = &_head_sentinel;
     }
+    InlineIntrusiveList(InlineIntrusiveList &&) noexcept = delete;
+    InlineIntrusiveList(const InlineIntrusiveList &) noexcept = delete;
+    InlineIntrusiveList &operator=(InlineIntrusiveList &&) noexcept = delete;
+    InlineIntrusiveList &operator=(const InlineIntrusiveList &) noexcept = delete;
+
     [[nodiscard]] auto head_sentinel() noexcept { return &_head_sentinel; }
     [[nodiscard]] auto head_sentinel() const noexcept { return const_cast<const Node *>(&_head_sentinel); }
     [[nodiscard]] auto tail_sentinel() noexcept { return &_tail_sentinel; }
@@ -223,6 +228,13 @@ private:
             return *this;
         }
     };
+
+public:
+    IntrusiveForwardList() noexcept = default;
+    IntrusiveForwardList(IntrusiveForwardList &&) noexcept = delete;
+    IntrusiveForwardList(const IntrusiveForwardList &) noexcept = delete;
+    IntrusiveForwardList &operator=(IntrusiveForwardList &&) noexcept = delete;
+    IntrusiveForwardList &operator=(const IntrusiveForwardList &) noexcept = delete;
 
 public:
     [[nodiscard]] auto empty() const noexcept { return _head == nullptr; }

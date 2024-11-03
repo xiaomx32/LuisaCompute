@@ -27,7 +27,7 @@ public:
 
 private:
     AST2XIRConfig _config;
-    Module _module;
+    Module *_module;
     luisa::unordered_map<uint64_t, Function *> _generated_functions;
     luisa::unordered_map<uint64_t, Constant *> _generated_constants;
     luisa::unordered_map<uint64_t, Constant *> _generated_literals;
@@ -339,7 +339,7 @@ private:
 
 public:
     explicit AST2XIRContext(const AST2XIRConfig &config) noexcept
-        : _config{config} {}
+        : _config{config}, _module{Pool::current()->create<Module>()} {}
 
     Function *add_function(const ASTFunction &f) noexcept {
         // try emplace the function
@@ -350,10 +350,10 @@ public:
         FunctionDefinition *def = nullptr;
         switch (f.tag()) {
             case ASTFunction::Tag::KERNEL:
-                def = _module.create_kernel();
+                def = _module->create_kernel();
                 break;
             case ASTFunction::Tag::CALLABLE:
-                def = _module.create_callable(f.return_type());
+                def = _module->create_callable(f.return_type());
                 break;
             case ASTFunction::Tag::RASTER_STAGE:
                 LUISA_NOT_IMPLEMENTED();
@@ -370,8 +370,8 @@ public:
         LUISA_NOT_IMPLEMENTED();
     }
 
-    [[nodiscard]] Module finalize() noexcept {
-        return std::move(_module);
+    [[nodiscard]] Module *finalize() noexcept {
+        return _module;
     }
 };
 
@@ -387,7 +387,7 @@ void ast_to_xir_translate_add_external_function(AST2XIRContext *ctx, const ASTEx
     ctx->add_external_function(f);
 }
 
-Module ast_to_xir_translate_finalize(AST2XIRContext *ctx) noexcept {
+Module *ast_to_xir_translate_finalize(AST2XIRContext *ctx) noexcept {
     auto m = ctx->finalize();
     luisa::delete_with_allocator(ctx);
     return m;
