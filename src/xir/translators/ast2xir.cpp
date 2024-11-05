@@ -25,16 +25,504 @@ public:
         luisa::vector<const CommentStmt *> comments;
     };
 
+    struct TypedLiteral {
+        const Type *type;
+        LiteralExpr::Value value;
+
+        [[nodiscard]] bool operator==(const TypedLiteral &rhs) const noexcept {
+            return this->type == rhs.type &&
+                   this->value.index() == rhs.value.index() &&
+                   luisa::visit(
+                       [&rhs_variant = rhs.value]<typename T>(T lhs) noexcept {
+                           if constexpr (std::is_same_v<T, decltype(rhs)>) {
+                               auto rhs = luisa::get<T>(rhs_variant);
+                               if constexpr (luisa::is_scalar_v<T>) {
+                                   return lhs == rhs.get;
+                               } else if constexpr (luisa::is_vector_v<T>) {
+                                   return luisa::all(lhs == rhs);
+                               } else if constexpr (luisa::is_matrix_v<T>) {
+                                   for (auto i = 0u; i < luisa::matrix_dimension_v<T>; i++) {
+                                       if (!all(lhs[i] == rhs[i])) { return false; }
+                                   }
+                                   return true;
+                               } else {
+                                   static_assert(luisa::always_false_v<T>, "Unexpected literal type.");
+                               }
+                           } else {
+                               return false;
+                           }
+                       },
+                       this->value);
+        }
+
+        [[nodiscard]] uint64_t hash() const noexcept {
+            auto hv = luisa::visit(
+                []<typename T>(T v) noexcept {
+                    return hash_value(v);
+                },
+                value);
+            return hash_combine({type->hash(), hv});
+        }
+    };
+
 private:
     AST2XIRConfig _config;
     Module *_module;
     luisa::unordered_map<uint64_t, Function *> _generated_functions;
-    luisa::unordered_map<uint64_t, Constant *> _generated_constants;
-    luisa::unordered_map<uint64_t, Constant *> _generated_literals;
+    luisa::unordered_map<ConstantData, Constant *> _generated_constants;
+    luisa::unordered_map<TypedLiteral, Constant *> _generated_literals;
     Current _current;
 
 private:
-    Value *_translate_expression(Builder &b, const Expression *expr, bool load_lval) noexcept {
+    [[nodiscard]] Value *_translate_unary_expr(Builder &b, const UnaryExpr *expr) noexcept {
+        auto operand = _translate_expression(b, expr->operand(), true);
+        auto op = [unary_op = expr->op()] {
+            switch (unary_op) {
+                case UnaryOp::PLUS: return IntrinsicOp::UNARY_PLUS;
+                case UnaryOp::MINUS: return IntrinsicOp::UNARY_MINUS;
+                case UnaryOp::NOT: return IntrinsicOp::UNARY_NOT;
+                case UnaryOp::BIT_NOT: return IntrinsicOp::UNARY_BIT_NOT;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unexpected unary operation.");
+        }();
+        return b.call(expr->type(), op, {operand});
+    }
+
+    [[nodiscard]] Value *_translate_binary_expr(Builder &b, const BinaryExpr *expr) noexcept {
+        auto op = [binary_op = expr->op()] {
+            switch (binary_op) {
+                case BinaryOp::ADD: return IntrinsicOp::BINARY_ADD;
+                case BinaryOp::SUB: return IntrinsicOp::BINARY_SUB;
+                case BinaryOp::MUL: return IntrinsicOp::BINARY_MUL;
+                case BinaryOp::DIV: return IntrinsicOp::BINARY_DIV;
+                case BinaryOp::MOD: return IntrinsicOp::BINARY_MOD;
+                case BinaryOp::BIT_AND: return IntrinsicOp::BINARY_BIT_AND;
+                case BinaryOp::BIT_OR: return IntrinsicOp::BINARY_BIT_OR;
+                case BinaryOp::BIT_XOR: return IntrinsicOp::BINARY_BIT_XOR;
+                case BinaryOp::SHL: return IntrinsicOp::BINARY_SHIFT_LEFT;
+                case BinaryOp::SHR: return IntrinsicOp::BINARY_SHIFT_RIGHT;
+                case BinaryOp::AND: return IntrinsicOp::BINARY_AND;
+                case BinaryOp::OR: return IntrinsicOp::BINARY_OR;
+                case BinaryOp::LESS: return IntrinsicOp::BINARY_LESS;
+                case BinaryOp::GREATER: return IntrinsicOp::BINARY_GREATER;
+                case BinaryOp::LESS_EQUAL: return IntrinsicOp::BINARY_LESS_EQUAL;
+                case BinaryOp::GREATER_EQUAL: return IntrinsicOp::BINARY_GREATER_EQUAL;
+                case BinaryOp::EQUAL: return IntrinsicOp::BINARY_EQUAL;
+                case BinaryOp::NOT_EQUAL: return IntrinsicOp::BINARY_NOT_EQUAL;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unexpected binary operation.");
+        }();
+        auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
+        auto lhs = _translate_expression(b, expr->lhs(), true);
+        auto rhs = _translate_expression(b, expr->rhs(), true);
+        lhs = b.static_cast_if_necessary(type_promotion.lhs, lhs);
+        rhs = b.static_cast_if_necessary(type_promotion.rhs, rhs);
+        auto result = b.call(expr->type(), op, {lhs, rhs});
+        return b.static_cast_if_necessary(type_promotion.result, result);
+    }
+
+    [[nodiscard]] Value *_translate_constant_access_index(uint i) noexcept {
+        auto key = TypedLiteral{Type::of<uint>(), LiteralExpr::Value{i}};
+        return _translate_typed_literal(key);
+    }
+
+    [[nodiscard]] Value *_collect_access_indices(Builder &b, const Expression *expr, luisa::fixed_vector<Value *, 16u> &rev_indices) noexcept {
+        switch (expr->tag()) {
+            case Expression::Tag::MEMBER: {
+                auto member_expr = static_cast<const MemberExpr *>(expr);
+                auto member_index = _translate_constant_access_index(member_expr->member_index());
+                rev_indices.emplace_back(member_index);
+                return _collect_access_indices(b, member_expr->self(), rev_indices);
+            }
+            case Expression::Tag::ACCESS: {
+                auto access_expr = static_cast<const AccessExpr *>(expr);
+                auto index = _translate_expression(b, access_expr->index(), true);
+                rev_indices.emplace_back(index);
+                return _collect_access_indices(b, access_expr->range(), rev_indices);
+            }
+            default: break;
+        }
+        return _translate_expression(b, expr, false);
+    }
+
+    [[nodiscard]] Value *_translate_member_or_access_expr(Builder &b, const Expression *expr, bool load_lval) noexcept {
+        luisa::fixed_vector<Value *, 16u> args;
+        auto base = _collect_access_indices(b, expr, args);
+        if (base->is_lvalue()) {
+            std::reverse(args.begin(), args.end());
+            auto elem = b.gep(expr->type(), base, args);
+            return load_lval ? static_cast<Value *>(b.load(expr->type(), elem)) :
+                               static_cast<Value *>(elem);
+        }
+        args.emplace_back(base);
+        std::reverse(args.begin(), args.end());
+        return b.call(expr->type(), IntrinsicOp::EXTRACT, args);
+    }
+
+    [[nodiscard]] Value *_translate_member_expr(Builder &b, const MemberExpr *expr, bool load_lval) noexcept {
+        if (expr->is_swizzle()) {
+            luisa::fixed_vector<Value *, 5u> args;
+            auto v = _translate_expression(b, expr->self(), true);
+            args.emplace_back(v);
+            for (auto i = 0u; i < expr->swizzle_size(); i++) {
+                auto index = expr->swizzle_index(i);
+                args.emplace_back(_translate_constant_access_index(index));
+            }
+            return b.call(expr->type(), IntrinsicOp::SHUFFLE, args);
+        }
+        return _translate_member_or_access_expr(b, expr, load_lval);
+    }
+
+    [[nodiscard]] Value *_translate_typed_literal(TypedLiteral key) noexcept {
+        auto [iter, just_inserted] = _generated_literals.try_emplace(key, nullptr);
+        if (just_inserted) {
+            iter->second = luisa::visit(
+                [this, t = key.type]<typename T>(T v) noexcept {
+                    LUISA_ASSERT(t == Type::of<T>(), "Literal type mismatch.");
+                    return _module->create_constant(v);
+                },
+                key.value);
+        }
+        return iter->second;
+    }
+
+    [[nodiscard]] Value *_translate_literal_expr(const LiteralExpr *expr) noexcept {
+        auto key = TypedLiteral{expr->type(), expr->value()};
+        return _translate_typed_literal(key);
+    }
+
+    [[nodiscard]] Value *_translate_ref_expr(Builder &b, const RefExpr *expr, bool load_lval) noexcept {
+        auto ast_var = expr->variable();
+        LUISA_ASSERT(ast_var.type() == expr->type(), "Variable type mismatch.");
+        if (auto iter = _current.variables.find(ast_var); iter != _current.variables.end()) {
+            auto var = iter->second;
+            return load_lval && var->is_lvalue() ? b.load(expr->type(), var) : var;
+        }
+        LUISA_ASSERT(ast_var.is_builtin(), "Unresolved variable reference.");
+        auto op = [tag = ast_var.tag(), t = ast_var.type()] {
+            switch (tag) {
+                case Variable::Tag::THREAD_ID:
+                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid thread_id type: {}", t->description());
+                    return IntrinsicOp::THREAD_ID;
+                case Variable::Tag::BLOCK_ID:
+                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid block_id type: {}.", t->description());
+                    return IntrinsicOp::BLOCK_ID;
+                case Variable::Tag::DISPATCH_ID:
+                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid dispatch_id type: {}", t->description());
+                    return IntrinsicOp::DISPATCH_ID;
+                case Variable::Tag::DISPATCH_SIZE:
+                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid dispatch_size type: {}", t->description());
+                    return IntrinsicOp::DISPATCH_SIZE;
+                case Variable::Tag::KERNEL_ID:
+                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid kernel_id type: {}", t->description());
+                    return IntrinsicOp::KERNEL_ID;
+                case Variable::Tag::WARP_LANE_COUNT:
+                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid warp_size type: {}", t->description());
+                    return IntrinsicOp::WARP_SIZE;
+                case Variable::Tag::WARP_LANE_ID:
+                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid warp_lane_id type: {}", t->description());
+                    return IntrinsicOp::WARP_LANE_ID;
+                case Variable::Tag::OBJECT_ID:
+                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid object_id type: {}", t->description());
+                    return IntrinsicOp::OBJECT_ID;
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unexpected variable type.");
+        }();
+        return b.call(ast_var.type(), op, {});
+    }
+
+    [[nodiscard]] Value *_translate_constant_expr(const ConstantExpr *expr) noexcept {
+        auto c = expr->data();
+        auto [iter, just_inserted] = _generated_constants.try_emplace(c, nullptr);
+        if (just_inserted) {
+            iter->second = _module->create_constant(c.type(), c.raw());
+        }
+        return iter->second;
+    }
+
+    [[nodiscard]] Value *_translate_call_expr(Builder &b, const CallExpr *expr) noexcept {
+        if (expr->is_external()) {
+            auto ast = expr->external();
+            auto f = add_external_function(*ast);
+            LUISA_NOT_IMPLEMENTED();
+        }
+        if (expr->is_custom()) {
+            auto ast = expr->custom();
+            auto f = add_function(ast);
+            LUISA_ASSERT(f->type() == expr->type(), "Function return type mismatch.");
+            auto ast_args = expr->arguments();
+            luisa::fixed_vector<Value *, 16u> args;
+            args.reserve(expr->arguments().size());
+            for (auto i = 0u; i < ast_args.size(); i++) {
+                auto by_ref = ast.arguments()[i].is_reference();
+                auto arg = _translate_expression(b, ast_args[i], !by_ref);
+                args.emplace_back(arg);
+            }
+            return b.call(f->type(), f, args);
+        }
+        // builtin function
+        switch (expr->op()) {
+            case CallOp::CUSTOM: LUISA_ERROR_WITH_LOCATION("Unexpected custom call operation.");
+            case CallOp::EXTERNAL: LUISA_ERROR_WITH_LOCATION("Unexpected external call operation.");
+            case CallOp::ALL: break;
+            case CallOp::ANY: break;
+            case CallOp::SELECT: break;
+            case CallOp::CLAMP: break;
+            case CallOp::SATURATE: break;
+            case CallOp::LERP: break;
+            case CallOp::SMOOTHSTEP: break;
+            case CallOp::STEP: break;
+            case CallOp::ABS: break;
+            case CallOp::MIN: break;
+            case CallOp::MAX: break;
+            case CallOp::CLZ: break;
+            case CallOp::CTZ: break;
+            case CallOp::POPCOUNT: break;
+            case CallOp::REVERSE: break;
+            case CallOp::ISINF: break;
+            case CallOp::ISNAN: break;
+            case CallOp::ACOS: break;
+            case CallOp::ACOSH: break;
+            case CallOp::ASIN: break;
+            case CallOp::ASINH: break;
+            case CallOp::ATAN: break;
+            case CallOp::ATAN2: break;
+            case CallOp::ATANH: break;
+            case CallOp::COS: break;
+            case CallOp::COSH: break;
+            case CallOp::SIN: break;
+            case CallOp::SINH: break;
+            case CallOp::TAN: break;
+            case CallOp::TANH: break;
+            case CallOp::EXP: break;
+            case CallOp::EXP2: break;
+            case CallOp::EXP10: break;
+            case CallOp::LOG: break;
+            case CallOp::LOG2: break;
+            case CallOp::LOG10: break;
+            case CallOp::POW: break;
+            case CallOp::SQRT: break;
+            case CallOp::RSQRT: break;
+            case CallOp::CEIL: break;
+            case CallOp::FLOOR: break;
+            case CallOp::FRACT: break;
+            case CallOp::TRUNC: break;
+            case CallOp::ROUND: break;
+            case CallOp::FMA: break;
+            case CallOp::COPYSIGN: break;
+            case CallOp::CROSS: break;
+            case CallOp::DOT: break;
+            case CallOp::LENGTH: break;
+            case CallOp::LENGTH_SQUARED: break;
+            case CallOp::NORMALIZE: break;
+            case CallOp::FACEFORWARD: break;
+            case CallOp::REFLECT: break;
+            case CallOp::REDUCE_SUM: break;
+            case CallOp::REDUCE_PRODUCT: break;
+            case CallOp::REDUCE_MIN: break;
+            case CallOp::REDUCE_MAX: break;
+            case CallOp::OUTER_PRODUCT: break;
+            case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: break;
+            case CallOp::DETERMINANT: break;
+            case CallOp::TRANSPOSE: break;
+            case CallOp::INVERSE: break;
+            case CallOp::SYNCHRONIZE_BLOCK: break;
+            case CallOp::ATOMIC_EXCHANGE: break;
+            case CallOp::ATOMIC_COMPARE_EXCHANGE: break;
+            case CallOp::ATOMIC_FETCH_ADD: break;
+            case CallOp::ATOMIC_FETCH_SUB: break;
+            case CallOp::ATOMIC_FETCH_AND: break;
+            case CallOp::ATOMIC_FETCH_OR: break;
+            case CallOp::ATOMIC_FETCH_XOR: break;
+            case CallOp::ATOMIC_FETCH_MIN: break;
+            case CallOp::ATOMIC_FETCH_MAX: break;
+            case CallOp::ADDRESS_OF: break;
+            case CallOp::BUFFER_READ: break;
+            case CallOp::BUFFER_WRITE: break;
+            case CallOp::BUFFER_SIZE: break;
+            case CallOp::BUFFER_ADDRESS: break;
+            case CallOp::BYTE_BUFFER_READ: break;
+            case CallOp::BYTE_BUFFER_WRITE: break;
+            case CallOp::BYTE_BUFFER_SIZE: break;
+            case CallOp::TEXTURE_READ: break;
+            case CallOp::TEXTURE_WRITE: break;
+            case CallOp::TEXTURE_SIZE: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case CallOp::BINDLESS_TEXTURE2D_READ: break;
+            case CallOp::BINDLESS_TEXTURE3D_READ: break;
+            case CallOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE2D_SIZE: break;
+            case CallOp::BINDLESS_TEXTURE3D_SIZE: break;
+            case CallOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
+            case CallOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
+            case CallOp::BINDLESS_BUFFER_READ: break;
+            case CallOp::BINDLESS_BUFFER_WRITE: break;
+            case CallOp::BINDLESS_BYTE_BUFFER_READ: break;
+            case CallOp::BINDLESS_BUFFER_SIZE: break;
+            case CallOp::BINDLESS_BUFFER_TYPE: break;
+            case CallOp::BINDLESS_BUFFER_ADDRESS: break;
+            case CallOp::MAKE_BOOL2: break;
+            case CallOp::MAKE_BOOL3: break;
+            case CallOp::MAKE_BOOL4: break;
+            case CallOp::MAKE_INT2: break;
+            case CallOp::MAKE_INT3: break;
+            case CallOp::MAKE_INT4: break;
+            case CallOp::MAKE_UINT2: break;
+            case CallOp::MAKE_UINT3: break;
+            case CallOp::MAKE_UINT4: break;
+            case CallOp::MAKE_FLOAT2: break;
+            case CallOp::MAKE_FLOAT3: break;
+            case CallOp::MAKE_FLOAT4: break;
+            case CallOp::MAKE_SHORT2: break;
+            case CallOp::MAKE_SHORT3: break;
+            case CallOp::MAKE_SHORT4: break;
+            case CallOp::MAKE_USHORT2: break;
+            case CallOp::MAKE_USHORT3: break;
+            case CallOp::MAKE_USHORT4: break;
+            case CallOp::MAKE_LONG2: break;
+            case CallOp::MAKE_LONG3: break;
+            case CallOp::MAKE_LONG4: break;
+            case CallOp::MAKE_ULONG2: break;
+            case CallOp::MAKE_ULONG3: break;
+            case CallOp::MAKE_ULONG4: break;
+            case CallOp::MAKE_HALF2: break;
+            case CallOp::MAKE_HALF3: break;
+            case CallOp::MAKE_HALF4: break;
+            case CallOp::MAKE_DOUBLE2: break;
+            case CallOp::MAKE_DOUBLE3: break;
+            case CallOp::MAKE_DOUBLE4: break;
+            case CallOp::MAKE_BYTE2: break;
+            case CallOp::MAKE_BYTE3: break;
+            case CallOp::MAKE_BYTE4: break;
+            case CallOp::MAKE_UBYTE2: break;
+            case CallOp::MAKE_UBYTE3: break;
+            case CallOp::MAKE_UBYTE4: break;
+            case CallOp::MAKE_FLOAT2X2: break;
+            case CallOp::MAKE_FLOAT3X3: break;
+            case CallOp::MAKE_FLOAT4X4: break;
+            case CallOp::ASSERT: break;
+            case CallOp::ASSUME: break;
+            case CallOp::UNREACHABLE: break;
+            case CallOp::ZERO: break;
+            case CallOp::ONE: break;
+            case CallOp::PACK: break;
+            case CallOp::UNPACK: break;
+            case CallOp::REQUIRES_GRADIENT: break;
+            case CallOp::GRADIENT: break;
+            case CallOp::GRADIENT_MARKER: break;
+            case CallOp::ACCUMULATE_GRADIENT: break;
+            case CallOp::BACKWARD: break;
+            case CallOp::DETACH: break;
+            case CallOp::RAY_TRACING_INSTANCE_TRANSFORM: break;
+            case CallOp::RAY_TRACING_INSTANCE_USER_ID: break;
+            case CallOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
+            case CallOp::RAY_TRACING_TRACE_CLOSEST: break;
+            case CallOp::RAY_TRACING_TRACE_ANY: break;
+            case CallOp::RAY_TRACING_QUERY_ALL: break;
+            case CallOp::RAY_TRACING_QUERY_ANY: break;
+            case CallOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: break;
+            case CallOp::RAY_TRACING_INSTANCE_MOTION_SRT: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: break;
+            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: break;
+            case CallOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: break;
+            case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: break;
+            case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
+            case CallOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
+            case CallOp::RAY_QUERY_WORLD_SPACE_RAY: break;
+            case CallOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: break;
+            case CallOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: break;
+            case CallOp::RAY_QUERY_COMMITTED_HIT: break;
+            case CallOp::RAY_QUERY_COMMIT_TRIANGLE: break;
+            case CallOp::RAY_QUERY_COMMIT_PROCEDURAL: break;
+            case CallOp::RAY_QUERY_TERMINATE: break;
+            case CallOp::RAY_QUERY_PROCEED: break;
+            case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
+            case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
+            case CallOp::RASTER_DISCARD: break;
+            case CallOp::DDX: break;
+            case CallOp::DDY: break;
+            case CallOp::WARP_IS_FIRST_ACTIVE_LANE: break;
+            case CallOp::WARP_FIRST_ACTIVE_LANE: break;
+            case CallOp::WARP_ACTIVE_ALL_EQUAL: break;
+            case CallOp::WARP_ACTIVE_BIT_AND: break;
+            case CallOp::WARP_ACTIVE_BIT_OR: break;
+            case CallOp::WARP_ACTIVE_BIT_XOR: break;
+            case CallOp::WARP_ACTIVE_COUNT_BITS: break;
+            case CallOp::WARP_ACTIVE_MAX: break;
+            case CallOp::WARP_ACTIVE_MIN: break;
+            case CallOp::WARP_ACTIVE_PRODUCT: break;
+            case CallOp::WARP_ACTIVE_SUM: break;
+            case CallOp::WARP_ACTIVE_ALL: break;
+            case CallOp::WARP_ACTIVE_ANY: break;
+            case CallOp::WARP_ACTIVE_BIT_MASK: break;
+            case CallOp::WARP_PREFIX_COUNT_BITS: break;
+            case CallOp::WARP_PREFIX_SUM: break;
+            case CallOp::WARP_PREFIX_PRODUCT: break;
+            case CallOp::WARP_READ_LANE: break;
+            case CallOp::WARP_READ_FIRST_ACTIVE_LANE: break;
+            case CallOp::INDIRECT_SET_DISPATCH_KERNEL: break;
+            case CallOp::INDIRECT_SET_DISPATCH_COUNT: break;
+            case CallOp::TEXTURE2D_SAMPLE: break;
+            case CallOp::TEXTURE2D_SAMPLE_LEVEL: break;
+            case CallOp::TEXTURE2D_SAMPLE_GRAD: break;
+            case CallOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
+            case CallOp::TEXTURE3D_SAMPLE: break;
+            case CallOp::TEXTURE3D_SAMPLE_LEVEL: break;
+            case CallOp::TEXTURE3D_SAMPLE_GRAD: break;
+            case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case CallOp::SHADER_EXECUTION_REORDER: break;
+        }
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] Value *_translate_cast_expr(Builder &b, const CastExpr *expr) noexcept {
+        auto value = _translate_expression(b, expr->expression(), true);
+        switch (expr->op()) {
+            case compute::CastOp::STATIC: return b.static_cast_if_necessary(expr->type(), value);
+            case compute::CastOp::BITWISE: return b.bit_cast_if_necessary(expr->type(), value);
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected cast operation.");
+    }
+
+    [[nodiscard]] Value *_translate_expression(Builder &b, const Expression *expr, bool load_lval) noexcept {
+        LUISA_ASSERT(expr != nullptr, "Expression must not be null.");
+        switch (expr->tag()) {
+            case Expression::Tag::UNARY: return _translate_unary_expr(b, static_cast<const UnaryExpr *>(expr));
+            case Expression::Tag::BINARY: return _translate_binary_expr(b, static_cast<const BinaryExpr *>(expr));
+            case Expression::Tag::MEMBER: return _translate_member_expr(b, static_cast<const MemberExpr *>(expr), load_lval);
+            case Expression::Tag::ACCESS: return _translate_member_or_access_expr(b, expr, load_lval);
+            case Expression::Tag::LITERAL: return _translate_literal_expr(static_cast<const LiteralExpr *>(expr));
+            case Expression::Tag::REF: return _translate_ref_expr(b, static_cast<const RefExpr *>(expr), load_lval);
+            case Expression::Tag::CONSTANT: return _translate_constant_expr(static_cast<const ConstantExpr *>(expr));
+            case Expression::Tag::CALL: return _translate_call_expr(b, static_cast<const CallExpr *>(expr));
+            case Expression::Tag::CAST: return _translate_cast_expr(b, static_cast<const CastExpr *>(expr));
+            case Expression::Tag::TYPE_ID: LUISA_NOT_IMPLEMENTED();
+            case Expression::Tag::STRING_ID: LUISA_NOT_IMPLEMENTED();
+            case Expression::Tag::FUNC_REF: LUISA_NOT_IMPLEMENTED();
+            case Expression::Tag::CPUCUSTOM: LUISA_NOT_IMPLEMENTED();
+            case Expression::Tag::GPUCUSTOM: LUISA_NOT_IMPLEMENTED();
+        }
         return nullptr;
     }
 
@@ -312,13 +800,9 @@ private:
 
     void _translate_current_function() noexcept {
         // convert the arguments
-        for (auto &&ast_arg : _current.ast->arguments()) {
-            auto type = ast_arg.type();
-            if (ast_arg.is_reference()) {
-                _current.variables.emplace(ast_arg, _current.f->create_reference_argument(type));
-            } else {
-                _current.variables.emplace(ast_arg, _current.f->create_value_argument(type));
-            }
+        for (auto ast_arg : _current.ast->arguments()) {
+            auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
+            _current.variables.emplace(ast_arg, arg);
         }
         // create the body block
         Builder b;
@@ -342,10 +826,11 @@ public:
         : _config{config}, _module{Pool::current()->create<Module>()} {}
 
     Function *add_function(const ASTFunction &f) noexcept {
+        LUISA_ASSERT(_module != nullptr, "Module has been finalized.");
         // try emplace the function
-        auto [iter, newly_added] = _generated_functions.try_emplace(f.hash(), nullptr);
+        auto [iter, just_inserted] = _generated_functions.try_emplace(f.hash(), nullptr);
         // return the function if it has been translated
-        if (!newly_added) { return iter->second; }
+        if (!just_inserted) { return iter->second; }
         // create a new function
         FunctionDefinition *def = nullptr;
         switch (f.tag()) {
@@ -367,11 +852,13 @@ public:
     }
 
     Function *add_external_function(const ASTExternalFunction &f) noexcept {
+        LUISA_ASSERT(_module != nullptr, "Module has been finalized.");
         LUISA_NOT_IMPLEMENTED();
     }
 
     [[nodiscard]] Module *finalize() noexcept {
-        return _module;
+        auto module = std::exchange(_module, nullptr);
+        return module;
     }
 };
 

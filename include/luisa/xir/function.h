@@ -30,6 +30,7 @@ public:
     Argument *create_argument(const Type *type, bool by_ref) noexcept;
     ValueArgument *create_value_argument(const Type *type) noexcept;
     ReferenceArgument *create_reference_argument(const Type *type) noexcept;
+    ResourceArgument *create_resource_argument(const Type *type) noexcept;
 
     [[nodiscard]] auto &arguments() noexcept { return _arguments; }
     [[nodiscard]] auto &arguments() const noexcept { return _arguments; }

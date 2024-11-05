@@ -1,3 +1,4 @@
+#include <luisa/ast/type.h>
 #include <luisa/core/logging.h>
 #include <luisa/xir/function.h>
 
@@ -52,18 +53,32 @@ void Function::replace_argument(size_t index, Argument *argument) noexcept {
 }
 
 Argument *Function::create_argument(const Type *type, bool by_ref) noexcept {
+    if (type->is_resource()) {
+        LUISA_ASSERT(!by_ref, "Resource argument must not be passed by reference.");
+        return create_resource_argument(type);
+    }
     return by_ref ? static_cast<Argument *>(create_reference_argument(type)) :
                     static_cast<Argument *>(create_value_argument(type));
 }
 
 ValueArgument *Function::create_value_argument(const Type *type) noexcept {
+    LUISA_ASSERT(!type->is_resource(), "Resource argument must be created with create_resource_argument.");
+    LUISA_ASSERT(!type->is_custom(), "Opaque argument must be created with create_reference_argument.");
     auto argument = Pool::current()->create<ValueArgument>(type, this);
     add_argument(argument);
     return argument;
 }
 
 ReferenceArgument *Function::create_reference_argument(const Type *type) noexcept {
+    LUISA_ASSERT(!type->is_resource(), "Resource argument must be created with create_resource_argument.");
     auto argument = Pool::current()->create<ReferenceArgument>(type, this);
+    add_argument(argument);
+    return argument;
+}
+
+ResourceArgument *Function::create_resource_argument(const Type *type) noexcept {
+    LUISA_ASSERT(type->is_resource(), "Resource argument must be created with create_resource_argument.");
+    auto argument = Pool::current()->create<ResourceArgument>(type, this);
     add_argument(argument);
     return argument;
 }

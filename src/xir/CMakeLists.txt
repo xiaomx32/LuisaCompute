@@ -15,6 +15,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # derived instructions
         instructions/alloca.cpp
+        instructions/assert.cpp
         instructions/call.cpp
         instructions/cast.cpp
         instructions/gep.cpp
@@ -27,6 +28,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/return.cpp
         instructions/store.cpp
         instructions/switch.cpp
+        instructions/unreachable.cpp
 
         # derived metadata
         metadata/location.cpp

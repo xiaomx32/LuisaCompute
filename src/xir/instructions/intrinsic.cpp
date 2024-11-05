@@ -49,6 +49,8 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::WARP_LANE_ID: return "warp_lane_id";
         case IntrinsicOp::DISPATCH_ID: return "dispatch_id";
         case IntrinsicOp::DISPATCH_SIZE: return "dispatch_size";
+        case IntrinsicOp::KERNEL_ID: return "kernel_id";
+        case IntrinsicOp::OBJECT_ID: return "object_id";
         case IntrinsicOp::SYNCHRONIZE_BLOCK: return "synchronize_block";
         case IntrinsicOp::ALL: return "all";
         case IntrinsicOp::ANY: return "any";
@@ -275,6 +277,8 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"warp_lane_id", IntrinsicOp::WARP_LANE_ID},
         {"dispatch_id", IntrinsicOp::DISPATCH_ID},
         {"dispatch_size", IntrinsicOp::DISPATCH_SIZE},
+        {"kernel_id", IntrinsicOp::KERNEL_ID},
+        {"object_id", IntrinsicOp::OBJECT_ID},
         {"synchronize_block", IntrinsicOp::SYNCHRONIZE_BLOCK},
         {"all", IntrinsicOp::ALL},
         {"any", IntrinsicOp::ANY},

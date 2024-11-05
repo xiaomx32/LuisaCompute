@@ -3,6 +3,7 @@
 #include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
+#include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -63,9 +64,11 @@ public:
 
     BreakInst *break_(BasicBlock *target_block = nullptr) noexcept;
     ContinueInst *continue_(BasicBlock *target_block = nullptr) noexcept;
-    UnreachableInst *unreachable_() noexcept;
+    UnreachableInst *unreachable_(luisa::string_view message = {}) noexcept;
     ReturnInst *return_(Value *value) noexcept;
     ReturnInst *return_void() noexcept;
+
+    AssertInst *assert_(Value *condition, luisa::string_view message = {}) noexcept;
 
     CallInst *call(const Type *type, Value *callee, luisa::span<Value *const> arguments) noexcept;
     CallInst *call(const Type *type, Value *callee, std::initializer_list<Value *> arguments) noexcept;

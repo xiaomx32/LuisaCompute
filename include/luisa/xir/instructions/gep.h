@@ -14,6 +14,8 @@ public:
 public:
     explicit GEPInst(const Type *type = nullptr, Value *base = nullptr,
                      luisa::span<Value *const> indices = {}) noexcept;
+    [[nodiscard]] bool is_lvalue() const noexcept override { return true; }
+
     [[nodiscard]] auto base() noexcept { return operand(operand_index_base); }
     [[nodiscard]] auto base() const noexcept { return operand(operand_index_base); }
     [[nodiscard]] auto index(size_t i) noexcept { return operand(operand_index_index_offset + i); }

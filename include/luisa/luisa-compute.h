@@ -206,6 +206,7 @@
 #include <luisa/xir/ilist.h>
 #include <luisa/xir/instruction.h>
 #include <luisa/xir/instructions/alloca.h>
+#include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>

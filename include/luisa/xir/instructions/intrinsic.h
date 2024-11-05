@@ -55,6 +55,8 @@ enum struct IntrinsicOp {
     WARP_LANE_ID,
     DISPATCH_ID,
     DISPATCH_SIZE,
+    KERNEL_ID,
+    OBJECT_ID,
 
     // block synchronization
     SYNCHRONIZE_BLOCK,// ()

@@ -51,8 +51,12 @@ ContinueInst *Builder::continue_(BasicBlock *target_block) noexcept {
     return inst;
 }
 
-UnreachableInst *Builder::unreachable_() noexcept {
-    return _create_and_append_instruction<UnreachableInst>();
+UnreachableInst *Builder::unreachable_(luisa::string_view message) noexcept {
+    return _create_and_append_instruction<UnreachableInst>(luisa::string{message});
+}
+
+AssertInst *Builder::assert_(Value *condition, luisa::string_view message) noexcept {
+    return _create_and_append_instruction<AssertInst>(condition, luisa::string{message});
 }
 
 ReturnInst *Builder::return_(Value *value) noexcept {

@@ -5,6 +5,7 @@
 #include <luisa/ast/type.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
+#include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/break.h>
@@ -177,6 +178,19 @@ private:
 
     void _emit_unreachable_inst(const UnreachableInst *inst) noexcept {
         _main << "unreachable";
+        if (!inst->message().empty()) {
+            _main << " ";
+            _emit_string_escaped(_main, inst->message());
+        }
+    }
+
+    void _emit_assert_inst(const AssertInst *inst) noexcept {
+        _main << "assert";
+        if (!inst->message().empty()) {
+            _main << " ";
+            _emit_string_escaped(_main, inst->message());
+        }
+        _main << " " << _value_ident(inst->condition());
     }
 
     void _emit_if_inst(const IfInst *inst, int indent) noexcept {
@@ -394,6 +408,9 @@ private:
             case DerivedInstructionTag::CONDITIONAL_BRANCH:
                 _emit_conditional_branch_inst(static_cast<const ConditionalBranchInst *>(inst));
                 break;
+            case DerivedInstructionTag::ASSERT:
+                _emit_assert_inst(static_cast<const AssertInst *>(inst));
+                break;
         }
         _main << ";";
         _emit_use_debug_info(_main, inst->use_list());
@@ -440,7 +457,7 @@ private:
             }
             _emit_indent(1);
             _main << _value_ident(arg) << ": ";
-            if (arg->derived_value_tag() == DerivedValueTag::REFERENCE_ARGUMENT) {
+            if (arg->derived_argument_tag() == DerivedArgumentTag::REFERENCE) {
                 _main << "&";
             }
             _main << _type_ident(arg->type()) << ";";
