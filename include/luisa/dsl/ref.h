@@ -35,14 +35,13 @@ public:
     template<typename I>
         requires is_integral_expr_v<I>
     [[nodiscard]] auto &operator[](I &&index) & noexcept {
-        auto i = def(std::forward<I>(index));
         using Elem = std::remove_cvref_t<
             decltype(std::declval<expr_value_t<T>>()[0])>;
         auto f = FunctionBuilder::current();
         auto expr = f->access(
             Type::of<Elem>(),
             static_cast<const T *>(this)->expression(),
-            i.expression());
+            extract_expression(std::forward<I>(index)));
         return *f->create_temporary<Var<Elem>>(expr);
     }
 };
@@ -74,6 +73,8 @@ public:                                                                    \
     explicit Ref(const Expression *e) noexcept : _expression{e} {}         \
     [[nodiscard]] auto expression() const noexcept { return _expression; } \
     Ref(Ref &&) noexcept = default;                                        \
+    Ref(Var<__VA_ARGS__> &&other) noexcept                                 \
+        : Ref{static_cast<Ref &&>(other)} {}                               \
     Ref(const Ref &) noexcept = default;                                   \
     template<typename Rhs>                                                 \
     void operator=(Rhs &&rhs) & noexcept {                                 \

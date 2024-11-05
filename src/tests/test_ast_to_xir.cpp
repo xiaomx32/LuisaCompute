@@ -4,6 +4,7 @@ using namespace luisa;
 using namespace luisa::compute;
 
 int main() {
+
     Callable f = [](UInt a, UInt b) noexcept {
         $if (a == 0u) {
             a = 1u;
@@ -13,9 +14,13 @@ int main() {
         };
         return a * b;
     };
+
     Kernel1D k = [&](BufferUInt buffer, UInt y) noexcept {
+        $comment("i");
         auto i = dispatch_x();
+        $comment("x");
         auto x = buffer.read(i);
+        $comment("buffer");
         buffer.write(i, f(x, y));
     };
 

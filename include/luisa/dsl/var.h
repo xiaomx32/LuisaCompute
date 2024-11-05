@@ -1,6 +1,8 @@
 #pragma once
+
 #include <luisa/dsl/ref.h>
 #include <luisa/dsl/arg.h>
+
 // X11 macro
 #ifdef Bool
 #undef Bool
@@ -11,7 +13,7 @@ namespace luisa::compute {
 namespace detail {
 
 template<typename T>
-void apply_default_initializer(Ref<T> var) noexcept {
+void apply_default_initializer(const Ref<T> &var) noexcept {
     if constexpr (luisa::is_basic_v<T>) {
         dsl::assign(var, T{});
     } else {
@@ -37,10 +39,10 @@ struct Var : public detail::Ref<T> {
     // for local variables of basic or array types
     /// Construct a local variable of basic or array types
     Var() noexcept
-        : detail::Ref<T>{detail::FunctionBuilder::current()->local(Type::of<T>())} {
+        : detail::Ref<T>{static_cast<const Expression *>(detail::FunctionBuilder::current()->local(Type::of<T>()))} {
         // we have to apply the default initializer here so the variable
         // is properly defined right after construction
-        detail::apply_default_initializer(detail::Ref{*this});
+        detail::apply_default_initializer(static_cast<detail::Ref<T> &>(*this));
     }
 
     /// Assign members from args
@@ -52,7 +54,7 @@ struct Var : public detail::Ref<T> {
     /// Assign members
     template<typename... Args>
     Var(std::tuple<Args...> args) noexcept
-        : Var{args, std::index_sequence_for<Args...>{}} {}
+        : Var{std::move(args), std::index_sequence_for<Args...>{}} {}
 
     /// Assign from a single argument
     template<typename Arg>
