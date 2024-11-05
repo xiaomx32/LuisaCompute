@@ -22,4 +22,6 @@ void LC_XIR_API ast_to_xir_translate_add_function(AST2XIRContext *ctx, const AST
 void LC_XIR_API ast_to_xir_translate_add_external_function(AST2XIRContext *ctx, const ASTExternalFunction &f) noexcept;
 [[nodiscard]] LC_XIR_API Module *ast_to_xir_translate_finalize(AST2XIRContext *ctx) noexcept;
 
+[[nodiscard]] LC_XIR_API Module *ast_to_xir_translate(const ASTFunction &kernel, const AST2XIRConfig &config) noexcept;
+
 }// namespace luisa::compute::xir

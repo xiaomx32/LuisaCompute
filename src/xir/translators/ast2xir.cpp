@@ -161,6 +161,15 @@ private:
 
     [[nodiscard]] Value *_translate_member_expr(Builder &b, const MemberExpr *expr, bool load_lval) noexcept {
         if (expr->is_swizzle()) {
+            if (expr->swizzle_size() == 1u) {
+                auto v = _translate_expression(b, expr->self(), load_lval);
+                auto index = _translate_constant_access_index(expr->swizzle_index(0));
+                if (v->is_lvalue()) {
+                    LUISA_ASSERT(!load_lval, "Unexpected lvalue swizzle.");
+                    return b.gep(expr->type(), v, {index});
+                }
+                return b.call(expr->type(), IntrinsicOp::EXTRACT, {v, index});
+            }
             luisa::fixed_vector<Value *, 5u> args;
             auto v = _translate_expression(b, expr->self(), true);
             args.emplace_back(v);
@@ -338,8 +347,17 @@ private:
             case CallOp::ATOMIC_FETCH_MIN: break;
             case CallOp::ATOMIC_FETCH_MAX: break;
             case CallOp::ADDRESS_OF: break;
-            case CallOp::BUFFER_READ: break;
-            case CallOp::BUFFER_WRITE: break;
+            case CallOp::BUFFER_READ: {
+                auto buffer = _translate_expression(b, expr->arguments()[0], true);
+                auto index = _translate_expression(b, expr->arguments()[1], true);
+                return b.call(expr->type(), IntrinsicOp::BUFFER_READ, {buffer, index});
+            }
+            case CallOp::BUFFER_WRITE: {
+                auto buffer = _translate_expression(b, expr->arguments()[0], true);
+                auto index = _translate_expression(b, expr->arguments()[1], true);
+                auto value = _translate_expression(b, expr->arguments()[2], true);
+                return b.call(expr->type(), IntrinsicOp::BUFFER_WRITE, {buffer, index, value});
+            }
             case CallOp::BUFFER_SIZE: break;
             case CallOp::BUFFER_ADDRESS: break;
             case CallOp::BYTE_BUFFER_READ: break;
@@ -878,6 +896,12 @@ Module *ast_to_xir_translate_finalize(AST2XIRContext *ctx) noexcept {
     auto m = ctx->finalize();
     luisa::delete_with_allocator(ctx);
     return m;
+}
+
+Module *ast_to_xir_translate(const ASTFunction &kernel, const AST2XIRConfig &config) noexcept {
+    AST2XIRContext ctx{config};
+    ctx.add_function(kernel);
+    return ctx.finalize();
 }
 
 }// namespace luisa::compute::xir
