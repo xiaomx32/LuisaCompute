@@ -12,7 +12,8 @@ int main() {
         $for (i, 3) {
             b += i;
         };
-        return a * b;
+        auto delta = thread_x();
+        return a * b + delta;
     };
 
     Kernel1D k = [&](BufferUInt buffer, UInt y) noexcept {
