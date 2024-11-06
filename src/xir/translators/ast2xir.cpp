@@ -33,24 +33,19 @@ public:
             return this->type == rhs.type &&
                    this->value.index() == rhs.value.index() &&
                    luisa::visit(
-                       [&rhs_variant = rhs.value]<typename T>(T lhs) noexcept {
-                           if constexpr (std::is_same_v<T, decltype(rhs)>) {
-                               auto rhs = luisa::get<T>(rhs_variant);
-                               if constexpr (luisa::is_scalar_v<T>) {
-                                   return lhs == rhs.get;
-                               } else if constexpr (luisa::is_vector_v<T>) {
-                                   return luisa::all(lhs == rhs);
-                               } else if constexpr (luisa::is_matrix_v<T>) {
-                                   for (auto i = 0u; i < luisa::matrix_dimension_v<T>; i++) {
-                                       if (!all(lhs[i] == rhs[i])) { return false; }
-                                   }
-                                   return true;
-                               } else {
-                                   static_assert(luisa::always_false_v<T>, "Unexpected literal type.");
+                       [&rhs_variant = rhs.value]<typename T>(T lhs) noexcept -> bool {
+                           auto rhs = luisa::get<T>(rhs_variant);
+                           if constexpr (luisa::is_scalar_v<T>) {
+                               return lhs == rhs;
+                           } else if constexpr (luisa::is_vector_v<T>) {
+                               return luisa::all(lhs == rhs);
+                           } else if constexpr (luisa::is_matrix_v<T>) {
+                               for (auto i = 0u; i < luisa::matrix_dimension_v<T>; i++) {
+                                   if (!all(lhs[i] == rhs[i])) { return false; }
                                }
-                           } else {
-                               return false;
+                               return true;
                            }
+                           LUISA_ERROR_WITH_LOCATION("Unexpected literal type.");
                        },
                        this->value);
         }
@@ -200,13 +195,7 @@ private:
         return _translate_typed_literal(key);
     }
 
-    [[nodiscard]] Value *_translate_ref_expr(Builder &b, const RefExpr *expr, bool load_lval) noexcept {
-        auto ast_var = expr->variable();
-        LUISA_ASSERT(ast_var.type() == expr->type(), "Variable type mismatch.");
-        if (auto iter = _current.variables.find(ast_var); iter != _current.variables.end()) {
-            auto var = iter->second;
-            return load_lval && var->is_lvalue() ? b.load(expr->type(), var) : var;
-        }
+    [[nodiscard]] Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
         LUISA_ASSERT(ast_var.is_builtin(), "Unresolved variable reference.");
         auto op = [tag = ast_var.tag(), t = ast_var.type()] {
             switch (tag) {
@@ -239,6 +228,16 @@ private:
             LUISA_ERROR_WITH_LOCATION("Unexpected variable type.");
         }();
         return b.call(ast_var.type(), op, {});
+    }
+
+    [[nodiscard]] Value *_translate_ref_expr(Builder &b, const RefExpr *expr, bool load_lval) noexcept {
+        auto ast_var = expr->variable();
+        LUISA_ASSERT(ast_var.type() == expr->type(), "Variable type mismatch.");
+        if (auto iter = _current.variables.find(ast_var); iter != _current.variables.end()) {
+            auto var = iter->second;
+            return load_lval && var->is_lvalue() ? b.load(expr->type(), var) : var;
+        }
+        return _translate_builtin_variable(b, ast_var);
     }
 
     [[nodiscard]] Value *_translate_constant_expr(const ConstantExpr *expr) noexcept {
@@ -826,9 +825,18 @@ private:
         Builder b;
         b.set_insertion_point(_current.f->create_body_block());
         for (auto ast_local : _current.ast->local_variables()) {
-            _current.variables.emplace(ast_local, b.alloca_local(ast_local.type()));
+            LUISA_DEBUG_ASSERT(_current.variables.find(ast_local) == _current.variables.end(),
+                               "Local variable already exists.");
+            auto v = _current.variables.emplace(ast_local, b.alloca_local(ast_local.type())).first->second;
+            if (ast_local.is_builtin()) {
+                auto builtin_init = _translate_builtin_variable(b, ast_local);
+                LUISA_ASSERT(v->type() == builtin_init->type(), "Variable type mismatch.");
+                b.store(v, builtin_init);
+            }
         }
         for (auto ast_shared : _current.ast->shared_variables()) {
+            LUISA_DEBUG_ASSERT(_current.variables.find(ast_shared) == _current.variables.end(),
+                               "Shared variable already exists.");
             _current.variables.emplace(ast_shared, b.alloca_shared(ast_shared.type()));
         }
         _translate_statements(b, _current.ast->body()->statements());
