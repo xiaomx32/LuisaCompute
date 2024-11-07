@@ -116,10 +116,7 @@ endif ()
 
 # add platform macros
 if (WIN32)
-    target_compile_definitions(luisa-compute-include INTERFACE
-            LUISA_PLATFORM_WINDOWS=1
-            _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR=1 # workaround for MSVC, again
-    )
+    target_compile_definitions(luisa-compute-include INTERFACE LUISA_PLATFORM_WINDOWS=1)
 elseif (UNIX)
     target_compile_definitions(luisa-compute-include INTERFACE LUISA_PLATFORM_UNIX=1)
     if (APPLE)
@@ -137,5 +134,12 @@ install(TARGETS luisa-compute-include
 install(DIRECTORY include/luisa
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+
+# Global definition to avoid MSVC ABI break.
+# See https://github.com/microsoft/STL/releases/tag/vs-2022-17.10 for details.
+if (WIN32)
+    add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR=1)
+    target_compile_definitions(luisa-compute-include INTERFACE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR=1)
+endif ()
 
 add_subdirectory(src)
