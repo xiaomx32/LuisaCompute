@@ -8,6 +8,7 @@
 #endif
 
 #include <spdlog/fmt/fmt.h>
+#include <spdlog/fmt/bundled/xchar.h>
 
 #include <luisa/core/basic_types.h>
 #include <luisa/core/stl/string.h>
