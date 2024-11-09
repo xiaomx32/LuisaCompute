@@ -526,6 +526,8 @@ private:
 
 public:
     XIR2TextTranslator() noexcept : _prelude{1_k}, _main{4_k} {}
+
+    // TODO: collect the values first for better readability
     [[nodiscard]] luisa::string emit(const Module *module, bool debug_info) noexcept {
         _prelude.clear();
         _main.clear();

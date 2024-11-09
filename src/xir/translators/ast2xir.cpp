@@ -816,14 +816,23 @@ private:
     }
 
     void _translate_current_function() noexcept {
-        // convert the arguments
-        for (auto ast_arg : _current.ast->arguments()) {
-            auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
-            _current.variables.emplace(ast_arg, arg);
-        }
         // create the body block
         Builder b;
         b.set_insertion_point(_current.f->create_body_block());
+        // convert the arguments
+        for (auto ast_arg : _current.ast->arguments()) {
+            auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
+            if (auto ast_usage = _current.ast->variable_usage(ast_arg.uid());
+                arg->is_value() && ast_usage == Usage::WRITE || ast_usage == Usage::READ_WRITE) {
+                // AST allows update of the argument, so we need to copy it to a local variable
+                auto local = b.alloca_local(arg->type());
+                local->add_comment("Local copy of argument");
+                b.store(local, arg);
+                _current.variables.emplace(ast_arg, local);
+            } else {// otherwise, we can directly use the argument
+                _current.variables.emplace(ast_arg, arg);
+            }
+        }
         for (auto ast_local : _current.ast->local_variables()) {
             LUISA_DEBUG_ASSERT(_current.variables.find(ast_local) == _current.variables.end(),
                                "Local variable already exists.");

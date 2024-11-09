@@ -140,10 +140,12 @@ GEPInst *Builder::gep(const Type *type, Value *base, luisa::span<Value *const> i
 }
 
 LoadInst *Builder::load(const Type *type, Value *variable) noexcept {
+    LUISA_ASSERT(variable->is_lvalue(), "Load source must be an lvalue.");
     return _create_and_append_instruction<LoadInst>(type, variable);
 }
 
 StoreInst *Builder::store(Value *variable, Value *value) noexcept {
+    LUISA_ASSERT(variable->is_lvalue(), "Store destination must be an lvalue.");
     return _create_and_append_instruction<StoreInst>(variable, value);
 }
 

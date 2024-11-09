@@ -26,8 +26,7 @@ public:
     [[nodiscard]] virtual DerivedArgumentTag derived_argument_tag() const noexcept = 0;
 
     [[nodiscard]] bool is_lvalue() const noexcept final {
-        return derived_argument_tag() == DerivedArgumentTag::VALUE ||
-               derived_argument_tag() == DerivedArgumentTag::REFERENCE;
+        return derived_argument_tag() == DerivedArgumentTag::REFERENCE;
     }
 
     [[nodiscard]] auto is_value() const noexcept { return derived_argument_tag() == DerivedArgumentTag::VALUE; }
