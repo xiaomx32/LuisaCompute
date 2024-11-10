@@ -192,6 +192,16 @@ install(DIRECTORY reproc/reproc++/include/reproc++
 # Note: we do not link `reproc` and `reproc++` to `luisa-compute-ext` but
 #       instead to `luisa-compute-core` since this is an OBJECT library.
 
+# yyjson
+add_library(luisa-compute-ext-yyjson-interface INTERFACE)
+target_include_directories(luisa-compute-ext-yyjson-interface INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/yyjson/src>)
+target_compile_definitions(luisa-compute-ext-yyjson-interface INTERFACE YYJSON_IMPORTS=1)
+add_library(luisa-compute-ext-yyjson OBJECT yyjson/src/yyjson.c yyjson/src/yyjson.h)
+target_link_libraries(luisa-compute-ext-yyjson PUBLIC luisa-compute-ext-yyjson-interface)
+target_compile_definitions(luisa-compute-ext-yyjson PRIVATE YYJSON_EXPORTS=1)
+
+# marl
 add_library(luisa-compute-ext-marl-interface INTERFACE)
 target_include_directories(luisa-compute-ext-marl-interface INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/marl/include>)

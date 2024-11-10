@@ -37,11 +37,15 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # translators
         translators/ast2xir.cpp
+        translators/json2xir.cpp
+        translators/xir2json.cpp
         translators/xir2text.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})
-target_link_libraries(luisa-compute-xir PUBLIC luisa-compute-ast)
+target_link_libraries(luisa-compute-xir
+        PUBLIC luisa-compute-ast
+        PRIVATE luisa-compute-ext-yyjson-interface)
 
 target_compile_definitions(luisa-compute-xir PUBLIC LUISA_ENABLE_XIR=1)
 target_compile_definitions(luisa-compute-xir PRIVATE LC_XIR_EXPORT_DLL=1)

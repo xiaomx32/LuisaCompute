@@ -232,6 +232,8 @@
 #include <luisa/xir/module.h>
 #include <luisa/xir/pool.h>
 #include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/json2xir.h>
+#include <luisa/xir/translators/xir2json.h>
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/xir/use.h>
 #include <luisa/xir/user.h>
