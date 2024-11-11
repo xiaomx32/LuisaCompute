@@ -12,7 +12,7 @@ enum struct IntrinsicOp {
     // unary operators
     UNARY_PLUS,   // +x
     UNARY_MINUS,  // -x
-    UNARY_NOT,    // !x
+    UNARY_LOGIC_NOT,    // !x
     UNARY_BIT_NOT,// ~x
 
     // binary operators
@@ -22,8 +22,8 @@ enum struct IntrinsicOp {
     BINARY_DIV,
     BINARY_MOD,
 
-    BINARY_AND,
-    BINARY_OR,
+    BINARY_LOGIC_AND,
+    BINARY_LOGIC_OR,
 
     BINARY_BIT_AND,
     BINARY_BIT_OR,
@@ -158,9 +158,21 @@ enum struct IntrinsicOp {
     BYTE_BUFFER_WRITE,/// [(buffer, byte_index, value) -> void]: writes value into the index-th element of buffer
     BYTE_BUFFER_SIZE, /// [(buffer) -> size_bytes]
 
-    TEXTURE_READ, /// [(texture, coord) -> value]
-    TEXTURE_WRITE,/// [(texture, coord, value) -> void]
-    TEXTURE_SIZE, /// [(texture) -> Vector<uint, dim>]
+    TEXTURE2D_READ,             /// [(texture, coord) -> value]
+    TEXTURE2D_WRITE,            /// [(texture, coord, value) -> void]
+    TEXTURE2D_SIZE,             /// [(texture) -> Vector<uint, dim>]
+    TEXTURE2D_SAMPLE,           // (tex, uv: float2, filter: uint, address: uint): float4
+    TEXTURE2D_SAMPLE_LEVEL,     // (tex, uv: float2, level: float, filter: uint, address: uint): float4
+    TEXTURE2D_SAMPLE_GRAD,      // (tex, uv: float2, ddx: float2, ddy: float2, filter: uint, address: uint): float4
+    TEXTURE2D_SAMPLE_GRAD_LEVEL,// (tex, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, address: uint): float4
+
+    TEXTURE3D_READ,             /// [(texture, coord) -> value]
+    TEXTURE3D_WRITE,            /// [(texture, coord, value) -> void]
+    TEXTURE3D_SIZE,             /// [(texture) -> Vector<uint, dim>]
+    TEXTURE3D_SAMPLE,           // (tex, uv: float3, filter: uint, address: uint): float4
+    TEXTURE3D_SAMPLE_LEVEL,     // (tex, uv: float3, level: float, filter: uint, address: uint): float4
+    TEXTURE3D_SAMPLE_GRAD,      // (tex, uv: float3, ddx: float3, ddy: float3, filter: uint, address: uint): float4
+    TEXTURE3D_SAMPLE_GRAD_LEVEL,// (tex, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, address: uint): float4
 
     // bindless array operations
     BINDLESS_TEXTURE2D_SAMPLE,           // (bindless_array, index: uint, uv: float2): float4
@@ -190,12 +202,15 @@ enum struct IntrinsicOp {
     BINDLESS_TEXTURE2D_SIZE_LEVEL,// (bindless_array, index: uint, level: uint): uint2
     BINDLESS_TEXTURE3D_SIZE_LEVEL,// (bindless_array, index: uint, level: uint): uint3
 
-    BINDLESS_BUFFER_READ,     // (bindless_array, index: uint, elem_index: uint): expr->type()
-    BINDLESS_BUFFER_WRITE,    // (bindless_array, index: uint, elem_index: uint, value: expr): void
-    BINDLESS_BYTE_BUFFER_READ,// (bindless_array, index: uint, offset_bytes: uint): expr->type()
-    BINDLESS_BUFFER_SIZE,     // (bindless_array, index: uint, stride: uint) -> size
-    BINDLESS_BUFFER_TYPE,     // (bindless_array, index: uint) -> uint64 (type id of the element); the returned value
-                              // could be compared with the value of a TypeIDExpr to examine the type of the buffer
+    BINDLESS_BUFFER_READ, // (bindless_array, index: uint, elem_index: uint) -> T
+    BINDLESS_BUFFER_WRITE,// (bindless_array, index: uint, elem_index: uint, value: T) -> void
+    BINDLESS_BUFFER_SIZE, // (bindless_array, index: uint, stride: uint) -> size: uint64
+    BINDLESS_BUFFER_TYPE, // (bindless_array, index: uint) -> uint64 (type id of the element); the returned value
+                          // could be compared with the value of a TypeIDExpr to examine the type of the buffer
+
+    BINDLESS_BYTE_BUFFER_READ, // (bindless_array, index: uint, offset_bytes: uint64) -> T
+    BINDLESS_BYTE_BUFFER_WRITE,// (bindless_array, index: uint, offset_bytes: uint64, value: T) -> void
+    BINDLESS_BYTE_BUFFER_SIZE, // (bindless_array, index: uint) -> size: uint64
 
     // low-level pointer operations, for akari
     BUFFER_DEVICE_ADDRESS,         // (buffer) -> address: uint64
@@ -210,12 +225,12 @@ enum struct IntrinsicOp {
     EXTRACT,
 
     // autodiff ops
-    REQUIRES_GRADIENT,  // (expr) -> void
-    GRADIENT,           // (expr) -> expr
-    GRADIENT_MARKER,    // (ref, expr) -> void
-    ACCUMULATE_GRADIENT,// (ref, expr) -> void
-    BACKWARD,           // (expr) -> void
-    DETACH,             // (expr) -> expr
+    AUTODIFF_REQUIRES_GRADIENT,  // (expr) -> void
+    AUTODIFF_GRADIENT,           // (expr) -> expr
+    AUTODIFF_GRADIENT_MARKER,    // (ref, expr) -> void
+    AUTODIFF_ACCUMULATE_GRADIENT,// (ref, expr) -> void
+    AUTODIFF_BACKWARD,           // (expr) -> void
+    AUTODIFF_DETACH,             // (expr) -> expr
 
     // ray tracing
     RAY_TRACING_INSTANCE_TRANSFORM,      // (Accel, uint)
@@ -259,8 +274,8 @@ enum struct IntrinsicOp {
 
     // rasterization
     RASTER_DISCARD,// (): void
-    DDX,           // (arg: float vector): float vector
-    DDY,           // (arg: float vector): float vector
+    RASTER_DDX,    // (arg: float vector): float vector
+    RASTER_DDY,    // (arg: float vector): float vector
 
     // warp operations
     WARP_IS_FIRST_ACTIVE_LANE,  // (): bool
@@ -284,18 +299,8 @@ enum struct IntrinsicOp {
     WARP_READ_FIRST_ACTIVE_LANE,// (type: scalar/vector/matrix): type (read this variable's value at the first lane)
 
     // indirect dispatch
-    INDIRECT_SET_DISPATCH_KERNEL,// (Buffer, uint offset, uint3 block_size, uint3 dispatch_size, uint kernel_id)
-    INDIRECT_SET_DISPATCH_COUNT, // (Buffer, uint count)
-
-    // direct texture sampling
-    TEXTURE2D_SAMPLE,           // (tex, uv: float2, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_LEVEL,     // (tex, uv: float2, level: float, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_GRAD,      // (tex, uv: float2, ddx: float2, ddy: float2, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_GRAD_LEVEL,// (tex, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE,           // (tex, uv: float3, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_LEVEL,     // (tex, uv: float3, level: float, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_GRAD,      // (tex, uv: float3, ddx: float3, ddy: float3, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_GRAD_LEVEL,// (tex, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, address: uint): float4
+    INDIRECT_DISPATCH_SET_KERNEL,// (Buffer, uint offset, uint3 block_size, uint3 dispatch_size, uint kernel_id)
+    INDIRECT_DISPATCH_SET_COUNT, // (Buffer, uint count)
 
     // shader execution re-ordering
     SHADER_EXECUTION_REORDER,// (uint hint, uint hint_bits): void

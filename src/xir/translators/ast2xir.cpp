@@ -75,7 +75,7 @@ private:
             switch (unary_op) {
                 case UnaryOp::PLUS: return IntrinsicOp::UNARY_PLUS;
                 case UnaryOp::MINUS: return IntrinsicOp::UNARY_MINUS;
-                case UnaryOp::NOT: return IntrinsicOp::UNARY_NOT;
+                case UnaryOp::NOT: return IntrinsicOp::UNARY_LOGIC_NOT;
                 case UnaryOp::BIT_NOT: return IntrinsicOp::UNARY_BIT_NOT;
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected unary operation.");
@@ -96,8 +96,8 @@ private:
                 case BinaryOp::BIT_XOR: return IntrinsicOp::BINARY_BIT_XOR;
                 case BinaryOp::SHL: return IntrinsicOp::BINARY_SHIFT_LEFT;
                 case BinaryOp::SHR: return IntrinsicOp::BINARY_SHIFT_RIGHT;
-                case BinaryOp::AND: return IntrinsicOp::BINARY_AND;
-                case BinaryOp::OR: return IntrinsicOp::BINARY_OR;
+                case BinaryOp::AND: return IntrinsicOp::BINARY_LOGIC_AND;
+                case BinaryOp::OR: return IntrinsicOp::BINARY_LOGIC_OR;
                 case BinaryOp::LESS: return IntrinsicOp::BINARY_LESS;
                 case BinaryOp::GREATER: return IntrinsicOp::BINARY_GREATER;
                 case BinaryOp::LESS_EQUAL: return IntrinsicOp::BINARY_LESS_EQUAL;
