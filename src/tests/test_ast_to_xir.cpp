@@ -32,4 +32,7 @@ int main() {
     auto text = xir::xir_to_text_translate(module, true);
 
     LUISA_INFO("AST2IR:\n{}", text);
+
+    auto json = xir::xir_to_json_translate(module);
+    LUISA_INFO("IR2JSON:\n{}", json);
 }

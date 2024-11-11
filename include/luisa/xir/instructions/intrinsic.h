@@ -45,9 +45,6 @@ enum struct IntrinsicOp {
     ASSUME,
     ASSERT,
 
-    // hacking
-    ADDRESS_OF,// (variable) -> uint64
-
     // thread coordination
     THREAD_ID,
     BLOCK_ID,
@@ -153,10 +150,9 @@ enum struct IntrinsicOp {
     ATOMIC_FETCH_MAX,       /// [(atomic_ref, val) -> old]: stores max(old, val), returns old.
 
     // resource operations
-    BUFFER_READ,   /// [(buffer, index) -> value]: reads the index-th element in buffer
-    BUFFER_WRITE,  /// [(buffer, index, value) -> void]: writes value into the index-th element of buffer
-    BUFFER_SIZE,   /// [(buffer) -> size]
-    BUFFER_ADDRESS,/// [(buffer) -> address]
+    BUFFER_READ, /// [(buffer, index) -> value]: reads the index-th element in buffer
+    BUFFER_WRITE,/// [(buffer, index, value) -> void]: writes value into the index-th element of buffer
+    BUFFER_SIZE, /// [(buffer) -> size]
 
     BYTE_BUFFER_READ, /// [(buffer, byte_index) -> value]: reads the index-th element in buffer
     BYTE_BUFFER_WRITE,/// [(buffer, byte_index, value) -> void]: writes value into the index-th element of buffer
@@ -200,7 +196,13 @@ enum struct IntrinsicOp {
     BINDLESS_BUFFER_SIZE,     // (bindless_array, index: uint, stride: uint) -> size
     BINDLESS_BUFFER_TYPE,     // (bindless_array, index: uint) -> uint64 (type id of the element); the returned value
                               // could be compared with the value of a TypeIDExpr to examine the type of the buffer
-    BINDLESS_BUFFER_ADDRESS,  // (bindless_array, index: uint) -> uint64 (address of the buffer)
+
+    // low-level pointer operations, for akari
+    VARIABLE_DEVICE_ADDRESS,       // (variable) -> address: uint64
+    BUFFER_DEVICE_ADDRESS,         // (buffer) -> address: uint64
+    BINDLESS_BUFFER_DEVICE_ADDRESS,// (bindless_array, index: uint) -> address: uint64
+    DEVICE_ADDRESS_READ,           // (address: uint64) -> value: T
+    DEVICE_ADDRESS_WRITE,          // (address: uint64, value: T) -> void
 
     // aggregate operations
     AGGREGATE,

@@ -42,7 +42,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINARY_NOT_EQUAL: return "binary_not_equal";
         case IntrinsicOp::ASSUME: return "assume";
         case IntrinsicOp::ASSERT: return "assert";
-        case IntrinsicOp::ADDRESS_OF: return "address_of";
         case IntrinsicOp::THREAD_ID: return "thread_id";
         case IntrinsicOp::BLOCK_ID: return "block_id";
         case IntrinsicOp::WARP_SIZE: return "warp_size";
@@ -128,7 +127,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BUFFER_READ: return "buffer_read";
         case IntrinsicOp::BUFFER_WRITE: return "buffer_write";
         case IntrinsicOp::BUFFER_SIZE: return "buffer_size";
-        case IntrinsicOp::BUFFER_ADDRESS: return "buffer_address";
         case IntrinsicOp::BYTE_BUFFER_READ: return "byte_buffer_read";
         case IntrinsicOp::BYTE_BUFFER_WRITE: return "byte_buffer_write";
         case IntrinsicOp::BYTE_BUFFER_SIZE: return "byte_buffer_size";
@@ -164,7 +162,11 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read";
         case IntrinsicOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size";
         case IntrinsicOp::BINDLESS_BUFFER_TYPE: return "bindless_buffer_type";
-        case IntrinsicOp::BINDLESS_BUFFER_ADDRESS: return "bindless_buffer_address";
+        case IntrinsicOp::VARIABLE_DEVICE_ADDRESS: return "variable_device_address";
+        case IntrinsicOp::BUFFER_DEVICE_ADDRESS: return "buffer_device_address";
+        case IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return "bindless_buffer_device_address";
+        case IntrinsicOp::DEVICE_ADDRESS_READ: return "device_address_read";
+        case IntrinsicOp::DEVICE_ADDRESS_WRITE: return "device_address_write";
         case IntrinsicOp::AGGREGATE: return "aggregate";
         case IntrinsicOp::SHUFFLE: return "shuffle";
         case IntrinsicOp::INSERT: return "insert";
@@ -271,7 +273,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"binary_not_equal", IntrinsicOp::BINARY_NOT_EQUAL},
         {"assume", IntrinsicOp::ASSUME},
         {"assert", IntrinsicOp::ASSERT},
-        {"address_of", IntrinsicOp::ADDRESS_OF},
         {"thread_id", IntrinsicOp::THREAD_ID},
         {"block_id", IntrinsicOp::BLOCK_ID},
         {"block_size", IntrinsicOp::BLOCK_SIZE},
@@ -357,7 +358,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"buffer_read", IntrinsicOp::BUFFER_READ},
         {"buffer_write", IntrinsicOp::BUFFER_WRITE},
         {"buffer_size", IntrinsicOp::BUFFER_SIZE},
-        {"buffer_address", IntrinsicOp::BUFFER_ADDRESS},
         {"byte_buffer_read", IntrinsicOp::BYTE_BUFFER_READ},
         {"byte_buffer_write", IntrinsicOp::BYTE_BUFFER_WRITE},
         {"byte_buffer_size", IntrinsicOp::BYTE_BUFFER_SIZE},
@@ -393,7 +393,11 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"bindless_byte_buffer_read", IntrinsicOp::BINDLESS_BYTE_BUFFER_READ},
         {"bindless_buffer_size", IntrinsicOp::BINDLESS_BUFFER_SIZE},
         {"bindless_buffer_type", IntrinsicOp::BINDLESS_BUFFER_TYPE},
-        {"bindless_buffer_address", IntrinsicOp::BINDLESS_BUFFER_ADDRESS},
+        {"variable_device_address", IntrinsicOp::VARIABLE_DEVICE_ADDRESS},
+        {"buffer_device_address", IntrinsicOp::BUFFER_DEVICE_ADDRESS},
+        {"bindless_buffer_address", IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS},
+        {"device_address_read", IntrinsicOp::DEVICE_ADDRESS_READ},
+        {"device_address_write", IntrinsicOp::DEVICE_ADDRESS_WRITE},
         {"aggregate", IntrinsicOp::AGGREGATE},
         {"shuffle", IntrinsicOp::SHUFFLE},
         {"insert", IntrinsicOp::INSERT},
