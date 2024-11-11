@@ -198,7 +198,6 @@ enum struct IntrinsicOp {
                               // could be compared with the value of a TypeIDExpr to examine the type of the buffer
 
     // low-level pointer operations, for akari
-    VARIABLE_DEVICE_ADDRESS,       // (variable) -> address: uint64
     BUFFER_DEVICE_ADDRESS,         // (buffer) -> address: uint64
     BINDLESS_BUFFER_DEVICE_ADDRESS,// (bindless_array, index: uint) -> address: uint64
     DEVICE_ADDRESS_READ,           // (address: uint64) -> value: T

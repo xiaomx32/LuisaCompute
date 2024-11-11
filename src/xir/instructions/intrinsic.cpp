@@ -162,7 +162,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read";
         case IntrinsicOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size";
         case IntrinsicOp::BINDLESS_BUFFER_TYPE: return "bindless_buffer_type";
-        case IntrinsicOp::VARIABLE_DEVICE_ADDRESS: return "variable_device_address";
         case IntrinsicOp::BUFFER_DEVICE_ADDRESS: return "buffer_device_address";
         case IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return "bindless_buffer_device_address";
         case IntrinsicOp::DEVICE_ADDRESS_READ: return "device_address_read";
@@ -393,7 +392,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"bindless_byte_buffer_read", IntrinsicOp::BINDLESS_BYTE_BUFFER_READ},
         {"bindless_buffer_size", IntrinsicOp::BINDLESS_BUFFER_SIZE},
         {"bindless_buffer_type", IntrinsicOp::BINDLESS_BUFFER_TYPE},
-        {"variable_device_address", IntrinsicOp::VARIABLE_DEVICE_ADDRESS},
         {"buffer_device_address", IntrinsicOp::BUFFER_DEVICE_ADDRESS},
         {"bindless_buffer_address", IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS},
         {"device_address_read", IntrinsicOp::DEVICE_ADDRESS_READ},
