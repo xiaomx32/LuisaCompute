@@ -76,7 +76,7 @@ public:
     IntrinsicInst *call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept;
     IntrinsicInst *call(const Type *type, IntrinsicOp op, std::initializer_list<Value *> arguments) noexcept;
 
-    CastInst *static_cast_(const Type *type, Value *value) noexcept;
+    Instruction *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
     Value *static_cast_if_necessary(const Type *type, Value *value) noexcept;

@@ -83,6 +83,34 @@ private:
         return b.call(expr->type(), op, {operand});
     }
 
+    [[nodiscard]] Value *_type_cast_if_necessary(Builder &b, const Type *type, Value *value) noexcept {
+        // no cast needed
+        if (type == value->type()) { return value; }
+        // scalar to scalar cast
+        if (value->type()->is_scalar() && type->is_scalar()) {
+            return b.static_cast_(type, value);
+        }
+        // vector to vector cast
+        if (value->type()->is_vector() && type->is_vector()) {
+            LUISA_ASSERT(value->type()->dimension() >= type->dimension(), "Vector cast dimension mismatch.");
+            luisa::fixed_vector<Value *, 4u> elements;
+            for (auto i = 0u; i < type->dimension(); i++) {
+                auto idx = _translate_constant_access_index(i);
+                auto elem = b.call(type->element(), IntrinsicOp::EXTRACT, {value, idx});
+                elements.emplace_back(b.static_cast_if_necessary(type->element(), elem));
+            }
+            return b.call(type, IntrinsicOp::AGGREGATE, elements);
+        }
+        // scalar to vector cast
+        if (value->type()->is_scalar() && type->is_vector()) {
+            value = b.static_cast_if_necessary(type->element(), value);
+            luisa::fixed_vector<Value *, 4u> elements;
+            for (auto i = 0u; i < type->dimension(); i++) { elements.emplace_back(value); }
+            return b.call(type, IntrinsicOp::AGGREGATE, elements);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
+    }
+
     [[nodiscard]] Value *_translate_binary_expr(Builder &b, const BinaryExpr *expr) noexcept {
         auto op = [binary_op = expr->op()] {
             switch (binary_op) {
@@ -110,10 +138,10 @@ private:
         auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
         auto lhs = _translate_expression(b, expr->lhs(), true);
         auto rhs = _translate_expression(b, expr->rhs(), true);
-        lhs = b.static_cast_if_necessary(type_promotion.lhs, lhs);
-        rhs = b.static_cast_if_necessary(type_promotion.rhs, rhs);
+        lhs = _type_cast_if_necessary(b, type_promotion.lhs, lhs);
+        rhs = _type_cast_if_necessary(b, type_promotion.rhs, rhs);
         auto result = b.call(expr->type(), op, {lhs, rhs});
-        return b.static_cast_if_necessary(type_promotion.result, result);
+        return _type_cast_if_necessary(b, type_promotion.result, result);
     }
 
     [[nodiscard]] Value *_translate_constant_access_index(uint i) noexcept {
@@ -269,246 +297,332 @@ private:
             }
             return b.call(f->type(), f, args);
         }
+        auto pure_call = [&](IntrinsicOp target_op) noexcept {
+            luisa::fixed_vector<Value *, 16u> args;
+            args.reserve(expr->arguments().size());
+            for (auto ast_arg : expr->arguments()) {
+                auto arg = _translate_expression(b, ast_arg, true);
+                args.emplace_back(arg);
+            }
+            return b.call(expr->type(), target_op, args);
+        };
+        auto resource_call = [&](IntrinsicOp target_op) noexcept {
+            LUISA_ASSERT(!expr->arguments().empty(), "Resource call requires at least one argument.");
+            luisa::fixed_vector<Value *, 16u> args;
+            args.reserve(expr->arguments().size());
+            auto base = _translate_expression(b, expr->arguments()[0], false);
+            args.emplace_back(base);
+            auto other = expr->arguments().subspan(1);
+            for (auto ast_arg : other) {
+                auto arg = _translate_expression(b, ast_arg, true);
+                args.emplace_back(arg);
+            }
+            return b.call(expr->type(), target_op, args);
+        };
+        auto texture_dim = [&]() noexcept {
+            LUISA_ASSERT(!expr->arguments().empty(), "Texture dimension call requires at least one argument.");
+            auto tex = expr->arguments()[0];
+            LUISA_ASSERT(tex->tag() == Expression::Tag::REF, "Texture dimension call requires a texture reference.");
+            auto ref = static_cast<const RefExpr *>(tex);
+            auto ast_var = ref->variable();
+            LUISA_ASSERT(ast_var.tag() == Variable::Tag::TEXTURE, "Texture dimension call requires a texture reference.");
+            auto type = ast_var.type();
+            LUISA_ASSERT(type->is_texture(), "Texture dimension call requires a texture reference.");
+            return type->dimension();
+        };
+        auto make_vector_call = [&](const Type *elem_type, int dim) noexcept -> Value * {
+            LUISA_ASSERT(dim == 2 || dim == 3 || dim == 4, "Vector call only supports 2, 3 or 4 dimension.");
+            auto ast_args = expr->arguments();
+            if (ast_args.size() == 1) {
+                auto arg = _translate_expression(b, ast_args[0], true);
+                return _type_cast_if_necessary(b, expr->type(), arg);
+            }
+            luisa::fixed_vector<Value *, 4u> args;
+            for (auto ast_arg : ast_args) {
+                auto arg = _translate_expression(b, ast_arg, true);
+                if (arg->type()->is_scalar()) {
+                    args.emplace_back(_type_cast_if_necessary(b, elem_type, arg));
+                } else {
+                    LUISA_ASSERT(arg->type()->is_vector(), "Vector call argument type mismatch.");
+                    for (auto i = 0u; i < arg->type()->dimension(); i++) {
+                        auto idx = _translate_constant_access_index(i);
+                        auto elem = b.call(expr->type()->element(), IntrinsicOp::EXTRACT, {arg, idx});
+                        args.emplace_back(_type_cast_if_necessary(b, elem_type, elem));
+                    }
+                }
+            }
+            LUISA_ASSERT(args.size() == dim, "Vector call requires {} arguments.", dim);
+            return b.call(expr->type(), IntrinsicOp::AGGREGATE, args);
+        };
+        auto make_matrix_call = [&](const Type *elem_type, int dim) noexcept {
+            LUISA_ASSERT(elem_type == Type::of<float>(), "Matrix call only supports float element type.");
+            LUISA_ASSERT(dim == 2 || dim == 3 || dim == 4, "Matrix call only supports 2x2, 3x3 or 4x4 matrix.");
+            auto ast_args = expr->arguments();
+            LUISA_ASSERT(ast_args.size() == dim, "Matrix call requires {} arguments.", dim);
+            luisa::fixed_vector<Value *, 4u> args;
+            auto col_type = Type::vector(elem_type, dim);
+            for (auto ast_arg : ast_args) {
+                LUISA_ASSERT(ast_arg->type() == col_type, "Matrix call argument type mismatch.");
+                auto arg = _translate_expression(b, ast_arg, true);
+                args.emplace_back(arg);
+            }
+            return b.call(expr->type(), IntrinsicOp::AGGREGATE, args);
+        };
         // builtin function
         switch (expr->op()) {
             case CallOp::CUSTOM: LUISA_ERROR_WITH_LOCATION("Unexpected custom call operation.");
             case CallOp::EXTERNAL: LUISA_ERROR_WITH_LOCATION("Unexpected external call operation.");
-            case CallOp::ALL: break;
-            case CallOp::ANY: break;
-            case CallOp::SELECT: break;
-            case CallOp::CLAMP: break;
-            case CallOp::SATURATE: break;
-            case CallOp::LERP: break;
-            case CallOp::SMOOTHSTEP: break;
-            case CallOp::STEP: break;
-            case CallOp::ABS: break;
-            case CallOp::MIN: break;
-            case CallOp::MAX: break;
-            case CallOp::CLZ: break;
-            case CallOp::CTZ: break;
-            case CallOp::POPCOUNT: break;
-            case CallOp::REVERSE: break;
-            case CallOp::ISINF: break;
-            case CallOp::ISNAN: break;
-            case CallOp::ACOS: break;
-            case CallOp::ACOSH: break;
-            case CallOp::ASIN: break;
-            case CallOp::ASINH: break;
-            case CallOp::ATAN: break;
-            case CallOp::ATAN2: break;
-            case CallOp::ATANH: break;
-            case CallOp::COS: break;
-            case CallOp::COSH: break;
-            case CallOp::SIN: break;
-            case CallOp::SINH: break;
-            case CallOp::TAN: break;
-            case CallOp::TANH: break;
-            case CallOp::EXP: break;
-            case CallOp::EXP2: break;
-            case CallOp::EXP10: break;
-            case CallOp::LOG: break;
-            case CallOp::LOG2: break;
-            case CallOp::LOG10: break;
-            case CallOp::POW: break;
-            case CallOp::SQRT: break;
-            case CallOp::RSQRT: break;
-            case CallOp::CEIL: break;
-            case CallOp::FLOOR: break;
-            case CallOp::FRACT: break;
-            case CallOp::TRUNC: break;
-            case CallOp::ROUND: break;
-            case CallOp::FMA: break;
-            case CallOp::COPYSIGN: break;
-            case CallOp::CROSS: break;
-            case CallOp::DOT: break;
-            case CallOp::LENGTH: break;
-            case CallOp::LENGTH_SQUARED: break;
-            case CallOp::NORMALIZE: break;
-            case CallOp::FACEFORWARD: break;
-            case CallOp::REFLECT: break;
-            case CallOp::REDUCE_SUM: break;
-            case CallOp::REDUCE_PRODUCT: break;
-            case CallOp::REDUCE_MIN: break;
-            case CallOp::REDUCE_MAX: break;
-            case CallOp::OUTER_PRODUCT: break;
-            case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: break;
-            case CallOp::DETERMINANT: break;
-            case CallOp::TRANSPOSE: break;
-            case CallOp::INVERSE: break;
-            case CallOp::SYNCHRONIZE_BLOCK: break;
-            case CallOp::ATOMIC_EXCHANGE: break;
-            case CallOp::ATOMIC_COMPARE_EXCHANGE: break;
-            case CallOp::ATOMIC_FETCH_ADD: break;
-            case CallOp::ATOMIC_FETCH_SUB: break;
-            case CallOp::ATOMIC_FETCH_AND: break;
-            case CallOp::ATOMIC_FETCH_OR: break;
-            case CallOp::ATOMIC_FETCH_XOR: break;
-            case CallOp::ATOMIC_FETCH_MIN: break;
-            case CallOp::ATOMIC_FETCH_MAX: break;
-            case CallOp::ADDRESS_OF: break;
-            case CallOp::BUFFER_READ: {
-                auto buffer = _translate_expression(b, expr->arguments()[0], true);
-                auto index = _translate_expression(b, expr->arguments()[1], true);
-                return b.call(expr->type(), IntrinsicOp::BUFFER_READ, {buffer, index});
+            case CallOp::ALL: return pure_call(IntrinsicOp::ALL);
+            case CallOp::ANY: return pure_call(IntrinsicOp::ANY);
+            case CallOp::SELECT: return pure_call(IntrinsicOp::SELECT);
+            case CallOp::CLAMP: return pure_call(IntrinsicOp::CLAMP);
+            case CallOp::SATURATE: return pure_call(IntrinsicOp::SATURATE);
+            case CallOp::LERP: return pure_call(IntrinsicOp::LERP);
+            case CallOp::SMOOTHSTEP: return pure_call(IntrinsicOp::SMOOTHSTEP);
+            case CallOp::STEP: return pure_call(IntrinsicOp::STEP);
+            case CallOp::ABS: return pure_call(IntrinsicOp::ABS);
+            case CallOp::MIN: return pure_call(IntrinsicOp::MIN);
+            case CallOp::MAX: return pure_call(IntrinsicOp::MAX);
+            case CallOp::CLZ: return pure_call(IntrinsicOp::CLZ);
+            case CallOp::CTZ: return pure_call(IntrinsicOp::CTZ);
+            case CallOp::POPCOUNT: return pure_call(IntrinsicOp::POPCOUNT);
+            case CallOp::REVERSE: return pure_call(IntrinsicOp::REVERSE);
+            case CallOp::ISINF: return pure_call(IntrinsicOp::ISINF);
+            case CallOp::ISNAN: return pure_call(IntrinsicOp::ISNAN);
+            case CallOp::ACOS: return pure_call(IntrinsicOp::ACOS);
+            case CallOp::ACOSH: return pure_call(IntrinsicOp::ACOSH);
+            case CallOp::ASIN: return pure_call(IntrinsicOp::ASIN);
+            case CallOp::ASINH: return pure_call(IntrinsicOp::ASINH);
+            case CallOp::ATAN: return pure_call(IntrinsicOp::ATAN);
+            case CallOp::ATAN2: return pure_call(IntrinsicOp::ATAN2);
+            case CallOp::ATANH: return pure_call(IntrinsicOp::ATANH);
+            case CallOp::COS: return pure_call(IntrinsicOp::COS);
+            case CallOp::COSH: return pure_call(IntrinsicOp::COSH);
+            case CallOp::SIN: return pure_call(IntrinsicOp::SIN);
+            case CallOp::SINH: return pure_call(IntrinsicOp::SINH);
+            case CallOp::TAN: return pure_call(IntrinsicOp::TAN);
+            case CallOp::TANH: return pure_call(IntrinsicOp::TANH);
+            case CallOp::EXP: return pure_call(IntrinsicOp::EXP);
+            case CallOp::EXP2: return pure_call(IntrinsicOp::EXP2);
+            case CallOp::EXP10: return pure_call(IntrinsicOp::EXP10);
+            case CallOp::LOG: return pure_call(IntrinsicOp::LOG);
+            case CallOp::LOG2: return pure_call(IntrinsicOp::LOG2);
+            case CallOp::LOG10: return pure_call(IntrinsicOp::LOG10);
+            case CallOp::POW: return pure_call(IntrinsicOp::POW);
+            case CallOp::SQRT: return pure_call(IntrinsicOp::SQRT);
+            case CallOp::RSQRT: return pure_call(IntrinsicOp::RSQRT);
+            case CallOp::CEIL: return pure_call(IntrinsicOp::CEIL);
+            case CallOp::FLOOR: return pure_call(IntrinsicOp::FLOOR);
+            case CallOp::FRACT: return pure_call(IntrinsicOp::FRACT);
+            case CallOp::TRUNC: return pure_call(IntrinsicOp::TRUNC);
+            case CallOp::ROUND: return pure_call(IntrinsicOp::ROUND);
+            case CallOp::FMA: return pure_call(IntrinsicOp::FMA);
+            case CallOp::COPYSIGN: return pure_call(IntrinsicOp::COPYSIGN);
+            case CallOp::CROSS: return pure_call(IntrinsicOp::CROSS);
+            case CallOp::DOT: return pure_call(IntrinsicOp::DOT);
+            case CallOp::LENGTH: return pure_call(IntrinsicOp::LENGTH);
+            case CallOp::LENGTH_SQUARED: return pure_call(IntrinsicOp::LENGTH_SQUARED);
+            case CallOp::NORMALIZE: return pure_call(IntrinsicOp::NORMALIZE);
+            case CallOp::FACEFORWARD: return pure_call(IntrinsicOp::FACEFORWARD);
+            case CallOp::REFLECT: return pure_call(IntrinsicOp::REFLECT);
+            case CallOp::REDUCE_SUM: return pure_call(IntrinsicOp::REDUCE_SUM);
+            case CallOp::REDUCE_PRODUCT: return pure_call(IntrinsicOp::REDUCE_PRODUCT);
+            case CallOp::REDUCE_MIN: return pure_call(IntrinsicOp::REDUCE_MIN);
+            case CallOp::REDUCE_MAX: return pure_call(IntrinsicOp::REDUCE_MAX);
+            case CallOp::OUTER_PRODUCT: return pure_call(IntrinsicOp::OUTER_PRODUCT);
+            case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: return pure_call(IntrinsicOp::MATRIX_COMP_MUL);
+            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::DETERMINANT);
+            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::TRANSPOSE);
+            case CallOp::INVERSE: return pure_call(IntrinsicOp::INVERSE);
+            case CallOp::SYNCHRONIZE_BLOCK: return pure_call(IntrinsicOp::SYNCHRONIZE_BLOCK);
+            case CallOp::ATOMIC_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_EXCHANGE);
+            case CallOp::ATOMIC_COMPARE_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_COMPARE_EXCHANGE);
+            case CallOp::ATOMIC_FETCH_ADD: return resource_call(IntrinsicOp::ATOMIC_FETCH_ADD);
+            case CallOp::ATOMIC_FETCH_SUB: return resource_call(IntrinsicOp::ATOMIC_FETCH_SUB);
+            case CallOp::ATOMIC_FETCH_AND: return resource_call(IntrinsicOp::ATOMIC_FETCH_AND);
+            case CallOp::ATOMIC_FETCH_OR: return resource_call(IntrinsicOp::ATOMIC_FETCH_OR);
+            case CallOp::ATOMIC_FETCH_XOR: return resource_call(IntrinsicOp::ATOMIC_FETCH_XOR);
+            case CallOp::ATOMIC_FETCH_MIN: return resource_call(IntrinsicOp::ATOMIC_FETCH_MIN);
+            case CallOp::ATOMIC_FETCH_MAX: return resource_call(IntrinsicOp::ATOMIC_FETCH_MAX);
+            case CallOp::ADDRESS_OF: LUISA_ERROR_WITH_LOCATION("Removed address_of operation.");
+            case CallOp::BUFFER_READ: return resource_call(IntrinsicOp::BUFFER_READ);
+            case CallOp::BUFFER_WRITE: return resource_call(IntrinsicOp::BUFFER_WRITE);
+            case CallOp::BUFFER_SIZE: return resource_call(IntrinsicOp::BUFFER_SIZE);
+            case CallOp::BUFFER_ADDRESS: return resource_call(IntrinsicOp::BUFFER_DEVICE_ADDRESS);
+            case CallOp::BYTE_BUFFER_READ: return resource_call(IntrinsicOp::BYTE_BUFFER_READ);
+            case CallOp::BYTE_BUFFER_WRITE: return resource_call(IntrinsicOp::BYTE_BUFFER_WRITE);
+            case CallOp::BYTE_BUFFER_SIZE: return resource_call(IntrinsicOp::BYTE_BUFFER_SIZE);
+            case CallOp::TEXTURE_READ: return resource_call(texture_dim() == 2u ? IntrinsicOp::TEXTURE2D_READ : IntrinsicOp::TEXTURE3D_READ);
+            case CallOp::TEXTURE_WRITE: return resource_call(texture_dim() == 2u ? IntrinsicOp::TEXTURE2D_WRITE : IntrinsicOp::TEXTURE3D_WRITE);
+            case CallOp::TEXTURE_SIZE: return resource_call(texture_dim() == 2u ? IntrinsicOp::TEXTURE2D_SIZE : IntrinsicOp::TEXTURE3D_SIZE);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER);
+            case CallOp::BINDLESS_TEXTURE2D_READ: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_READ);
+            case CallOp::BINDLESS_TEXTURE3D_READ: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_READ);
+            case CallOp::BINDLESS_TEXTURE2D_READ_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL);
+            case CallOp::BINDLESS_TEXTURE3D_READ_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL);
+            case CallOp::BINDLESS_TEXTURE2D_SIZE: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SIZE);
+            case CallOp::BINDLESS_TEXTURE3D_SIZE: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SIZE);
+            case CallOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL);
+            case CallOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return resource_call(IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL);
+            case CallOp::BINDLESS_BUFFER_READ: return resource_call(IntrinsicOp::BINDLESS_BUFFER_READ);
+            case CallOp::BINDLESS_BUFFER_WRITE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_WRITE);
+            case CallOp::BINDLESS_BYTE_BUFFER_READ: return resource_call(IntrinsicOp::BINDLESS_BYTE_BUFFER_READ);
+            case CallOp::BINDLESS_BUFFER_SIZE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_SIZE);
+            case CallOp::BINDLESS_BUFFER_TYPE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_TYPE);
+            case CallOp::BINDLESS_BUFFER_ADDRESS: return resource_call(IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS);
+            case CallOp::MAKE_BOOL2: return make_vector_call(Type::of<bool>(), 2);
+            case CallOp::MAKE_BOOL3: return make_vector_call(Type::of<bool>(), 3);
+            case CallOp::MAKE_BOOL4: return make_vector_call(Type::of<bool>(), 4);
+            case CallOp::MAKE_INT2: return make_vector_call(Type::of<int>(), 2);
+            case CallOp::MAKE_INT3: return make_vector_call(Type::of<int>(), 3);
+            case CallOp::MAKE_INT4: return make_vector_call(Type::of<int>(), 4);
+            case CallOp::MAKE_UINT2: return make_vector_call(Type::of<uint>(), 2);
+            case CallOp::MAKE_UINT3: return make_vector_call(Type::of<uint>(), 3);
+            case CallOp::MAKE_UINT4: return make_vector_call(Type::of<uint>(), 4);
+            case CallOp::MAKE_FLOAT2: return make_vector_call(Type::of<float>(), 2);
+            case CallOp::MAKE_FLOAT3: return make_vector_call(Type::of<float>(), 3);
+            case CallOp::MAKE_FLOAT4: return make_vector_call(Type::of<float>(), 4);
+            case CallOp::MAKE_SHORT2: return make_vector_call(Type::of<short>(), 2);
+            case CallOp::MAKE_SHORT3: return make_vector_call(Type::of<short>(), 3);
+            case CallOp::MAKE_SHORT4: return make_vector_call(Type::of<short>(), 4);
+            case CallOp::MAKE_USHORT2: return make_vector_call(Type::of<ushort>(), 2);
+            case CallOp::MAKE_USHORT3: return make_vector_call(Type::of<ushort>(), 3);
+            case CallOp::MAKE_USHORT4: return make_vector_call(Type::of<ushort>(), 4);
+            case CallOp::MAKE_LONG2: return make_vector_call(Type::of<long>(), 2);
+            case CallOp::MAKE_LONG3: return make_vector_call(Type::of<long>(), 3);
+            case CallOp::MAKE_LONG4: return make_vector_call(Type::of<long>(), 4);
+            case CallOp::MAKE_ULONG2: return make_vector_call(Type::of<ulong>(), 2);
+            case CallOp::MAKE_ULONG3: return make_vector_call(Type::of<ulong>(), 3);
+            case CallOp::MAKE_ULONG4: return make_vector_call(Type::of<ulong>(), 4);
+            case CallOp::MAKE_HALF2: return make_vector_call(Type::of<half>(), 2);
+            case CallOp::MAKE_HALF3: return make_vector_call(Type::of<half>(), 3);
+            case CallOp::MAKE_HALF4: return make_vector_call(Type::of<half>(), 4);
+            case CallOp::MAKE_DOUBLE2: return make_vector_call(Type::of<double>(), 2);
+            case CallOp::MAKE_DOUBLE3: return make_vector_call(Type::of<double>(), 3);
+            case CallOp::MAKE_DOUBLE4: return make_vector_call(Type::of<double>(), 4);
+            case CallOp::MAKE_BYTE2: return make_vector_call(Type::of<byte>(), 2);
+            case CallOp::MAKE_BYTE3: return make_vector_call(Type::of<byte>(), 3);
+            case CallOp::MAKE_BYTE4: return make_vector_call(Type::of<byte>(), 4);
+            case CallOp::MAKE_UBYTE2: return make_vector_call(Type::of<ubyte>(), 2);
+            case CallOp::MAKE_UBYTE3: return make_vector_call(Type::of<ubyte>(), 3);
+            case CallOp::MAKE_UBYTE4: return make_vector_call(Type::of<ubyte>(), 4);
+            case CallOp::MAKE_FLOAT2X2: return make_matrix_call(Type::of<float>(), 2);
+            case CallOp::MAKE_FLOAT3X3: return make_matrix_call(Type::of<float>(), 3);
+            case CallOp::MAKE_FLOAT4X4: return make_matrix_call(Type::of<float>(), 4);
+            case CallOp::ASSERT: {
+                LUISA_ASSERT(!expr->arguments().empty(), "Assert requires at least one argument.");
+                auto cond = _translate_expression(b, expr->arguments()[0], true);
+                luisa::string_view message;
+                if (expr->arguments().size() >= 2u) {
+                    auto ast_msg_id = expr->arguments()[1];
+                    LUISA_ASSERT(ast_msg_id->tag() == Expression::Tag::STRING_ID, "Assert message must be a string.");
+                    auto msg_id = static_cast<const StringIDExpr *>(ast_msg_id);
+                    message = msg_id->data();
+                }
+                return b.assert_(cond, message);
             }
-            case CallOp::BUFFER_WRITE: {
-                auto buffer = _translate_expression(b, expr->arguments()[0], true);
-                auto index = _translate_expression(b, expr->arguments()[1], true);
-                auto value = _translate_expression(b, expr->arguments()[2], true);
-                return b.call(expr->type(), IntrinsicOp::BUFFER_WRITE, {buffer, index, value});
+            case CallOp::ASSUME: {
+                LUISA_ASSERT(!expr->arguments().empty(), "Assume requires at least one argument.");
+                auto cond = _translate_expression(b, expr->arguments()[0], true);
+                return b.call(nullptr, IntrinsicOp::ASSUME, {cond});
             }
-            case CallOp::BUFFER_SIZE: break;
-            case CallOp::BUFFER_ADDRESS: break;
-            case CallOp::BYTE_BUFFER_READ: break;
-            case CallOp::BYTE_BUFFER_WRITE: break;
-            case CallOp::BYTE_BUFFER_SIZE: break;
-            case CallOp::TEXTURE_READ: break;
-            case CallOp::TEXTURE_WRITE: break;
-            case CallOp::TEXTURE_SIZE: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case CallOp::BINDLESS_TEXTURE2D_READ: break;
-            case CallOp::BINDLESS_TEXTURE3D_READ: break;
-            case CallOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE2D_SIZE: break;
-            case CallOp::BINDLESS_TEXTURE3D_SIZE: break;
-            case CallOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
-            case CallOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
-            case CallOp::BINDLESS_BUFFER_READ: break;
-            case CallOp::BINDLESS_BUFFER_WRITE: break;
-            case CallOp::BINDLESS_BYTE_BUFFER_READ: break;
-            case CallOp::BINDLESS_BUFFER_SIZE: break;
-            case CallOp::BINDLESS_BUFFER_TYPE: break;
-            case CallOp::BINDLESS_BUFFER_ADDRESS: break;
-            case CallOp::MAKE_BOOL2: break;
-            case CallOp::MAKE_BOOL3: break;
-            case CallOp::MAKE_BOOL4: break;
-            case CallOp::MAKE_INT2: break;
-            case CallOp::MAKE_INT3: break;
-            case CallOp::MAKE_INT4: break;
-            case CallOp::MAKE_UINT2: break;
-            case CallOp::MAKE_UINT3: break;
-            case CallOp::MAKE_UINT4: break;
-            case CallOp::MAKE_FLOAT2: break;
-            case CallOp::MAKE_FLOAT3: break;
-            case CallOp::MAKE_FLOAT4: break;
-            case CallOp::MAKE_SHORT2: break;
-            case CallOp::MAKE_SHORT3: break;
-            case CallOp::MAKE_SHORT4: break;
-            case CallOp::MAKE_USHORT2: break;
-            case CallOp::MAKE_USHORT3: break;
-            case CallOp::MAKE_USHORT4: break;
-            case CallOp::MAKE_LONG2: break;
-            case CallOp::MAKE_LONG3: break;
-            case CallOp::MAKE_LONG4: break;
-            case CallOp::MAKE_ULONG2: break;
-            case CallOp::MAKE_ULONG3: break;
-            case CallOp::MAKE_ULONG4: break;
-            case CallOp::MAKE_HALF2: break;
-            case CallOp::MAKE_HALF3: break;
-            case CallOp::MAKE_HALF4: break;
-            case CallOp::MAKE_DOUBLE2: break;
-            case CallOp::MAKE_DOUBLE3: break;
-            case CallOp::MAKE_DOUBLE4: break;
-            case CallOp::MAKE_BYTE2: break;
-            case CallOp::MAKE_BYTE3: break;
-            case CallOp::MAKE_BYTE4: break;
-            case CallOp::MAKE_UBYTE2: break;
-            case CallOp::MAKE_UBYTE3: break;
-            case CallOp::MAKE_UBYTE4: break;
-            case CallOp::MAKE_FLOAT2X2: break;
-            case CallOp::MAKE_FLOAT3X3: break;
-            case CallOp::MAKE_FLOAT4X4: break;
-            case CallOp::ASSERT: break;
-            case CallOp::ASSUME: break;
-            case CallOp::UNREACHABLE: break;
-            case CallOp::ZERO: break;
-            case CallOp::ONE: break;
-            case CallOp::PACK: break;
-            case CallOp::UNPACK: break;
-            case CallOp::REQUIRES_GRADIENT: break;
-            case CallOp::GRADIENT: break;
-            case CallOp::GRADIENT_MARKER: break;
-            case CallOp::ACCUMULATE_GRADIENT: break;
-            case CallOp::BACKWARD: break;
-            case CallOp::DETACH: break;
-            case CallOp::RAY_TRACING_INSTANCE_TRANSFORM: break;
-            case CallOp::RAY_TRACING_INSTANCE_USER_ID: break;
-            case CallOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
-            case CallOp::RAY_TRACING_TRACE_CLOSEST: break;
-            case CallOp::RAY_TRACING_TRACE_ANY: break;
-            case CallOp::RAY_TRACING_QUERY_ALL: break;
-            case CallOp::RAY_TRACING_QUERY_ANY: break;
-            case CallOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: break;
-            case CallOp::RAY_TRACING_INSTANCE_MOTION_SRT: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: break;
-            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: break;
-            case CallOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: break;
-            case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: break;
-            case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
-            case CallOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
-            case CallOp::RAY_QUERY_WORLD_SPACE_RAY: break;
-            case CallOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: break;
-            case CallOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: break;
-            case CallOp::RAY_QUERY_COMMITTED_HIT: break;
-            case CallOp::RAY_QUERY_COMMIT_TRIANGLE: break;
-            case CallOp::RAY_QUERY_COMMIT_PROCEDURAL: break;
-            case CallOp::RAY_QUERY_TERMINATE: break;
-            case CallOp::RAY_QUERY_PROCEED: break;
-            case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
-            case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
-            case CallOp::RASTER_DISCARD: break;
-            case CallOp::DDX: break;
-            case CallOp::DDY: break;
-            case CallOp::WARP_IS_FIRST_ACTIVE_LANE: break;
-            case CallOp::WARP_FIRST_ACTIVE_LANE: break;
-            case CallOp::WARP_ACTIVE_ALL_EQUAL: break;
-            case CallOp::WARP_ACTIVE_BIT_AND: break;
-            case CallOp::WARP_ACTIVE_BIT_OR: break;
-            case CallOp::WARP_ACTIVE_BIT_XOR: break;
-            case CallOp::WARP_ACTIVE_COUNT_BITS: break;
-            case CallOp::WARP_ACTIVE_MAX: break;
-            case CallOp::WARP_ACTIVE_MIN: break;
-            case CallOp::WARP_ACTIVE_PRODUCT: break;
-            case CallOp::WARP_ACTIVE_SUM: break;
-            case CallOp::WARP_ACTIVE_ALL: break;
-            case CallOp::WARP_ACTIVE_ANY: break;
-            case CallOp::WARP_ACTIVE_BIT_MASK: break;
-            case CallOp::WARP_PREFIX_COUNT_BITS: break;
-            case CallOp::WARP_PREFIX_SUM: break;
-            case CallOp::WARP_PREFIX_PRODUCT: break;
-            case CallOp::WARP_READ_LANE: break;
-            case CallOp::WARP_READ_FIRST_ACTIVE_LANE: break;
-            case CallOp::INDIRECT_SET_DISPATCH_KERNEL: break;
-            case CallOp::INDIRECT_SET_DISPATCH_COUNT: break;
-            case CallOp::TEXTURE2D_SAMPLE: break;
-            case CallOp::TEXTURE2D_SAMPLE_LEVEL: break;
-            case CallOp::TEXTURE2D_SAMPLE_GRAD: break;
-            case CallOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case CallOp::TEXTURE3D_SAMPLE: break;
-            case CallOp::TEXTURE3D_SAMPLE_LEVEL: break;
-            case CallOp::TEXTURE3D_SAMPLE_GRAD: break;
-            case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case CallOp::SHADER_EXECUTION_REORDER: break;
+            case CallOp::UNREACHABLE: {
+                luisa::string_view message;
+                if (!expr->arguments().empty()) {
+                    auto ast_msg_id = expr->arguments()[0];
+                    LUISA_ASSERT(ast_msg_id->tag() == Expression::Tag::STRING_ID, "Unreachable message must be a string.");
+                    auto msg_id = static_cast<const StringIDExpr *>(ast_msg_id);
+                    message = msg_id->data();
+                }
+                return b.unreachable_(message);
+            }
+            case CallOp::ZERO: return pure_call(IntrinsicOp::ZERO);
+            case CallOp::ONE: return pure_call(IntrinsicOp::ONE);
+            case CallOp::PACK: LUISA_NOT_IMPLEMENTED();
+            case CallOp::UNPACK: LUISA_NOT_IMPLEMENTED();
+            case CallOp::REQUIRES_GRADIENT: LUISA_NOT_IMPLEMENTED();
+            case CallOp::GRADIENT: LUISA_NOT_IMPLEMENTED();
+            case CallOp::GRADIENT_MARKER: LUISA_NOT_IMPLEMENTED();
+            case CallOp::ACCUMULATE_GRADIENT: LUISA_NOT_IMPLEMENTED();
+            case CallOp::BACKWARD: LUISA_NOT_IMPLEMENTED();
+            case CallOp::DETACH: LUISA_NOT_IMPLEMENTED();
+            case CallOp::RAY_TRACING_INSTANCE_TRANSFORM: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM);
+            case CallOp::RAY_TRACING_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID);
+            case CallOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK);
+            case CallOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM);
+            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY);
+            case CallOp::RAY_TRACING_SET_INSTANCE_OPACITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY);
+            case CallOp::RAY_TRACING_SET_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID);
+            case CallOp::RAY_TRACING_TRACE_CLOSEST: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_CLOSEST);
+            case CallOp::RAY_TRACING_TRACE_ANY: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_ANY);
+            case CallOp::RAY_TRACING_QUERY_ALL: return resource_call(IntrinsicOp::RAY_TRACING_QUERY_ALL);
+            case CallOp::RAY_TRACING_QUERY_ANY: return resource_call(IntrinsicOp::RAY_TRACING_QUERY_ANY);
+            case CallOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX);
+            case CallOp::RAY_TRACING_INSTANCE_MOTION_SRT: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT);
+            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX);
+            case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT);
+            case CallOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR);
+            case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR);
+            case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: return resource_call(IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR);
+            case CallOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: return resource_call(IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR);
+            case CallOp::RAY_QUERY_WORLD_SPACE_RAY: return resource_call(IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY);
+            case CallOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: return resource_call(IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT);
+            case CallOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: return resource_call(IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT);
+            case CallOp::RAY_QUERY_COMMITTED_HIT: return resource_call(IntrinsicOp::RAY_QUERY_COMMITTED_HIT);
+            case CallOp::RAY_QUERY_COMMIT_TRIANGLE: return resource_call(IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE);
+            case CallOp::RAY_QUERY_COMMIT_PROCEDURAL: return resource_call(IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL);
+            case CallOp::RAY_QUERY_TERMINATE: return resource_call(IntrinsicOp::RAY_QUERY_TERMINATE);
+            case CallOp::RAY_QUERY_PROCEED: return resource_call(IntrinsicOp::RAY_QUERY_PROCEED);
+            case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE);
+            case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE);
+            case CallOp::RASTER_DISCARD: return pure_call(IntrinsicOp::RASTER_DISCARD);
+            case CallOp::DDX: return pure_call(IntrinsicOp::RASTER_DDX);
+            case CallOp::DDY: return pure_call(IntrinsicOp::RASTER_DDY);
+            case CallOp::WARP_IS_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE);
+            case CallOp::WARP_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_FIRST_ACTIVE_LANE);
+            case CallOp::WARP_ACTIVE_ALL_EQUAL: return pure_call(IntrinsicOp::WARP_ACTIVE_ALL_EQUAL);
+            case CallOp::WARP_ACTIVE_BIT_AND: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_AND);
+            case CallOp::WARP_ACTIVE_BIT_OR: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_OR);
+            case CallOp::WARP_ACTIVE_BIT_XOR: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_XOR);
+            case CallOp::WARP_ACTIVE_COUNT_BITS: return pure_call(IntrinsicOp::WARP_ACTIVE_COUNT_BITS);
+            case CallOp::WARP_ACTIVE_MAX: return pure_call(IntrinsicOp::WARP_ACTIVE_MAX);
+            case CallOp::WARP_ACTIVE_MIN: return pure_call(IntrinsicOp::WARP_ACTIVE_MIN);
+            case CallOp::WARP_ACTIVE_PRODUCT: return pure_call(IntrinsicOp::WARP_ACTIVE_PRODUCT);
+            case CallOp::WARP_ACTIVE_SUM: return pure_call(IntrinsicOp::WARP_ACTIVE_SUM);
+            case CallOp::WARP_ACTIVE_ALL: return pure_call(IntrinsicOp::WARP_ACTIVE_ALL);
+            case CallOp::WARP_ACTIVE_ANY: return pure_call(IntrinsicOp::WARP_ACTIVE_ANY);
+            case CallOp::WARP_ACTIVE_BIT_MASK: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_MASK);
+            case CallOp::WARP_PREFIX_COUNT_BITS: return pure_call(IntrinsicOp::WARP_PREFIX_COUNT_BITS);
+            case CallOp::WARP_PREFIX_SUM: return pure_call(IntrinsicOp::WARP_PREFIX_SUM);
+            case CallOp::WARP_PREFIX_PRODUCT: return pure_call(IntrinsicOp::WARP_PREFIX_PRODUCT);
+            case CallOp::WARP_READ_LANE: return pure_call(IntrinsicOp::WARP_READ_LANE);
+            case CallOp::WARP_READ_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE);
+            case CallOp::INDIRECT_SET_DISPATCH_KERNEL: return resource_call(IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL);
+            case CallOp::INDIRECT_SET_DISPATCH_COUNT: return resource_call(IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT);
+            case CallOp::TEXTURE2D_SAMPLE: return resource_call(IntrinsicOp::TEXTURE2D_SAMPLE);
+            case CallOp::TEXTURE2D_SAMPLE_LEVEL: return resource_call(IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL);
+            case CallOp::TEXTURE2D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE2D_SAMPLE_GRAD);
+            case CallOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL);
+            case CallOp::TEXTURE3D_SAMPLE: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE);
+            case CallOp::TEXTURE3D_SAMPLE_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL);
+            case CallOp::TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD);
+            case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL);
+            case CallOp::SHADER_EXECUTION_REORDER: return resource_call(IntrinsicOp::SHADER_EXECUTION_REORDER);
         }
         LUISA_NOT_IMPLEMENTED();
     }
@@ -516,7 +630,7 @@ private:
     [[nodiscard]] Value *_translate_cast_expr(Builder &b, const CastExpr *expr) noexcept {
         auto value = _translate_expression(b, expr->expression(), true);
         switch (expr->op()) {
-            case compute::CastOp::STATIC: return b.static_cast_if_necessary(expr->type(), value);
+            case compute::CastOp::STATIC: return _type_cast_if_necessary(b, expr->type(), value);
             case compute::CastOp::BITWISE: return b.bit_cast_if_necessary(expr->type(), value);
         }
         LUISA_ERROR_WITH_LOCATION("Unexpected cast operation.");
@@ -691,7 +805,7 @@ private:
             auto t = ast_for->variable()->type();
             // var += step
             auto step = _translate_expression(b, ast_for->step(), true);
-            auto cast_step = b.static_cast_if_necessary(t, step);
+            auto cast_step = _type_cast_if_necessary(b, t, step);
             auto prev = b.load(t, var);
             auto next = b.call(t, IntrinsicOp::BINARY_ADD, {prev, cast_step});
             b.store(var, next);
@@ -767,8 +881,11 @@ private:
             }
             case Statement::Tag::EXPR: {
                 auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
-                _commented(_translate_expression(b, ast_expr, false));
-                _translate_statements(b, cdr);
+                auto last = _commented(_translate_expression(b, ast_expr, false));
+                if (last->derived_value_tag() != DerivedValueTag::INSTRUCTION ||
+                    !static_cast<Instruction *>(last)->is_terminator()) {
+                    _translate_statements(b, cdr);
+                }
                 break;
             }
             case Statement::Tag::SWITCH: {

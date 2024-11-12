@@ -109,7 +109,8 @@ IntrinsicInst *Builder::call(const Type *type, IntrinsicOp op, luisa::span<Value
     return _create_and_append_instruction<IntrinsicInst>(type, op, arguments);
 }
 
-CastInst *Builder::static_cast_(const Type *type, Value *value) noexcept {
+Instruction *Builder::static_cast_(const Type *type, Value *value) noexcept {
+    LUISA_ASSERT(type->is_scalar() && value->type()->is_scalar(), "Invalid cast operation.");
     return _create_and_append_instruction<CastInst>(type, CastOp::STATIC_CAST, value);
 }
 

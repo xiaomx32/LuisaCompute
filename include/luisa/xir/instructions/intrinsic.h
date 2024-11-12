@@ -10,10 +10,10 @@ enum struct IntrinsicOp {
     NOP,
 
     // unary operators
-    UNARY_PLUS,   // +x
-    UNARY_MINUS,  // -x
-    UNARY_LOGIC_NOT,    // !x
-    UNARY_BIT_NOT,// ~x
+    UNARY_PLUS,     // +x
+    UNARY_MINUS,    // -x
+    UNARY_LOGIC_NOT,// !x
+    UNARY_BIT_NOT,  // ~x
 
     // binary operators
     BINARY_ADD,
@@ -137,6 +137,9 @@ enum struct IntrinsicOp {
     DETERMINANT,    // (floatNxN)
     TRANSPOSE,      // (floatNxN)
     INVERSE,        // (floatNxN)
+
+    ZERO,// () -> T
+    ONE, // () -> T
 
     // atomic operations
     ATOMIC_EXCHANGE,        /// [(atomic_ref, desired) -> old]: stores desired, returns old.
