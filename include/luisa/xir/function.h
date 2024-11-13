@@ -32,6 +32,10 @@ public:
     ReferenceArgument *create_reference_argument(const Type *type) noexcept;
     ResourceArgument *create_resource_argument(const Type *type) noexcept;
 
+    [[nodiscard]] auto is_definition() const noexcept {
+        return derived_function_tag() != DerivedFunctionTag::EXTERNAL;
+    }
+
     [[nodiscard]] auto &arguments() noexcept { return _arguments; }
     [[nodiscard]] auto &arguments() const noexcept { return _arguments; }
 };

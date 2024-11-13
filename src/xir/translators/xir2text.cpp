@@ -80,6 +80,45 @@ private:
         return next_uid;
     }
 
+    void _traverse_value_in_instruction(const Instruction *inst) noexcept {
+        static_cast<void>(_value_uid(inst));
+        for (auto &use : inst->operand_uses()) {
+            if (auto value = use->value();
+                value != nullptr && value->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
+                _traverse_values_in_basic_block(static_cast<const BasicBlock *>(value));
+            }
+        }
+    }
+
+    void _traverse_values_in_basic_block(const BasicBlock *bb) noexcept {
+        if (!_value_uid_map.contains(bb)) {// to avoid infinite recursion in loops
+            static_cast<void>(_value_uid(bb));
+            for (auto &inst : bb->instructions()) {
+                _traverse_value_in_instruction(&inst);
+            }
+        }
+    }
+
+    void _traverse_values_in_function(const Function *f) noexcept {
+        for (auto arg : f->arguments()) {
+            static_cast<void>(_value_uid(arg));
+        }
+        if (f->is_definition()) {
+            auto def = static_cast<const FunctionDefinition *>(f);
+            _traverse_values_in_basic_block(def->body_block());
+        }
+    }
+
+    void _traverse_values_in_module(const Module *module) noexcept {
+        for (auto &c : module->constants()) {
+            static_cast<void>(_value_uid(&c));
+        }
+        for (auto &f : module->functions()) {
+            static_cast<void>(_value_uid(&f));
+            _traverse_values_in_function(&f);
+        }
+    }
+
     [[nodiscard]] luisa::string _type_ident(const Type *type) noexcept {
         if (type == nullptr) { return "void"; }
         switch (type->tag()) {
@@ -476,6 +515,7 @@ private:
     }
 
     void _emit_module(const Module *module) noexcept {
+        _traverse_values_in_module(module);
         if (!module->metadata_list().empty()) {
             _emit_metadata_list(_prelude, module->metadata_list());
             _prelude << "\n";
@@ -527,7 +567,6 @@ private:
 public:
     XIR2TextTranslator() noexcept : _prelude{1_k}, _main{4_k} {}
 
-    // TODO: collect the values first for better readability
     [[nodiscard]] luisa::string emit(const Module *module, bool debug_info) noexcept {
         _prelude.clear();
         _main.clear();
