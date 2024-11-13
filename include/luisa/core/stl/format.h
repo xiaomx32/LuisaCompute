@@ -7,7 +7,6 @@
 #pragma warning(disable : 4996)
 #endif
 
-#include <spdlog/fmt/fmt.h>
 #include <spdlog/fmt/bundled/xchar.h>
 
 #include <luisa/core/basic_types.h>
@@ -132,16 +131,16 @@ struct formatter<luisa::Matrix<N>> {
     }
 };
 
-template<typename T, size_t N>
-struct formatter<std::array<T, N>> {
-    constexpr auto parse(format_parse_context &ctx) const -> decltype(ctx.begin()) {
-        return ctx.end();
-    }
-    template<typename FormatContext>
-    auto format(const std::array<T, N> &a, FormatContext &ctx) const -> decltype(ctx.out()) {
-        return fmt::format_to(ctx.out(), FMT_STRING("[{}]"), fmt::join(a, ", "));
-    }
-};
+// template<typename T, size_t N>
+// struct formatter<std::array<T, N>> {
+//     constexpr auto parse(format_parse_context &ctx) const -> decltype(ctx.begin()) {
+//         return ctx.end();
+//     }
+//     template<typename FormatContext>
+//     auto format(const std::array<T, N> &a, FormatContext &ctx) const -> decltype(ctx.out()) {
+//         return fmt::format_to(ctx.out(), FMT_STRING("[{}]"), fmt::join(a, ", "));
+//     }
+// };
 
 }// namespace fmt
 
