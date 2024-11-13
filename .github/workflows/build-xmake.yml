@@ -55,7 +55,10 @@ jobs:
           submodules: recursive
       - name: "Install Dependencies"
         run: |
-          brew install llvm molten-vk ninja cmake xmake
+          if [ "${{ matrix.compiler }}" = "homebrew-clang" ]; then
+            brew install llvm
+          fi
+          brew install molten-vk ninja cmake xmake
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: "Configure and Build"
         run: |
