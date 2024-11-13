@@ -199,7 +199,7 @@ on_load(function(target)
     if project_kind then
         target:set("kind", project_kind)
     end
-    if not is_plat("windows") then
+    if is_plat("linux") then
         if project_kind == "static" or project_kind == "object" then
             target:add("cxflags", "-fPIC", {
                 tools = {"clang", "gcc"}
