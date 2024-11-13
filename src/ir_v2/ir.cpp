@@ -1,4 +1,5 @@
 #include <luisa/ir_v2/ir_v2.h>
+#include <luisa/core/stl/format.h>
 #include <luisa/core/string_scratch.h>
 namespace luisa::compute::ir_v2 {
 bool Node::is_lvalue() const noexcept {
