@@ -21,8 +21,8 @@ class FallbackDevice : public DeviceInterface {
 
 private:
     RTCDevice _rtc_device;
-    //std::unique_ptr<::llvm::TargetMachine> _target_machine;
-    //mutable std::unique_ptr<::llvm::orc::LLJIT> _jit;
+    std::unique_ptr<::llvm::TargetMachine> _target_machine;
+    mutable std::unique_ptr<::llvm::orc::LLJIT> _jit;
     mutable std::mutex _jit_mutex;
 
 public:

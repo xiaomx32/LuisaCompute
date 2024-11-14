@@ -1,5 +1,5 @@
 find_package(LLVM CONFIG)
-find_package(embree CONFIG)
+find_package(embree 3 CONFIG)
 
 if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
@@ -20,13 +20,13 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_texture.cpp
             fallback_mesh.cpp
             fallback_accel.cpp
+            fallback_codegen.cpp
             )
     luisa_compute_add_backend(fallback SOURCES ${LC_BACKEND_FALLBACK_SRC})
-    message(STATUS "Build with fallback backend")
+    message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")
     llvm_map_components_to_libnames(LLVM_LIBS core executionengine support orcjit nativecodegen irreader passes analysis coroutines)
     target_include_directories(luisa-compute-backend-fallback PRIVATE ${LLVM_INCLUDE_DIRS})
-    target_link_libraries(luisa-compute-backend-fallback PRIVATE ${LLVM_LIBS})
-    target_link_libraries(luisa-compute-backend-fallback PRIVATE embree)
+    target_link_libraries(luisa-compute-backend-fallback PRIVATE embree ${LLVM_LIBS} luisa-compute-xir)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(luisa-compute-backend-fallback PRIVATE
                 /wd4624 /wd4996 # do not complain about LLVM
