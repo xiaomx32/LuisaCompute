@@ -11,6 +11,7 @@ private:
         std::byte _small[sizeof(void *)] = {};
         void *_large;
     };
+    uint64_t _hash = {};
 
     [[nodiscard]] bool _is_small() const noexcept;
     [[noreturn]] void _error_cannot_change_type() const noexcept;

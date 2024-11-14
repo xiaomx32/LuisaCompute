@@ -737,6 +737,7 @@ private:
 
     void _translate_if_stmt(Builder &b, const IfStmt *ast_if, luisa::span<const Statement *const> cdr) noexcept {
         auto cond = _translate_expression(b, ast_if->condition(), true);
+        cond = b.static_cast_if_necessary(Type::of<bool>(), cond);
         auto inst = _commented(b.if_(cond));
         auto merge_block = inst->create_merge_block();
         // true branch
@@ -788,6 +789,7 @@ private:
         {
             b.set_insertion_point(prepare_block);
             auto cond = _translate_expression(b, ast_for->condition(), true);
+            cond = b.static_cast_if_necessary(Type::of<bool>(), cond);
             b.cond_br(cond, body_block, merge_block);
         }
         // body block
