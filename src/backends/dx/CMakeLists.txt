@@ -72,8 +72,10 @@ if (WIN32)
         target_link_libraries(luisa-compute-backend-dx PRIVATE luisa-compute-oidn-ext)
     endif ()
 
+    set(ZLIB_USE_STATIC_LIBS ON)
     find_package(ZLIB)
     if (ZLIB_FOUND)
+        message(STATUS "Found ZLIB: ${ZLIB_LIBRARIES}")
         target_link_libraries(luisa-compute-backend-dx PRIVATE ZLIB::ZLIB)
     else () # use maxwell's favorite xrepo otherwise
         target_include_directories(luisa-compute-backend-dx PRIVATE "../../../xrepo/packages/z/zlib/port/zlib/include")
