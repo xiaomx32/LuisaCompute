@@ -206,6 +206,11 @@ on_load(function(target)
             })
         end
     end
+    if is_plat("macosx") then
+        target:add("cxflags", "-no-pie", {
+            tools = {"clang"}
+        })
+    end
     -- fma support
     if is_arch("x64", "x86_64") then
         target:add("cxflags", "-mfma", {
