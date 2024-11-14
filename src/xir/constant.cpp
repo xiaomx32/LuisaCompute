@@ -1,5 +1,6 @@
-#include <luisa/ast/type_registry.h>
+#include <luisa/core/stl/hash.h>
 #include <luisa/core/logging.h>
+#include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
 
 namespace luisa::compute::xir {
@@ -95,7 +96,8 @@ void Constant::set_data(const void *data) noexcept {
     _hash = 0u;
     if (data != nullptr) {
         detail::xir_constant_fill_data(type(), data, this->data());
-        _hash = luisa::hash64(this->data(), type()->size(), luisa::hash64_default_seed);
+        auto hv = luisa::hash64(this->data(), type()->size(), luisa::hash64_default_seed);
+        _hash = luisa::hash_combine({type()->hash(), hv});
     }
 }
 
