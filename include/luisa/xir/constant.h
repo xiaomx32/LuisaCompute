@@ -29,6 +29,8 @@ public:
     [[nodiscard]] void *data() noexcept;
     [[nodiscard]] const void *data() const noexcept;
 
+    [[nodiscard]] auto hash() const noexcept { return _hash; }
+
     template<typename T>
     [[nodiscard]] T &as() noexcept {
         _check_reinterpret_cast_type_size(sizeof(T));
