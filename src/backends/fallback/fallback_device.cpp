@@ -1,0 +1,357 @@
+//
+// Created by Mike Smith on 2022/5/23.
+//
+
+#include <luisa/core/stl.h>
+#include <luisa/core/logging.h>
+
+#include "fallback_stream.h"
+#include "fallback_device.h"
+#include "fallback_texture.h"
+#include "fallback_mesh.h"
+#include "fallback_accel.h"
+#include "fallback_bindless_array.h"
+
+//#include "llvm_event.h"
+//#include "llvm_shader.h"
+//#include "llvm_codegen.h"
+
+namespace luisa::compute::fallback {
+
+FallbackDevice::FallbackDevice(Context &&ctx) noexcept
+    : DeviceInterface{std::move(ctx)}, _rtc_device{rtcNewDevice(nullptr)} {
+//    static std::once_flag flag;
+//    std::call_once(flag, [] {
+//        ::llvm::InitializeNativeTarget();
+//        ::llvm::InitializeNativeTargetAsmPrinter();
+//    });
+//    // build JIT engine
+//    ::llvm::orc::LLJITBuilder jit_builder;
+//    if (auto host = ::llvm::orc::JITTargetMachineBuilder::detectHost()) {
+//        ::llvm::TargetOptions options;
+//        options.AllowFPOpFusion = ::llvm::FPOpFusion::Fast;
+//        options.UnsafeFPMath = true;
+//        options.NoInfsFPMath = true;
+//        options.NoNaNsFPMath = true;
+//        options.NoTrappingFPMath = true;
+//        options.NoSignedZerosFPMath = true;
+//#if LLVM_VERSION_MAJOR >= 14
+//        options.ApproxFuncFPMath = true;
+//#endif
+//        options.EnableIPRA = true;
+//        options.StackSymbolOrdering = true;
+//        options.EnableMachineFunctionSplitter = true;
+//        options.EnableMachineOutliner = true;
+//        options.NoTrapAfterNoreturn = true;
+//        host->setOptions(options);
+//        host->setCodeGenOptLevel(::llvm::CodeGenOptLevel::Aggressive);
+//#ifdef __aarch64__
+//        host->addFeatures({"+neon"});
+//#else
+//        host->addFeatures({"+avx2"});
+//#endif
+//        LUISA_INFO("LLVM JIT target: triplet = {}, features = {}.",
+//                   host->getTargetTriple().str(),
+//                   host->getFeatures().getString());
+//        if (auto machine = host->createTargetMachine()) {
+//            _target_machine = std::move(machine.get());
+//        } else {
+//            ::llvm::handleAllErrors(machine.takeError(), [&](const ::llvm::ErrorInfoBase &e) {
+//                LUISA_WARNING_WITH_LOCATION("JITTargetMachineBuilder::createTargetMachine(): {}.", e.message());
+//            });
+//            LUISA_ERROR_WITH_LOCATION("Failed to create target machine.");
+//        }
+//        jit_builder.setJITTargetMachineBuilder(std::move(*host));
+//    } else {
+//        ::llvm::handleAllErrors(host.takeError(), [&](const ::llvm::ErrorInfoBase &e) {
+//            LUISA_WARNING_WITH_LOCATION("JITTargetMachineBuilder::detectHost(): {}.", e.message());
+//        });
+//        LUISA_ERROR_WITH_LOCATION("Failed to detect host.");
+//    }
+//
+//    if (auto expected_jit = jit_builder.create()) {
+//        _jit = std::move(expected_jit.get());
+//    } else {
+//        ::llvm::handleAllErrors(expected_jit.takeError(), [](const ::llvm::ErrorInfoBase &err) {
+//            LUISA_WARNING_WITH_LOCATION("LLJITBuilder::create(): {}", err.message());
+//        });
+//        LUISA_ERROR_WITH_LOCATION("Failed to create LLJIT.");
+//    }
+//
+//    // map symbols
+//    if (auto generator = ::llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+//            _jit->getDataLayout().getGlobalPrefix())) {
+//        _jit->getMainJITDylib().addGenerator(std::move(generator.get()));
+//    } else {
+//        ::llvm::handleAllErrors(generator.takeError(), [](const ::llvm::ErrorInfoBase &err) {
+//            LUISA_WARNING_WITH_LOCATION("DynamicLibrarySearchGenerator::GetForCurrentProcess(): {}", err.message());
+//        });
+//        LUISA_ERROR_WITH_LOCATION("Failed to add generator.");
+//    }
+//    ::llvm::orc::SymbolMap symbol_map
+//    {
+//        {_jit->mangleAndIntern("texture.read.2d.int"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_2d_int)},
+//        {_jit->mangleAndIntern("texture.read.3d.int"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_3d_int)},
+//        {_jit->mangleAndIntern("texture.read.2d.uint"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_2d_uint)},
+//        {_jit->mangleAndIntern("texture.read.3d.uint"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_3d_uint)},
+//        {_jit->mangleAndIntern("texture.read.2d.float"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_2d_float)},
+//        {_jit->mangleAndIntern("texture.read.3d.float"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_read_3d_float)},
+//        {_jit->mangleAndIntern("texture.write.2d.int"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_2d_int)},
+//        {_jit->mangleAndIntern("texture.write.3d.int"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_3d_int)},
+//        {_jit->mangleAndIntern("texture.write.2d.uint"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_2d_uint)},
+//        {_jit->mangleAndIntern("texture.write.3d.uint"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_3d_uint)},
+//        {_jit->mangleAndIntern("texture.write.2d.float"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_2d_float)},
+//        {_jit->mangleAndIntern("texture.write.3d.float"), ::llvm::JITEvaluatedSymbol::fromPointer(&texture_write_3d_float)},
+//        {_jit->mangleAndIntern("accel.trace.closest"), ::llvm::JITEvaluatedSymbol::fromPointer(&accel_trace_closest)},
+//        {_jit->mangleAndIntern("accel.trace.any"), ::llvm::JITEvaluatedSymbol::fromPointer(&accel_trace_any)},
+//        {_jit->mangleAndIntern("bindless.texture.2d.read"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_2d_read)},
+//        {_jit->mangleAndIntern("bindless.texture.3d.read"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_3d_read)},
+//        {_jit->mangleAndIntern("bindless.texture.2d.sample"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_2d_sample)},
+//        {_jit->mangleAndIntern("bindless.texture.3d.sample"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_3d_sample)},
+//        {_jit->mangleAndIntern("bindless.texture.2d.sample.level"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_2d_sample_level)},
+//        {_jit->mangleAndIntern("bindless.texture.3d.sample.level"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_3d_sample_level)},
+//        {_jit->mangleAndIntern("bindless.texture.2d.sample.grad"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_2d_sample_grad)},
+//        {_jit->mangleAndIntern("bindless.texture.3d.sample.grad"), ::llvm::JITEvaluatedSymbol::fromPointer(&bindless_texture_3d_sample_grad)}
+//    };
+//    if (auto error = _jit->getMainJITDylib().define(
+//            ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
+//        ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
+//            LUISA_WARNING_WITH_LOCATION("LLJIT::define(): {}", err.message());
+//        });
+//        LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
+//    }
+}
+
+void *FallbackDevice::native_handle() const noexcept {
+    return reinterpret_cast<void *>(reinterpret_cast<uint64_t>(this));
+}
+
+
+void FallbackDevice::destroy_buffer(uint64_t handle) noexcept {
+    luisa::deallocate_with_allocator(reinterpret_cast<std::byte *>(handle));
+}
+
+void FallbackDevice::destroy_texture(uint64_t handle) noexcept {
+    luisa::delete_with_allocator(reinterpret_cast<FallbackTexture *>(handle));
+}
+
+
+void FallbackDevice::destroy_bindless_array(uint64_t handle) noexcept {
+    luisa::delete_with_allocator(reinterpret_cast<FallbackBindlessArray *>(handle));
+}
+
+
+
+void FallbackDevice::destroy_stream(uint64_t handle) noexcept {
+    luisa::delete_with_allocator(reinterpret_cast<FallbackStream *>(handle));
+}
+
+void FallbackDevice::synchronize_stream(uint64_t stream_handle) noexcept {
+    reinterpret_cast<FallbackStream *>(stream_handle)->synchronize();
+}
+
+
+void FallbackDevice::destroy_shader(uint64_t handle) noexcept {
+    //luisa::delete_with_allocator(reinterpret_cast<LLVMShader *>(handle));
+}
+
+
+void FallbackDevice::destroy_event(uint64_t handle) noexcept {
+    //luisa::delete_with_allocator(reinterpret_cast<LLVMEvent *>(handle));
+}
+
+
+
+void FallbackDevice::destroy_mesh(uint64_t handle) noexcept {
+    luisa::delete_with_allocator(reinterpret_cast<FallbackMesh *>(handle));
+}
+
+
+void FallbackDevice::destroy_accel(uint64_t handle) noexcept {
+    luisa::delete_with_allocator(reinterpret_cast<FallbackAccel *>(handle));
+}
+
+
+void FallbackDevice::destroy_swap_chain(uint64_t handle) noexcept {
+    LUISA_ERROR_WITH_LOCATION("Not implemented.");
+}
+
+
+void FallbackDevice::present_display_in_stream(
+    uint64_t stream_handle, uint64_t swap_chain_handle, uint64_t image_handle) noexcept {
+    LUISA_ERROR_WITH_LOCATION("Not implemented.");
+}
+
+FallbackDevice::~FallbackDevice() noexcept {
+    //rtcReleaseDevice(_rtc_device);
+}
+uint FallbackDevice::compute_warp_size() const noexcept {
+    return 0;
+}
+BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t elem_count, void *external_memory) noexcept {
+
+    BufferCreationInfo info{};
+
+    info.element_stride = element->size();
+    info.total_size_bytes = info.element_stride * elem_count;
+    info.handle = reinterpret_cast<uint64_t>(
+        luisa::allocate_with_allocator<std::byte>(info.total_size_bytes));
+    info.native_handle = reinterpret_cast<void *>(info.handle);
+    return info;
+}
+BufferCreationInfo FallbackDevice::create_buffer(const ir::CArc<ir::Type> *element, size_t elem_count, void *external_memory) noexcept {
+    return BufferCreationInfo();
+}
+ResourceCreationInfo FallbackDevice::create_texture(PixelFormat format, uint dimension, uint width, uint height, uint depth, uint mipmap_levels, bool simultaneous_access, bool allow_raster_target) noexcept {
+    ResourceCreationInfo info{};
+    auto texture = luisa::new_with_allocator<FallbackTexture>(
+        pixel_format_to_storage(format), dimension,
+        make_uint3(width, height, depth), mipmap_levels);
+    info.handle = reinterpret_cast<uint64_t>(texture);
+    return info;
+}
+ResourceCreationInfo FallbackDevice::create_stream(StreamTag stream_tag) noexcept {
+    return ResourceCreationInfo
+    {
+        .handle=reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackStream>())
+    };
+}
+void FallbackDevice::dispatch(uint64_t stream_handle, CommandList &&list) noexcept
+{
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    stream->dispatch(std::move(list));
+}
+void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const DeviceInterface::StreamLogCallback &callback) noexcept {
+    DeviceInterface::set_stream_log_callback(stream_handle, callback);
+}
+SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
+    return SwapchainCreationInfo();
+}
+ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
+//    return ShaderCreationInfo
+//    {
+//            ResourceCreationInfo
+//            {
+//                .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<LLVMShader>(this, kernel))
+//            }
+//    };
+    return ShaderCreationInfo();
+}
+ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, const ir::KernelModule *kernel) noexcept {
+    return ShaderCreationInfo();
+}
+ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, const ir_v2::KernelModule &kernel) noexcept {
+    return DeviceInterface::create_shader(option, kernel);
+}
+ShaderCreationInfo FallbackDevice::load_shader(luisa::string_view name, luisa::span<const Type *const> arg_types) noexcept {
+    return ShaderCreationInfo();
+}
+Usage FallbackDevice::shader_argument_usage(uint64_t handle, size_t index) noexcept {
+    return Usage::READ;
+}
+void FallbackDevice::signal_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept
+{
+    reinterpret_cast<FallbackStream *>(stream_handle)->signal(reinterpret_cast<LLVMEvent *>(handle));
+}
+void FallbackDevice::wait_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept
+{
+    reinterpret_cast<FallbackStream *>(stream_handle)->wait(reinterpret_cast<LLVMEvent *>(handle));
+}
+bool FallbackDevice::is_event_completed(uint64_t handle, uint64_t fence_value) const noexcept {
+    return false;
+}
+void FallbackDevice::synchronize_event(uint64_t handle, uint64_t fence_value) noexcept
+{
+    //reinterpret_cast<LLVMEvent *>(handle)->wait();
+}
+ResourceCreationInfo FallbackDevice::create_mesh(const AccelOption &option) noexcept
+{
+    return
+    {
+        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackMesh>(_rtc_device, option.hint)),
+        .native_handle = nullptr
+    };
+}
+ResourceCreationInfo FallbackDevice::create_procedural_primitive(const AccelOption &option) noexcept {
+    return ResourceCreationInfo();
+}
+void FallbackDevice::destroy_procedural_primitive(uint64_t handle) noexcept {
+}
+ResourceCreationInfo FallbackDevice::create_curve(const AccelOption &option) noexcept {
+    return DeviceInterface::create_curve(option);
+}
+void FallbackDevice::destroy_curve(uint64_t handle) noexcept {
+    DeviceInterface::destroy_curve(handle);
+}
+ResourceCreationInfo FallbackDevice::create_motion_instance(const AccelMotionOption &option) noexcept {
+    return DeviceInterface::create_motion_instance(option);
+}
+void FallbackDevice::destroy_motion_instance(uint64_t handle) noexcept {
+    DeviceInterface::destroy_motion_instance(handle);
+}
+ResourceCreationInfo FallbackDevice::create_accel(const AccelOption &option) noexcept
+{
+    return ResourceCreationInfo
+    {
+        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackAccel>(_rtc_device, option.hint)),
+        .native_handle = nullptr
+    };
+}
+string FallbackDevice::query(luisa::string_view property) noexcept {
+    return DeviceInterface::query(property);
+}
+DeviceExtension *FallbackDevice::extension(luisa::string_view name) noexcept {
+    return DeviceInterface::extension(name);
+}
+void FallbackDevice::set_name(luisa::compute::Resource::Tag resource_tag, uint64_t resource_handle, luisa::string_view name) noexcept {
+}
+SparseBufferCreationInfo FallbackDevice::create_sparse_buffer(const Type *element, size_t elem_count) noexcept {
+    return DeviceInterface::create_sparse_buffer(element, elem_count);
+}
+ResourceCreationInfo FallbackDevice::allocate_sparse_buffer_heap(size_t byte_size) noexcept {
+    return DeviceInterface::allocate_sparse_buffer_heap(byte_size);
+}
+void FallbackDevice::deallocate_sparse_buffer_heap(uint64_t handle) noexcept {
+    DeviceInterface::deallocate_sparse_buffer_heap(handle);
+}
+void FallbackDevice::update_sparse_resources(uint64_t stream_handle, vector<SparseUpdateTile> &&textures_update) noexcept {
+    DeviceInterface::update_sparse_resources(stream_handle, std::move(textures_update));
+}
+void FallbackDevice::destroy_sparse_buffer(uint64_t handle) noexcept {
+    DeviceInterface::destroy_sparse_buffer(handle);
+}
+ResourceCreationInfo FallbackDevice::allocate_sparse_texture_heap(size_t byte_size, bool is_compressed_type) noexcept {
+    return DeviceInterface::allocate_sparse_texture_heap(byte_size, is_compressed_type);
+}
+void FallbackDevice::deallocate_sparse_texture_heap(uint64_t handle) noexcept {
+    DeviceInterface::deallocate_sparse_texture_heap(handle);
+}
+SparseTextureCreationInfo FallbackDevice::create_sparse_texture(PixelFormat format, uint dimension, uint width, uint height, uint depth, uint mipmap_levels, bool simultaneous_access) noexcept {
+    return DeviceInterface::create_sparse_texture(format, dimension, width, height, depth, mipmap_levels, simultaneous_access);
+}
+void FallbackDevice::destroy_sparse_texture(uint64_t handle) noexcept {
+    DeviceInterface::destroy_sparse_texture(handle);
+}
+ResourceCreationInfo FallbackDevice::create_bindless_array(size_t size) noexcept {
+    ResourceCreationInfo info{};
+    auto array = luisa::new_with_allocator<FallbackBindlessArray>(size);
+    info.handle = reinterpret_cast<uint64_t>(array);
+    return info;
+}
+ResourceCreationInfo FallbackDevice::create_event() noexcept {
+    return ResourceCreationInfo{};
+//    return ResourceCreationInfo
+//    {
+//        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<LLVMEvent>())
+//    };
+}
+
+}// namespace luisa::compute::llvm
+
+LUISA_EXPORT_API luisa::compute::DeviceInterface *create(luisa::compute::Context &&ctx, std::string_view) noexcept {
+    return luisa::new_with_allocator<luisa::compute::fallback::FallbackDevice>(std::move(ctx));
+}
+
+LUISA_EXPORT_API void destroy(luisa::compute::DeviceInterface *device) noexcept {
+    luisa::delete_with_allocator(device);
+}
