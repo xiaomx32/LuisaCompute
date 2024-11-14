@@ -1,7 +1,7 @@
 find_package(LLVM CONFIG)
-find_package(embree REQUIRED)
+find_package(embree CONFIG)
 
-if (LLVM_FOUND) # link with llvm for jit
+if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
     set(LC_BACKEND_FALLBACK_SRC
             fallback_device.cpp
@@ -35,7 +35,7 @@ if (LLVM_FOUND) # link with llvm for jit
         target_compile_options(luisa-compute-backend-fallback PRIVATE -ffast-math)
     endif ()
 elseif (NOT LUISA_COMPUTE_CHECK_BACKEND_DEPENDENCIES)
-    message(FATAL_ERROR "LLVM not found for the fallback backend.")
+    message(FATAL_ERROR "LLVM or Embree not found for the fallback backend.")
 else ()
-    message(WARNING "LLVM not found. Fallback backend will not be built.")
+    message(WARNING "LLVM or Embree not found. Fallback backend will not be built.")
 endif ()
