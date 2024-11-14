@@ -11,10 +11,12 @@ void Builder::_check_valid_insertion_point() const noexcept {
 Builder::Builder() noexcept = default;
 
 IfInst *Builder::if_(Value *cond) noexcept {
+    LUISA_ASSERT(cond != nullptr && cond->type() == Type::of<bool>(), "Invalid condition.");
     return _create_and_append_instruction<IfInst>(cond);
 }
 
 SwitchInst *Builder::switch_(Value *value) noexcept {
+    LUISA_ASSERT(value != nullptr, "Switch value cannot be null.");
     return _create_and_append_instruction<SwitchInst>(value);
 }
 
@@ -33,6 +35,7 @@ BranchInst *Builder::br(BasicBlock *target) noexcept {
 }
 
 ConditionalBranchInst *Builder::cond_br(Value *cond, BasicBlock *true_target, BasicBlock *false_target) noexcept {
+    LUISA_ASSERT(cond != nullptr && cond->type() == Type::of<bool>(), "Invalid condition.");
     auto inst = _create_and_append_instruction<ConditionalBranchInst>(cond);
     inst->set_true_target(true_target);
     inst->set_false_target(false_target);

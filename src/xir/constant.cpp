@@ -27,11 +27,75 @@ void Constant::_error_cannot_change_type() const noexcept {
     LUISA_ERROR_WITH_LOCATION("Constant type cannot be changed.");
 }
 
-void Constant::set_data(const void *data) noexcept {
-    if (data == nullptr) {
-        memset(this->data(), 0, type()->size());
+namespace detail {
+
+static void xir_constant_fill_data(const Type *t, const void *raw, void *data) noexcept {
+    LUISA_DEBUG_ASSERT(t != nullptr && raw != nullptr && data != nullptr, "Invalid arguments.");
+    if (t->is_bool()) {
+        auto value = static_cast<uint8_t>(*static_cast<const bool *>(raw) ? 1u : 0u);
+        memmove(data, &value, 1);
+    } else if (t->is_scalar()) {
+        memmove(data, raw, t->size());
     } else {
-        memmove(this->data(), data, type()->size());
+        switch (t->tag()) {
+            case Type::Tag::VECTOR: {
+                auto elem_type = t->element();
+                auto dim = t->dimension();
+                for (auto i = 0u; i < dim; i++) {
+                    auto offset = i * elem_type->size();
+                    auto raw_elem = static_cast<const std::byte *>(raw) + offset;
+                    auto data_elem = static_cast<std::byte *>(data) + offset;
+                    xir_constant_fill_data(elem_type, raw_elem, data_elem);
+                }
+                break;
+            }
+            case Type::Tag::MATRIX: {
+                auto elem_type = t->element();
+                auto dim = t->dimension();
+                auto col_type = Type::vector(elem_type, dim);
+                for (auto i = 0u; i < dim; i++) {
+                    auto offset = i * col_type->size();
+                    auto raw_col = static_cast<const std::byte *>(raw) + offset;
+                    auto data_col = static_cast<std::byte *>(data) + offset;
+                    xir_constant_fill_data(col_type, raw_col, data_col);
+                }
+                break;
+            }
+            case Type::Tag::ARRAY: {
+                auto elem_type = t->element();
+                auto dim = t->dimension();
+                for (auto i = 0u; i < dim; i++) {
+                    auto offset = i * elem_type->size();
+                    auto raw_elem = static_cast<const std::byte *>(raw) + offset;
+                    auto data_elem = static_cast<std::byte *>(data) + offset;
+                    xir_constant_fill_data(elem_type, raw_elem, data_elem);
+                }
+                break;
+            }
+            case Type::Tag::STRUCTURE: {
+                size_t offset = 0u;
+                for (auto m : t->members()) {
+                    offset = luisa::align(offset, m->alignment());
+                    auto raw_member = static_cast<const std::byte *>(raw) + offset;
+                    auto data_member = static_cast<std::byte *>(data) + offset;
+                    xir_constant_fill_data(m, raw_member, data_member);
+                    offset += m->size();
+                }
+                break;
+            }
+            default: LUISA_ERROR_WITH_LOCATION("Unsupported constant type.");
+        }
+    }
+}
+
+}// namespace detail
+
+void Constant::set_data(const void *data) noexcept {
+    memset(this->data(), 0, type()->size());
+    _hash = 0u;
+    if (data != nullptr) {
+        detail::xir_constant_fill_data(type(), data, this->data());
+        _hash = luisa::hash64(this->data(), type()->size(), luisa::hash64_default_seed);
     }
 }
 

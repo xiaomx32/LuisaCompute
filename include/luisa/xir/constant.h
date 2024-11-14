@@ -11,6 +11,7 @@ private:
         std::byte _small[sizeof(void *)] = {};
         void *_large;
     };
+    uint64_t _hash = {};
 
     [[nodiscard]] bool _is_small() const noexcept;
     [[noreturn]] void _error_cannot_change_type() const noexcept;
@@ -27,6 +28,8 @@ public:
     void set_data(const void *data) noexcept;
     [[nodiscard]] void *data() noexcept;
     [[nodiscard]] const void *data() const noexcept;
+
+    [[nodiscard]] auto hash() const noexcept { return _hash; }
 
     template<typename T>
     [[nodiscard]] T &as() noexcept {
