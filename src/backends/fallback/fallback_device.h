@@ -4,16 +4,16 @@
 
 #pragma once
 
-#include <embree3/rtcore_device.h>
 #include <luisa/runtime/device.h>
+#include "fallback_embree.h"
 
 namespace llvm {
 class TargetMachine;
-}
+}// namespace llvm
 
 namespace llvm::orc {
 class LLJIT;
-}
+}// namespace llvm::orc
 
 namespace luisa::compute::fallback {
 
@@ -35,7 +35,6 @@ public:
     void destroy_buffer(uint64_t handle) noexcept override;
     void destroy_texture(uint64_t handle) noexcept override;
     void destroy_bindless_array(uint64_t handle) noexcept override;
-
 
     void destroy_stream(uint64_t handle) noexcept override;
     void synchronize_stream(uint64_t stream_handle) noexcept override;
@@ -86,5 +85,4 @@ public:
     ResourceCreationInfo create_event() noexcept override;
 };
 
-}// namespace luisa::compute::llvm
-
+}// namespace luisa::compute::fallback

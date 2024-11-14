@@ -1,5 +1,5 @@
 find_package(LLVM CONFIG)
-find_package(embree 3 CONFIG)
+find_package(embree CONFIG)
 
 if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
@@ -21,7 +21,7 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_mesh.cpp
             fallback_accel.cpp
             fallback_codegen.cpp
-            )
+    )
     luisa_compute_add_backend(fallback SOURCES ${LC_BACKEND_FALLBACK_SRC})
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")
     llvm_map_components_to_libnames(LLVM_LIBS core executionengine support orcjit nativecodegen irreader passes analysis coroutines)
@@ -34,6 +34,9 @@ if (LLVM_FOUND AND embree_FOUND)
     else ()
         target_compile_options(luisa-compute-backend-fallback PRIVATE -ffast-math)
     endif ()
+    # help distinguish between embree 3 and 4
+    target_compile_definitions(luisa-compute-backend-fallback PRIVATE
+            LUISA_COMPUTE_EMBREE_VERSION=${embree_VERSION_MAJOR})
 elseif (NOT LUISA_COMPUTE_CHECK_BACKEND_DEPENDENCIES)
     message(FATAL_ERROR "LLVM or Embree not found for the fallback backend.")
 else ()

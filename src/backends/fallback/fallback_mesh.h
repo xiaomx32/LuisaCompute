@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <embree3/rtcore.h>
 #include <luisa/runtime/rtx/mesh.h>
 #include "fallback_accel.h"
 

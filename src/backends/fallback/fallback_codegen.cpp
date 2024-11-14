@@ -31,8 +31,8 @@ class FallbackCodegen {
 
 private:
     struct LLVMStruct {
-        llvm::StructType *type;
-        luisa::vector<uint> member_indices;
+        llvm::StructType *type = nullptr;
+        luisa::vector<uint> padded_field_indices;
     };
 
 private:
@@ -40,6 +40,7 @@ private:
     llvm::Module *_llvm_module = nullptr;
     luisa::unordered_map<const Type *, luisa::unique_ptr<LLVMStruct>> _llvm_struct_types;
     luisa::unordered_map<const xir::Constant *, llvm::Constant *> _llvm_constants;
+    luisa::unordered_map<const xir::Function *, llvm::Function *> _llvm_functions;
 
 private:
     void _reset() noexcept {
@@ -47,6 +48,7 @@ private:
         _llvm_module = nullptr;
         _llvm_struct_types.clear();
         _llvm_constants.clear();
+        _llvm_functions.clear();
     }
 
 private:
@@ -55,7 +57,7 @@ private:
         if (iter->second) { return iter->second.get(); }
         auto struct_type = (iter->second = luisa::make_unique<LLVMStruct>()).get();
         auto member_index = 0u;
-        luisa::vector<::llvm::Type *> field_types;
+        llvm::SmallVector<::llvm::Type *> field_types;
         luisa::vector<uint> field_indices;
         size_t size = 0u;
         for (auto member : t->members()) {
@@ -76,9 +78,8 @@ private:
             auto padding = ::llvm::ArrayType::get(byte_type, t->size() - size);
             field_types.emplace_back(padding);
         }
-        llvm::ArrayRef llvm_fields{field_types.data(), field_types.size()};
-        struct_type->type = ::llvm::StructType::create(_llvm_context, llvm_fields);
-        struct_type->member_indices = std::move(field_indices);
+        struct_type->type = ::llvm::StructType::create(_llvm_context, field_types);
+        struct_type->padded_field_indices = std::move(field_indices);
         return struct_type;
     }
 
@@ -138,46 +139,65 @@ private:
                 auto elem_type = t->element();
                 auto stride = elem_type->size();
                 auto dim = t->dimension();
-                luisa::fixed_vector<llvm::Constant *, 4u> elements;
+                llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
                     auto elem_data = static_cast<const std::byte *>(data) + i * stride;
                     elements.emplace_back(_translate_literal(elem_type, elem_data));
                 }
-                llvm::ArrayRef llvm_elements{elements.data(), elements.size()};
-                return llvm::ConstantVector::get(llvm_elements);
+                return llvm::ConstantVector::get(elements);
             }
             case Type::Tag::MATRIX: {
                 LUISA_ASSERT(llvm_type->isArrayTy(), "Matrix type should be an array type.");
                 auto col_type = Type::vector(t->element(), t->dimension());
                 auto col_stride = col_type->size();
                 auto dim = t->dimension();
-                luisa::fixed_vector<llvm::Constant *, 4u> elements;
+                llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
                     auto col_data = static_cast<const std::byte *>(data) + i * col_stride;
                     elements.emplace_back(_translate_literal(col_type, col_data));
                 }
-                llvm::ArrayRef llvm_elements{elements.data(), elements.size()};
-                return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvm_type), llvm_elements);
+                return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvm_type), elements);
             }
             case Type::Tag::ARRAY: {
                 LUISA_ASSERT(llvm_type->isArrayTy(), "Array type should be an array type.");
                 auto elem_type = t->element();
                 auto stride = elem_type->size();
                 auto dim = t->dimension();
-                luisa::vector<llvm::Constant *> elements;
+                llvm::SmallVector<llvm::Constant *> elements;
                 elements.reserve(dim);
                 for (auto i = 0u; i < dim; i++) {
                     auto elem_data = static_cast<const std::byte *>(data) + i * stride;
                     elements.emplace_back(_translate_literal(elem_type, elem_data));
                 }
-                llvm::ArrayRef llvm_elements{elements.data(), elements.size()};
-                return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvm_type), llvm_elements);
+                return llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(llvm_type), elements);
             }
             case Type::Tag::STRUCTURE: {
                 auto struct_type = _translate_struct_type(t);
                 LUISA_ASSERT(llvm_type == struct_type->type, "Type mismatch.");
-                luisa::vector<llvm::Constant *> elements;
-                // TODO: WORK IN PROGRESS
+                auto padded_field_types = struct_type->type->elements();
+                llvm::SmallVector<llvm::Constant *, 16u> fields;
+                fields.resize(padded_field_types.size(), nullptr);
+                LUISA_ASSERT(t->members().size() == struct_type->padded_field_indices.size(),
+                             "Member count mismatch.");
+                // fill in data fields
+                size_t data_offset = 0u;
+                for (auto i = 0u; i < t->members().size(); i++) {
+                    auto field_type = t->members()[i];
+                    data_offset = luisa::align(data_offset, field_type->alignment());
+                    auto field_data = static_cast<const std::byte *>(data) + data_offset;
+                    data_offset += field_type->size();
+                    auto padded_index = struct_type->padded_field_indices[i];
+                    fields[padded_index] = _translate_literal(field_type, field_data);
+                }
+                // fill in padding fields
+                for (auto i = 0u; i < fields.size(); i++) {
+                    if (fields[i] == nullptr) {
+                        auto field_type = padded_field_types[i];
+                        LUISA_ASSERT(field_type->isArrayTy(), "Padding field should be an array type.");
+                        fields[i] = llvm::ConstantAggregateZero::get(field_type);
+                    }
+                }
+                return llvm::ConstantStruct::get(struct_type->type, fields);
             }
             default: break;
         }
@@ -207,6 +227,16 @@ private:
     }
 
     void _translate_module(const xir::Module *module) noexcept {
+        for (auto &f : module->functions()) {
+            static_cast<void *>(_translate_function(&f));
+        }
+    }
+
+    [[nodiscard]] llvm::Function *_translate_function(const xir::Function *f) noexcept {
+        if (auto iter = _llvm_functions.find(f); iter != _llvm_functions.end()) {
+            return iter->second;
+        }
+        // TODO...
     }
 
 public:

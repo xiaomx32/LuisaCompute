@@ -4,20 +4,18 @@
 
 #pragma once
 
-#include <embree3/rtcore.h>
-
 #include <luisa/core/stl.h>
 #include <luisa/runtime/rtx/accel.h>
 #include <luisa/dsl/struct.h>
 #include <luisa/runtime/rtx/ray.h>
 #include <luisa/runtime/rtx/hit.h>
 
+#include "fallback_embree.h"
 #include "llvm_abi.h"
 
-namespace luisa
-{
-    class ThreadPool;
-}
+namespace luisa {
+class ThreadPool;
+}// namespace luisa
 
 namespace luisa::compute::fallback {
 
@@ -53,8 +51,8 @@ public:
     ~FallbackAccel() noexcept;
     void build(ThreadPool &pool, size_t instance_count,
                luisa::span<const AccelBuildCommand::Modification> mods) noexcept;
-//    [[nodiscard]] SurfaceHit trace_closest(Ray ray) const noexcept;
-//    [[nodiscard]] bool trace_any(Ray ray) const noexcept;
+    //    [[nodiscard]] SurfaceHit trace_closest(Ray ray) const noexcept;
+    //    [[nodiscard]] bool trace_any(Ray ray) const noexcept;
     [[nodiscard]] auto handle() const noexcept { return Handle{this, _instances.data()}; }
 };
 
@@ -70,7 +68,7 @@ struct alignas(16) FallbackAccelInstance {
     uint geom1;
 };
 
-}// namespace luisa::compute::llvm
+}// namespace luisa::compute::fallback
 
 LUISA_STRUCT(luisa::compute::fallback::FallbackAccelInstance,
              affine, visible, dirty, pad, geom0, geom1) {};
