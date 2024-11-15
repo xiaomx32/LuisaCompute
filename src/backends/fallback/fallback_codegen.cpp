@@ -15,6 +15,7 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/MC/TargetRegistry.h>
 
+#include <luisa/core/stl/unordered_map.h>
 #include <luisa/core/logging.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
@@ -22,8 +23,6 @@
 #include <luisa/xir/metadata/location.h>
 
 #include "fallback_codegen.h"
-
-#include "luisa/core/stl/unordered_map.h"
 
 namespace luisa::compute::fallback {
 
@@ -35,6 +34,14 @@ private:
         luisa::vector<uint> padded_field_indices;
     };
 
+    using IRBuilder = llvm::IRBuilder<>;
+
+    struct CurrentFunction {
+        llvm::Function *func = nullptr;
+        luisa::unordered_map<const xir::Value *, llvm::Value *> value_map;
+        luisa::unordered_set<const llvm::BasicBlock *> translated_basic_blocks;
+    };
+
 private:
     llvm::LLVMContext &_llvm_context;
     llvm::Module *_llvm_module = nullptr;
@@ -44,7 +51,6 @@ private:
 
 private:
     void _reset() noexcept {
-        // TODO
         _llvm_module = nullptr;
         _llvm_struct_types.clear();
         _llvm_constants.clear();
@@ -52,6 +58,11 @@ private:
     }
 
 private:
+    [[nodiscard]] static llvm::StringRef _get_name_from_metadata(auto something, llvm::StringRef fallback = {}) noexcept {
+        auto name_md = something->template find_metadata<xir::NameMD>();
+        return name_md ? llvm::StringRef{name_md->name()} : fallback;
+    }
+
     [[nodiscard]] LLVMStruct *_translate_struct_type(const Type *t) noexcept {
         auto iter = _llvm_struct_types.try_emplace(t, nullptr).first;
         if (iter->second) { return iter->second.get(); }
@@ -139,6 +150,9 @@ private:
                 auto elem_type = t->element();
                 auto stride = elem_type->size();
                 auto dim = t->dimension();
+                if (dim > 2u && (elem_type->is_int64() || elem_type->is_uint64())) {
+                    LUISA_ERROR_WITH_LOCATION("64-bit integer vector with dimension > 2 is not implemented.");
+                }
                 llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
                     auto elem_data = static_cast<const std::byte *>(data) + i * stride;
@@ -148,9 +162,9 @@ private:
             }
             case Type::Tag::MATRIX: {
                 LUISA_ASSERT(llvm_type->isArrayTy(), "Matrix type should be an array type.");
-                auto col_type = Type::vector(t->element(), t->dimension());
-                auto col_stride = col_type->size();
                 auto dim = t->dimension();
+                auto col_type = Type::vector(t->element(), dim);
+                auto col_stride = col_type->size();
                 llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
                     auto col_data = static_cast<const std::byte *>(data) + i * col_stride;
@@ -228,15 +242,313 @@ private:
 
     void _translate_module(const xir::Module *module) noexcept {
         for (auto &f : module->functions()) {
-            static_cast<void *>(_translate_function(&f));
+            static_cast<void>(_translate_function(&f));
         }
+    }
+
+    [[nodiscard]] llvm::Value *_lookup_value(CurrentFunction &current, const xir::Value *v) noexcept {
+        LUISA_ASSERT(v != nullptr, "Value is null.");
+        switch (v->derived_value_tag()) {
+            case xir::DerivedValueTag::FUNCTION: {
+                return _translate_function(static_cast<const xir::Function *>(v));
+            }
+            case xir::DerivedValueTag::BASIC_BLOCK: {
+                return _find_or_create_basic_block(current, static_cast<const xir::BasicBlock *>(v));
+            }
+            case xir::DerivedValueTag::CONSTANT: {
+                return _translate_constant(static_cast<const xir::Constant *>(v));
+            }
+            case xir::DerivedValueTag::INSTRUCTION: [[fallthrough]];
+            case xir::DerivedValueTag::ARGUMENT: {
+                auto iter = current.value_map.find(v);
+                LUISA_ASSERT(iter != current.value_map.end(), "Value not found.");
+                return iter->second;
+            }
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid value.");
+    }
+
+    [[nodiscard]] llvm::Constant *_translate_string_or_null(IRBuilder &b, luisa::string_view s) noexcept {
+        if (s.empty()) {
+            auto ptr_type = llvm::PointerType::get(_llvm_context, 0);
+            return llvm::ConstantPointerNull::get(ptr_type);
+        }
+        return b.CreateGlobalStringPtr(s);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_scalar_cast(IRBuilder &b, const Type *dst_t, const Type *src_t, llvm::Value *value) noexcept {
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_translate_vector_cast(IRBuilder &b, const Type *dst_t, const Type *src_t, llvm::Value *value) noexcept {
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_translate_gep_inst(CurrentFunction &current, IRBuilder &b, const xir::GEPInst *inst) noexcept {
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
+        switch (inst->derived_instruction_tag()) {
+            case xir::DerivedInstructionTag::SENTINEL: {
+                LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
+            }
+            case xir::DerivedInstructionTag::IF: {
+                auto if_inst = static_cast<const xir::IfInst *>(inst);
+                auto llvm_condition = _lookup_value(current, if_inst->condition());
+                llvm_condition = b.CreateICmpNE(llvm_condition, llvm::ConstantInt::get(llvm_condition->getType(), 0));
+                auto llvm_true_block = _find_or_create_basic_block(current, if_inst->true_block());
+                auto llvm_false_block = _find_or_create_basic_block(current, if_inst->false_block());
+                auto llvm_merge_block = _find_or_create_basic_block(current, if_inst->merge_block());
+                auto llvm_inst = b.CreateCondBr(llvm_condition, llvm_true_block, llvm_false_block);
+                _translate_instructions_in_basic_block(current, llvm_true_block, if_inst->true_block());
+                _translate_instructions_in_basic_block(current, llvm_false_block, if_inst->false_block());
+                _translate_instructions_in_basic_block(current, llvm_merge_block, if_inst->merge_block());
+                return llvm_inst;
+            }
+            case xir::DerivedInstructionTag::SWITCH: {
+                auto switch_inst = static_cast<const xir::SwitchInst *>(inst);
+                auto llvm_condition = _lookup_value(current, switch_inst->value());
+                auto llvm_merge_block = _find_or_create_basic_block(current, switch_inst->merge_block());
+                auto llvm_default_block = _find_or_create_basic_block(current, switch_inst->default_block());
+                auto llvm_inst = b.CreateSwitch(llvm_condition, llvm_default_block, switch_inst->case_count());
+                for (auto i = 0u; i < switch_inst->case_count(); i++) {
+                    auto case_value = switch_inst->case_value(i);
+                    auto llvm_case_value = _translate_literal(Type::of<decltype(case_value)>(), &case_value);
+                    auto llvm_case_block = _find_or_create_basic_block(current, switch_inst->case_block(i));
+                    llvm_inst->addCase(llvm::cast<llvm::ConstantInt>(llvm_case_value), llvm_case_block);
+                }
+                _translate_instructions_in_basic_block(current, llvm_default_block, switch_inst->default_block());
+                for (auto &case_block_use : switch_inst->case_block_uses()) {
+                    auto case_block = static_cast<const xir::BasicBlock *>(case_block_use->value());
+                    auto llvm_case_block = _find_or_create_basic_block(current, case_block);
+                    _translate_instructions_in_basic_block(current, llvm_case_block, case_block);
+                }
+                _translate_instructions_in_basic_block(current, llvm_merge_block, switch_inst->merge_block());
+                return llvm_inst;
+            }
+            case xir::DerivedInstructionTag::LOOP: {
+                auto loop_inst = static_cast<const xir::LoopInst *>(inst);
+                auto llvm_merge_block = _find_or_create_basic_block(current, loop_inst->merge_block());
+                auto llvm_prepare_block = _find_or_create_basic_block(current, loop_inst->prepare_block());
+                auto llvm_body_block = _find_or_create_basic_block(current, loop_inst->body_block());
+                auto llvm_update_block = _find_or_create_basic_block(current, loop_inst->update_block());
+                auto llvm_inst = b.CreateBr(llvm_prepare_block);
+                _translate_instructions_in_basic_block(current, llvm_prepare_block, loop_inst->prepare_block());
+                _translate_instructions_in_basic_block(current, llvm_body_block, loop_inst->body_block());
+                _translate_instructions_in_basic_block(current, llvm_update_block, loop_inst->update_block());
+                _translate_instructions_in_basic_block(current, llvm_merge_block, loop_inst->merge_block());
+                return llvm_inst;
+            }
+            case xir::DerivedInstructionTag::SIMPLE_LOOP: {
+                auto loop_inst = static_cast<const xir::SimpleLoopInst *>(inst);
+                auto llvm_merge_block = _find_or_create_basic_block(current, loop_inst->merge_block());
+                auto llvm_body_block = _find_or_create_basic_block(current, loop_inst->body_block());
+                auto llvm_inst = b.CreateBr(llvm_body_block);
+                _translate_instructions_in_basic_block(current, llvm_body_block, loop_inst->body_block());
+                _translate_instructions_in_basic_block(current, llvm_merge_block, loop_inst->merge_block());
+                return llvm_inst;
+            }
+            case xir::DerivedInstructionTag::CONDITIONAL_BRANCH: {
+                auto cond_br_inst = static_cast<const xir::ConditionalBranchInst *>(inst);
+                auto llvm_condition = _lookup_value(current, cond_br_inst->condition());
+                llvm_condition = b.CreateICmpNE(llvm_condition, llvm::ConstantInt::get(llvm_condition->getType(), 0));
+                auto llvm_true_block = _find_or_create_basic_block(current, cond_br_inst->true_block());
+                auto llvm_false_block = _find_or_create_basic_block(current, cond_br_inst->false_block());
+                return b.CreateCondBr(llvm_condition, llvm_true_block, llvm_false_block);
+            }
+            case xir::DerivedInstructionTag::UNREACHABLE: {
+                LUISA_ASSERT(inst->type() == nullptr, "Unreachable instruction should not have a type.");
+                return b.CreateUnreachable();
+            }
+            case xir::DerivedInstructionTag::BRANCH: [[fallthrough]];
+            case xir::DerivedInstructionTag::BREAK: [[fallthrough]];
+            case xir::DerivedInstructionTag::CONTINUE: {
+                auto br_inst = static_cast<const xir::BranchTerminatorInstruction *>(inst);
+                auto llvm_target_block = _find_or_create_basic_block(current, br_inst->target_block());
+                return b.CreateBr(llvm_target_block);
+            }
+            case xir::DerivedInstructionTag::RETURN: {
+                auto return_inst = static_cast<const xir::ReturnInst *>(inst);
+                if (auto ret_val = return_inst->return_value()) {
+                    auto llvm_ret_val = _lookup_value(current, ret_val);
+                    return b.CreateRet(llvm_ret_val);
+                }
+                return b.CreateRetVoid();
+            }
+            case xir::DerivedInstructionTag::PHI: {
+                LUISA_ERROR_WITH_LOCATION("Unexpected phi instruction. Please run reg2mem pass first.");
+            }
+            case xir::DerivedInstructionTag::ALLOCA: {
+                auto llvm_type = _translate_type(inst->type());
+                return b.CreateAlloca(llvm_type);
+            }
+            case xir::DerivedInstructionTag::LOAD: {
+                auto load_inst = static_cast<const xir::LoadInst *>(inst);
+                auto llvm_type = _translate_type(load_inst->type());
+                auto llvm_ptr = _lookup_value(current, load_inst->variable());
+                return b.CreateLoad(llvm_type, llvm_ptr);
+            }
+            case xir::DerivedInstructionTag::STORE: {
+                auto store_inst = static_cast<const xir::StoreInst *>(inst);
+                auto llvm_ptr = _lookup_value(current, store_inst->variable());
+                auto llvm_value = _lookup_value(current, store_inst->value());
+                return b.CreateStore(llvm_value, llvm_ptr);
+            }
+            case xir::DerivedInstructionTag::GEP: {
+                auto gep_inst = static_cast<const xir::GEPInst *>(inst);
+                return _translate_gep_inst(current, b, gep_inst);
+            }
+            case xir::DerivedInstructionTag::CALL: {
+                auto call_inst = static_cast<const xir::CallInst *>(inst);
+                auto llvm_func = llvm::cast<llvm::Function>(_lookup_value(current, call_inst->callee()));
+                llvm::SmallVector<llvm::Value *, 16u> llvm_args;
+                llvm_args.reserve(call_inst->argument_count());
+                for (auto i = 0u; i < call_inst->argument_count(); i++) {
+                    auto llvm_arg = _lookup_value(current, call_inst->argument(i));
+                    llvm_args.emplace_back(llvm_arg);
+                }
+                return b.CreateCall(llvm_func, llvm_args);
+            }
+            case xir::DerivedInstructionTag::INTRINSIC: {
+                auto intrinsic_inst = static_cast<const xir::IntrinsicInst *>(inst);
+                return _translate_intrinsic_inst(current, b, intrinsic_inst);
+            }
+            case xir::DerivedInstructionTag::CAST: {
+                auto cast_inst = static_cast<const xir::CastInst *>(inst);
+                auto llvm_value = _lookup_value(current, cast_inst->value());
+                switch (cast_inst->op()) {
+                    case xir::CastOp::STATIC_CAST: {
+                        auto dst_type = cast_inst->type();
+                        auto src_type = cast_inst->value()->type();
+                        if (dst_type->is_scalar() && src_type->is_scalar()) {
+                            return _translate_scalar_cast(b, dst_type, src_type, llvm_value);
+                        }
+                        if (dst_type->is_vector() && src_type->is_vector()) {
+                            return _translate_vector_cast(b, dst_type, src_type, llvm_value);
+                        }
+                        LUISA_ERROR_WITH_LOCATION("Invalid cast operation: {} -> {}.",
+                                                  src_type->description(),
+                                                  dst_type->description());
+                    }
+                    case xir::CastOp::BITWISE_CAST: {
+                        auto llvm_type = _translate_type(cast_inst->type());
+                        return b.CreateBitCast(llvm_value, llvm_type);
+                    }
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
+            }
+            case xir::DerivedInstructionTag::PRINT: {
+                LUISA_WARNING_WITH_LOCATION("Ignoring print instruction.");// TODO...
+                return nullptr;
+            }
+            case xir::DerivedInstructionTag::ASSERT: {
+                auto assert_inst = static_cast<const xir::AssertInst *>(inst);
+                auto llvm_condition = _lookup_value(current, assert_inst->condition());
+                auto llvm_message = _translate_string_or_null(b, assert_inst->message());
+                auto llvm_void_type = llvm::Type::getVoidTy(_llvm_context);
+                auto assert_func_type = llvm::FunctionType::get(llvm_void_type, {llvm_condition->getType(), llvm_message->getType()}, false);
+                auto external_assert = _llvm_module->getOrInsertFunction("luisa.assert", assert_func_type);
+                return b.CreateCall(external_assert, {llvm_condition, llvm_message});
+            }
+            case xir::DerivedInstructionTag::OUTLINE: {
+                auto outline_inst = static_cast<const xir::OutlineInst *>(inst);
+                auto llvm_target_block = _find_or_create_basic_block(current, outline_inst->target_block());
+                auto llvm_merge_block = _find_or_create_basic_block(current, outline_inst->merge_block());
+                auto llvm_inst = b.CreateBr(llvm_target_block);
+                _translate_instructions_in_basic_block(current, llvm_target_block, outline_inst->target_block());
+                _translate_instructions_in_basic_block(current, llvm_merge_block, outline_inst->merge_block());
+                return llvm_inst;
+            }
+            case xir::DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedInstructionTag::RAY_QUERY: LUISA_NOT_IMPLEMENTED();
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
+    }
+
+    [[nodiscard]] llvm::BasicBlock *_find_or_create_basic_block(CurrentFunction &current, const xir::BasicBlock *bb) noexcept {
+        auto iter = current.value_map.try_emplace(bb, nullptr).first;
+        if (iter->second) { return llvm::cast<llvm::BasicBlock>(iter->second); }
+        auto llvm_bb = llvm::BasicBlock::Create(_llvm_context, _get_name_from_metadata(bb), current.func);
+        iter->second = llvm_bb;
+        return llvm_bb;
+    }
+
+    void _translate_instructions_in_basic_block(CurrentFunction &current, llvm::BasicBlock *llvm_bb, const xir::BasicBlock *bb) noexcept {
+        if (current.translated_basic_blocks.emplace(llvm_bb).second) {
+            for (auto &inst : bb->instructions()) {
+                IRBuilder b{llvm_bb};
+                auto llvm_value = _translate_instruction(current, b, &inst);
+                auto [_, success] = current.value_map.emplace(&inst, llvm_value);
+                LUISA_ASSERT(success, "Instruction already translated.");
+            }
+        }
+    }
+
+    [[nodiscard]] llvm::BasicBlock *_translate_basic_block(CurrentFunction &current, const xir::BasicBlock *bb) noexcept {
+        auto llvm_bb = _find_or_create_basic_block(current, bb);
+        _translate_instructions_in_basic_block(current, llvm_bb, bb);
+        return llvm_bb;
+    }
+
+    [[nodiscard]] llvm::Function *_translate_kernel_function(const xir::KernelFunction *f) noexcept {
+        return nullptr;
+    }
+
+    [[nodiscard]] llvm::Function *_translate_callable_function(const xir::CallableFunction *f) noexcept {
+        auto llvm_ret_type = _translate_type(f->type());
+        llvm::SmallVector<llvm::Type *, 16u> llvm_arg_types;
+        for (auto arg : f->arguments()) {
+            if (arg->is_reference()) {
+                // reference arguments are passed by pointer
+                llvm_arg_types.emplace_back(llvm::PointerType::get(_llvm_context, 0));
+            } else {
+                // value and resource arguments are passed by value
+                llvm_arg_types.emplace_back(_translate_type(arg->type()));
+            }
+        }
+        // create function
+        auto llvm_func_type = llvm::FunctionType::get(llvm_ret_type, llvm_arg_types, false);
+        auto name_md = f->find_metadata<xir::NameMD>();
+        auto func_name = name_md ? name_md->name() : "callable";
+        auto llvm_func = llvm::Function::Create(llvm_func_type, llvm::Function::InternalLinkage, llvm::Twine{func_name}, _llvm_module);
+        _llvm_functions.emplace(f, llvm_func);
+        // create current translation context
+        CurrentFunction current{.func = llvm_func};
+        // map arguments
+        auto arg_index = 0u;
+        for (auto &llvm_arg : current.func->args()) {
+            auto arg = f->arguments()[arg_index++];
+            current.value_map.emplace(arg, &llvm_arg);
+        }
+        // translate body
+        static_cast<void>(_translate_basic_block(current, f->body_block()));
+        // return
+        return llvm_func;
     }
 
     [[nodiscard]] llvm::Function *_translate_function(const xir::Function *f) noexcept {
         if (auto iter = _llvm_functions.find(f); iter != _llvm_functions.end()) {
             return iter->second;
         }
-        // TODO...
+        auto llvm_func = [&] {
+            switch (f->derived_function_tag()) {
+                case xir::DerivedFunctionTag::KERNEL:
+                    return _translate_kernel_function(
+                        static_cast<const xir::KernelFunction *>(f));
+                case xir::DerivedFunctionTag::CALLABLE:
+                    return _translate_callable_function(
+                        static_cast<const xir::CallableFunction *>(f));
+                case xir::DerivedFunctionTag::EXTERNAL: LUISA_NOT_IMPLEMENTED();
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid function type.");
+        }();
+        _llvm_functions.emplace(f, llvm_func);
+        return llvm_func;
     }
 
 public:
@@ -244,11 +556,9 @@ public:
         : _llvm_context{ctx} {}
 
     [[nodiscard]] auto emit(const xir::Module *module) noexcept {
-        auto name_md = module->find_metadata<xir::NameMD>();
+        auto llvm_module = std::make_unique<llvm::Module>(llvm::StringRef{_get_name_from_metadata(module)}, _llvm_context);
         auto location_md = module->find_metadata<xir::LocationMD>();
-        auto module_name = name_md ? name_md->name() : "module";
         auto module_location = location_md ? location_md->file().string() : "unknown";
-        auto llvm_module = std::make_unique<llvm::Module>(llvm::StringRef{module_name}, _llvm_context);
         llvm_module->setSourceFileName(location_md ? location_md->file().string() : "unknown");
         _llvm_module = llvm_module.get();
         _translate_module(module);
