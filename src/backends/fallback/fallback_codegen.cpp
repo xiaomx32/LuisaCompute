@@ -48,6 +48,7 @@ private:
     luisa::unordered_map<const Type *, luisa::unique_ptr<LLVMStruct>> _llvm_struct_types;
     luisa::unordered_map<const xir::Constant *, llvm::Constant *> _llvm_constants;
     luisa::unordered_map<const xir::Function *, llvm::Function *> _llvm_functions;
+    luisa::unordered_map<const Type *, llvm::Constant *> _llvm_zeros;
 
 private:
     void _reset() noexcept {
@@ -284,11 +285,18 @@ private:
         LUISA_NOT_IMPLEMENTED();
     }
 
-    [[nodiscard]] llvm::Value *_get_constant_zero(const Type *t) noexcept {
-        // TODO: optimize?
-        llvm::SmallVector<uint8_t, 64u> zero_data;
-        zero_data.resize(t->size(), 0u);
-        return _translate_literal(t, zero_data.data());
+    [[nodiscard]] llvm::Constant *_get_constant_zero(const Type *t) noexcept {
+        auto iter = _llvm_zeros.try_emplace(t, nullptr).first;
+        if (iter->second == nullptr) {
+            if (t->is_scalar()) {
+                auto zero_data = 0ull;
+                iter->second = _translate_literal(t, &zero_data);
+            } else {
+                auto llvm_type = _translate_type(t);
+                iter->second = llvm::ConstantAggregateZero::get(llvm_type);
+            }
+        }
+        return iter->second;
     }
 
     [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
