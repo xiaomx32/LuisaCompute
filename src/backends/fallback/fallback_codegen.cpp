@@ -276,20 +276,19 @@ private:
         return b.CreateGlobalStringPtr(s);
     }
 
-    [[nodiscard]] llvm::Value *_translate_scalar_cast(IRBuilder &b, const Type *dst_t, const Type *src_t, llvm::Value *value) noexcept {
-        LUISA_NOT_IMPLEMENTED();
-    }
-
-    [[nodiscard]] llvm::Value *_translate_vector_cast(IRBuilder &b, const Type *dst_t, const Type *src_t, llvm::Value *value) noexcept {
-        LUISA_NOT_IMPLEMENTED();
-    }
-
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         LUISA_NOT_IMPLEMENTED();
     }
 
     [[nodiscard]] llvm::Value *_translate_gep_inst(CurrentFunction &current, IRBuilder &b, const xir::GEPInst *inst) noexcept {
         LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_get_constant_zero(const Type *t) noexcept {
+        // TODO: optimize?
+        llvm::SmallVector<uint8_t, 64u> zero_data;
+        zero_data.resize(t->size(), 0u);
+        return _translate_literal(t, zero_data.data());
     }
 
     [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
@@ -425,15 +424,49 @@ private:
                     case xir::CastOp::STATIC_CAST: {
                         auto dst_type = cast_inst->type();
                         auto src_type = cast_inst->value()->type();
-                        if (dst_type->is_scalar() && src_type->is_scalar()) {
-                            return _translate_scalar_cast(b, dst_type, src_type, llvm_value);
+                        if (dst_type == src_type) { return llvm_value; }
+                        LUISA_ASSERT((dst_type->is_scalar() && src_type->is_scalar()) ||
+                                         (dst_type->is_vector() && src_type->is_vector() &&
+                                          dst_type->dimension() == src_type->dimension()),
+                                     "Invalid static cast.");
+                        auto dst_is_scalar = dst_type->is_scalar();
+                        auto src_is_scalar = src_type->is_scalar();
+                        auto dst_elem_type = dst_is_scalar ? dst_type : dst_type->element();
+                        auto src_elem_type = src_is_scalar ? src_type : src_type->element();
+                        // typeN -> boolN
+                        auto llvm_dst_type = _translate_type(dst_type);
+                        if (dst_elem_type->is_bool()) {
+                            auto zero = _get_constant_zero(src_elem_type);
+                            auto cmp = src_elem_type->is_float16() || src_elem_type->is_float32() || src_elem_type->is_float64() ?
+                                           b.CreateFCmpONE(llvm_value, zero) :
+                                           b.CreateICmpNE(llvm_value, zero);
+                            return b.CreateZExt(cmp, llvm_dst_type);
                         }
-                        if (dst_type->is_vector() && src_type->is_vector()) {
-                            return _translate_vector_cast(b, dst_type, src_type, llvm_value);
+                        // general case
+                        auto classify = [](const Type *t) noexcept {
+                            return std::make_tuple(
+                                t->is_float16() || t->is_float32() || t->is_float64(),
+                                t->is_int8() || t->is_int16() || t->is_int32() || t->is_int64(),
+                                t->is_uint8() || t->is_uint16() || t->is_uint32() || t->is_uint64() || t->is_bool());
+                        };
+                        auto [dst_float, dst_int, dst_uint] = classify(dst_elem_type);
+                        auto [src_float, src_int, src_uint] = classify(src_elem_type);
+                        if (dst_float) {
+                            if (src_float) { return b.CreateFPCast(llvm_value, llvm_dst_type); }
+                            if (src_int) { return b.CreateSIToFP(llvm_value, llvm_dst_type); }
+                            if (src_uint) { return b.CreateUIToFP(llvm_value, llvm_dst_type); }
                         }
-                        LUISA_ERROR_WITH_LOCATION("Invalid cast operation: {} -> {}.",
-                                                  src_type->description(),
-                                                  dst_type->description());
+                        if (dst_int) {
+                            if (src_float) { return b.CreateFPToSI(llvm_value, llvm_dst_type); }
+                            if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
+                            if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
+                        }
+                        if (dst_uint) {
+                            if (src_float) { return b.CreateFPToUI(llvm_value, llvm_dst_type); }
+                            if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
+                            if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
+                        }
+                        LUISA_ERROR_WITH_LOCATION("Invalid static cast.");
                     }
                     case xir::CastOp::BITWISE_CAST: {
                         auto llvm_type = _translate_type(cast_inst->type());
