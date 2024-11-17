@@ -102,8 +102,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::DETERMINANT: return "determinant";
         case IntrinsicOp::TRANSPOSE: return "transpose";
         case IntrinsicOp::INVERSE: return "inverse";
-        case IntrinsicOp::ZERO: return "zero";
-        case IntrinsicOp::ONE: return "one";
         case IntrinsicOp::ATOMIC_EXCHANGE: return "atomic_exchange";
         case IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: return "atomic_compare_exchange";
         case IntrinsicOp::ATOMIC_FETCH_ADD: return "atomic_fetch_add";
@@ -339,8 +337,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"determinant", IntrinsicOp::DETERMINANT},
         {"transpose", IntrinsicOp::TRANSPOSE},
         {"inverse", IntrinsicOp::INVERSE},
-        {"zero", IntrinsicOp::ZERO},
-        {"one", IntrinsicOp::ONE},
         {"atomic_exchange", IntrinsicOp::ATOMIC_EXCHANGE},
         {"atomic_compare_exchange", IntrinsicOp::ATOMIC_COMPARE_EXCHANGE},
         {"atomic_fetch_add", IntrinsicOp::ATOMIC_FETCH_ADD},

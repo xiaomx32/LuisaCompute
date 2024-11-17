@@ -138,9 +138,6 @@ enum struct IntrinsicOp {
     TRANSPOSE,      // (floatNxN)
     INVERSE,        // (floatNxN)
 
-    ZERO,// () -> T
-    ONE, // () -> T
-
     // atomic operations
     ATOMIC_EXCHANGE,        /// [(atomic_ref, desired) -> old]: stores desired, returns old.
     ATOMIC_COMPARE_EXCHANGE,/// [(atomic_ref, expected, desired) -> old]: stores (old == expected ? desired : old), returns old.

@@ -66,6 +66,8 @@ private:
     luisa::unordered_map<uint64_t, Function *> _generated_functions;
     luisa::unordered_map<ConstantData, Constant *> _generated_constants;
     luisa::unordered_map<TypedLiteral, Constant *> _generated_literals;
+    luisa::unordered_map<const Type *, Constant *> _generated_zero_constants;
+    luisa::unordered_map<const Type *, Constant *> _generated_one_constants;
     Current _current;
 
 private:
@@ -211,7 +213,7 @@ private:
             iter->second = luisa::visit(
                 [this, t = key.type]<typename T>(T v) noexcept {
                     LUISA_ASSERT(t == Type::of<T>(), "Literal type mismatch.");
-                    return _module->create_constant(v);
+                    return _module->create_constant(t, &v);
                 },
                 key.value);
         }
@@ -275,6 +277,78 @@ private:
             iter->second = _module->create_constant(c.type(), c.raw());
         }
         return iter->second;
+    }
+
+    [[nodiscard]] Value *_translate_zero_or_one(const Type *type, int value) noexcept {
+
+        // zero or one scalar
+#define LUISA_AST2XIR_ZERO_ONE_SCALAR(T)    \
+    if (type == Type::of<T>()) {            \
+        return _translate_typed_literal(    \
+            {type, static_cast<T>(value)}); \
+    }
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(bool)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(byte)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ubyte)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(short)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ushort)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(int)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(uint)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(slong)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ulong)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(half)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(float)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(double)
+#undef LUISA_AST2XIR_ZERO_ONE_SCALAR
+
+        // zero or one vector
+#define LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, N)                   \
+    if (type == Type::of<T##N>()) {                             \
+        return _translate_typed_literal(                        \
+            {type, luisa::make_##T##N(static_cast<T>(value))}); \
+    }
+#define LUISA_AST2XIR_ZERO_ONE_VECTOR(T)  \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 2) \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 3) \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 4)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(bool)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(byte)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ubyte)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(short)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ushort)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(int)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(uint)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(slong)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ulong)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(half)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(float)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(double)
+#undef LUISA_AST2XIR_ZERO_ONE_VECTOR
+#undef LUISA_AST2XIR_ZERO_ONE_VECTOR_N
+
+        // zero or one matrix
+#define LUISA_AST2XIR_ZERO_ONE_MATRIX(N)                                    \
+    if (type == Type::of<luisa::float##N##x##N>()) {                        \
+        return _translate_typed_literal(                                    \
+            {type, luisa::make_float##N##x##N(static_cast<float>(value))}); \
+    }
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(2)
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(3)
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(4)
+#undef LUISA_AST2XIR_ZERO_ONE_MATRIX
+
+        // fall back to generic zero constant
+        if (value == 0) {
+            auto iter = _generated_zero_constants.try_emplace(type, nullptr).first;
+            if (iter->second == nullptr) { iter->second = _module->create_constant_zero(type); }
+            return iter->second;
+        }
+        if (value == 1) {
+            auto iter = _generated_one_constants.try_emplace(type, nullptr).first;
+            if (iter->second == nullptr) { iter->second = _module->create_constant_one(type); }
+            return iter->second;
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected zero or one constant.");
     }
 
     [[nodiscard]] Value *_translate_call_expr(Builder &b, const CallExpr *expr) noexcept {
@@ -551,8 +625,8 @@ private:
                 }
                 return b.unreachable_(message);
             }
-            case CallOp::ZERO: return pure_call(IntrinsicOp::ZERO);
-            case CallOp::ONE: return pure_call(IntrinsicOp::ONE);
+            case CallOp::ZERO: return _translate_zero_or_one(expr->type(), 0);
+            case CallOp::ONE: return _translate_zero_or_one(expr->type(), 1);
             case CallOp::PACK: LUISA_NOT_IMPLEMENTED();
             case CallOp::UNPACK: LUISA_NOT_IMPLEMENTED();
             case CallOp::REQUIRES_GRADIENT: LUISA_NOT_IMPLEMENTED();

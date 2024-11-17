@@ -36,6 +36,18 @@ Constant *Module::create_constant(const Type *type, const void *data) noexcept {
     return c;
 }
 
+Constant *Module::create_constant_zero(const Type *type) noexcept {
+    auto c = create_constant(type);
+    c->set_zero();
+    return c;
+}
+
+Constant *Module::create_constant_one(const Type *type) noexcept {
+    auto c = create_constant(type);
+    c->set_one();
+    return c;
+}
+
 void Module::add_function(Function *function) noexcept {
     LUISA_DEBUG_ASSERT(!function->is_linked(), "Function is already linked.");
     _functions.insert_front(function);

@@ -231,7 +231,7 @@ private:
             auto g = llvm::dyn_cast<llvm::GlobalVariable>(
                 _llvm_module->getOrInsertGlobal(llvm::StringRef{name}, llvm_value->getType()));
             g->setConstant(true);
-            g->setLinkage(llvm::GlobalValue::LinkageTypes::InternalLinkage);
+            g->setLinkage(llvm::GlobalValue::LinkageTypes::PrivateLinkage);
             g->setInitializer(llvm_value);
             g->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
             llvm_value = g;
@@ -247,7 +247,7 @@ private:
         }
     }
 
-    [[nodiscard]] llvm::Value *_lookup_value(CurrentFunction &current, const xir::Value *v) noexcept {
+    [[nodiscard]] llvm::Value *_lookup_value(CurrentFunction &current, IRBuilder &b, const xir::Value *v, bool load_global = true) noexcept {
         LUISA_ASSERT(v != nullptr, "Value is null.");
         switch (v->derived_value_tag()) {
             case xir::DerivedValueTag::FUNCTION: {
@@ -257,7 +257,12 @@ private:
                 return _find_or_create_basic_block(current, static_cast<const xir::BasicBlock *>(v));
             }
             case xir::DerivedValueTag::CONSTANT: {
-                return _translate_constant(static_cast<const xir::Constant *>(v));
+                auto c = _translate_constant(static_cast<const xir::Constant *>(v));
+                if (load_global && c->getType()->isPointerTy()) {
+                    auto llvm_type = _translate_type(v->type());
+                    return b.CreateLoad(llvm_type, c);
+                }
+                return c;
             }
             case xir::DerivedValueTag::INSTRUCTION: [[fallthrough]];
             case xir::DerivedValueTag::ARGUMENT: {
@@ -278,11 +283,97 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+
+        // extract needs special handling
+        if (inst->op() == xir::IntrinsicOp::EXTRACT) {
+            auto base = inst->operand(0u);
+            auto indices = inst->operand_uses().subspan(1u);
+            auto llvm_base = _lookup_value(current, b, base, false);
+            auto llvm_base_type = _translate_type(base->type());
+            llvm::SmallVector<llvm::Value *> llvm_indices;
+            llvm_indices.reserve(1 + indices.size());
+            llvm_indices.emplace_back(b.getInt64(0));
+            _collect_aggregate_mapped_indices(current, b, base->type(), indices, llvm_indices);
+            // we have to create a temporary alloca for non-constant indices
+            // TODO: optimize this
+            if (!llvm_base->getType()->isPointerTy()) {
+                auto temp = b.CreateAlloca(llvm_base_type);
+                b.CreateStore(llvm_base, temp);
+                llvm_base = temp;
+            }
+            auto llvm_gep = b.CreateInBoundsGEP(llvm_base_type, llvm_base, llvm_indices);
+            auto llvm_type = _translate_type(inst->type());
+            return b.CreateLoad(llvm_type, llvm_gep);
+        }
+        auto llvm_type = _translate_type(inst->type());
+        return llvm::UndefValue::get(llvm_type);
         LUISA_NOT_IMPLEMENTED();
     }
 
+    void _collect_aggregate_mapped_indices(CurrentFunction &current, IRBuilder &b,
+                                           const Type *t, luisa::span<const xir::Use *const> indices,
+                                           llvm::SmallVector<llvm::Value *> &collected) noexcept {
+        // degenerate cases
+        if (t->is_scalar()) {
+            LUISA_ASSERT(indices.empty(), "Scalar type should have no indices.");
+            return;
+        }
+        if (indices.empty()) { return; }
+
+        // index into current aggregate and update indices
+        auto index = indices.front()->value();
+        indices = indices.subspan(1);
+        LUISA_ASSERT(index != nullptr && index->type() != nullptr, "Index is null.");
+
+        // structures only allow static indices and need special handling for padding
+        if (t->is_structure()) {
+            LUISA_ASSERT(index->derived_value_tag() == xir::DerivedValueTag::CONSTANT,
+                         "Structure index should be constant.");
+            auto i = [index = static_cast<const xir::Constant *>(index)]() noexcept -> uint64_t {
+                auto index_t = index->type();
+                LUISA_ASSERT(index_t != nullptr, "Index type is null.");
+                switch (index_t->tag()) {
+                    case Type::Tag::INT8: return index->as<int8_t>();
+                    case Type::Tag::UINT8: return index->as<uint8_t>();
+                    case Type::Tag::INT16: return index->as<int16_t>();
+                    case Type::Tag::UINT16: return index->as<uint16_t>();
+                    case Type::Tag::INT32: return index->as<int32_t>();
+                    case Type::Tag::UINT32: return index->as<uint32_t>();
+                    case Type::Tag::INT64: return index->as<int64_t>();
+                    case Type::Tag::UINT64: return index->as<uint64_t>();
+                    default: break;
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid index type: {}.", index_t->description());
+            }();
+            LUISA_ASSERT(i < t->members().size(), "Index out of range.");
+            // remap index to padded index
+            auto llvm_struct = _translate_struct_type(t);
+            auto padded_index = llvm_struct->padded_field_indices[i];
+            collected.emplace_back(b.getInt64(padded_index));
+            // update type
+            t = t->members()[i];
+        } else {
+            collected.emplace_back(_lookup_value(current, b, index));
+            if (t->is_matrix()) {
+                t = Type::vector(t->element(), t->dimension());
+            } else {
+                LUISA_ASSERT(t->is_array() || t->is_vector(), "Invalid aggregate type.");
+                t = t->element();
+            }
+        }
+        // recursively collect indices
+        _collect_aggregate_mapped_indices(current, b, t, indices, collected);
+    }
+
     [[nodiscard]] llvm::Value *_translate_gep_inst(CurrentFunction &current, IRBuilder &b, const xir::GEPInst *inst) noexcept {
-        LUISA_NOT_IMPLEMENTED();
+        auto base = _lookup_value(current, b, inst->base());
+        LUISA_ASSERT(base->getType()->isPointerTy(), "Base should be a pointer.");
+        auto llvm_type = _translate_type(inst->type());
+        llvm::SmallVector<llvm::Value *> indices;
+        indices.reserve(1 /* 0 that dereference the ptr */ + inst->index_count());
+        indices.emplace_back(b.getInt64(0));
+        _collect_aggregate_mapped_indices(current, b, inst->base()->type(), inst->index_uses(), indices);
+        return b.CreateInBoundsGEP(llvm_type, base, indices);
     }
 
     [[nodiscard]] llvm::Constant *_get_constant_zero(const Type *t) noexcept {
@@ -306,8 +397,9 @@ private:
             }
             case xir::DerivedInstructionTag::IF: {
                 auto if_inst = static_cast<const xir::IfInst *>(inst);
-                auto llvm_condition = _lookup_value(current, if_inst->condition());
-                llvm_condition = b.CreateICmpNE(llvm_condition, llvm::ConstantInt::get(llvm_condition->getType(), 0));
+                auto llvm_condition = _lookup_value(current, b, if_inst->condition());
+                auto llvm_false = b.getInt8(0);
+                llvm_condition = b.CreateICmpNE(llvm_condition, llvm_false);
                 auto llvm_true_block = _find_or_create_basic_block(current, if_inst->true_block());
                 auto llvm_false_block = _find_or_create_basic_block(current, if_inst->false_block());
                 auto llvm_merge_block = _find_or_create_basic_block(current, if_inst->merge_block());
@@ -319,15 +411,15 @@ private:
             }
             case xir::DerivedInstructionTag::SWITCH: {
                 auto switch_inst = static_cast<const xir::SwitchInst *>(inst);
-                auto llvm_condition = _lookup_value(current, switch_inst->value());
+                auto llvm_condition = _lookup_value(current, b, switch_inst->value());
                 auto llvm_merge_block = _find_or_create_basic_block(current, switch_inst->merge_block());
                 auto llvm_default_block = _find_or_create_basic_block(current, switch_inst->default_block());
                 auto llvm_inst = b.CreateSwitch(llvm_condition, llvm_default_block, switch_inst->case_count());
                 for (auto i = 0u; i < switch_inst->case_count(); i++) {
                     auto case_value = switch_inst->case_value(i);
-                    auto llvm_case_value = _translate_literal(Type::of<decltype(case_value)>(), &case_value);
+                    auto llvm_case_value = b.getInt32(case_value);
                     auto llvm_case_block = _find_or_create_basic_block(current, switch_inst->case_block(i));
-                    llvm_inst->addCase(llvm::cast<llvm::ConstantInt>(llvm_case_value), llvm_case_block);
+                    llvm_inst->addCase(llvm_case_value, llvm_case_block);
                 }
                 _translate_instructions_in_basic_block(current, llvm_default_block, switch_inst->default_block());
                 for (auto &case_block_use : switch_inst->case_block_uses()) {
@@ -362,8 +454,9 @@ private:
             }
             case xir::DerivedInstructionTag::CONDITIONAL_BRANCH: {
                 auto cond_br_inst = static_cast<const xir::ConditionalBranchInst *>(inst);
-                auto llvm_condition = _lookup_value(current, cond_br_inst->condition());
-                llvm_condition = b.CreateICmpNE(llvm_condition, llvm::ConstantInt::get(llvm_condition->getType(), 0));
+                auto llvm_condition = _lookup_value(current, b, cond_br_inst->condition());
+                auto llvm_false = b.getInt8(0);
+                llvm_condition = b.CreateICmpNE(llvm_condition, llvm_false);
                 auto llvm_true_block = _find_or_create_basic_block(current, cond_br_inst->true_block());
                 auto llvm_false_block = _find_or_create_basic_block(current, cond_br_inst->false_block());
                 return b.CreateCondBr(llvm_condition, llvm_true_block, llvm_false_block);
@@ -382,7 +475,7 @@ private:
             case xir::DerivedInstructionTag::RETURN: {
                 auto return_inst = static_cast<const xir::ReturnInst *>(inst);
                 if (auto ret_val = return_inst->return_value()) {
-                    auto llvm_ret_val = _lookup_value(current, ret_val);
+                    auto llvm_ret_val = _lookup_value(current, b, ret_val);
                     return b.CreateRet(llvm_ret_val);
                 }
                 return b.CreateRetVoid();
@@ -397,13 +490,13 @@ private:
             case xir::DerivedInstructionTag::LOAD: {
                 auto load_inst = static_cast<const xir::LoadInst *>(inst);
                 auto llvm_type = _translate_type(load_inst->type());
-                auto llvm_ptr = _lookup_value(current, load_inst->variable());
+                auto llvm_ptr = _lookup_value(current, b, load_inst->variable());
                 return b.CreateLoad(llvm_type, llvm_ptr);
             }
             case xir::DerivedInstructionTag::STORE: {
                 auto store_inst = static_cast<const xir::StoreInst *>(inst);
-                auto llvm_ptr = _lookup_value(current, store_inst->variable());
-                auto llvm_value = _lookup_value(current, store_inst->value());
+                auto llvm_ptr = _lookup_value(current, b, store_inst->variable());
+                auto llvm_value = _lookup_value(current, b, store_inst->value());
                 return b.CreateStore(llvm_value, llvm_ptr);
             }
             case xir::DerivedInstructionTag::GEP: {
@@ -412,11 +505,11 @@ private:
             }
             case xir::DerivedInstructionTag::CALL: {
                 auto call_inst = static_cast<const xir::CallInst *>(inst);
-                auto llvm_func = llvm::cast<llvm::Function>(_lookup_value(current, call_inst->callee()));
+                auto llvm_func = llvm::cast<llvm::Function>(_lookup_value(current, b, call_inst->callee()));
                 llvm::SmallVector<llvm::Value *, 16u> llvm_args;
                 llvm_args.reserve(call_inst->argument_count());
                 for (auto i = 0u; i < call_inst->argument_count(); i++) {
-                    auto llvm_arg = _lookup_value(current, call_inst->argument(i));
+                    auto llvm_arg = _lookup_value(current, b, call_inst->argument(i));
                     llvm_args.emplace_back(llvm_arg);
                 }
                 return b.CreateCall(llvm_func, llvm_args);
@@ -427,7 +520,7 @@ private:
             }
             case xir::DerivedInstructionTag::CAST: {
                 auto cast_inst = static_cast<const xir::CastInst *>(inst);
-                auto llvm_value = _lookup_value(current, cast_inst->value());
+                auto llvm_value = _lookup_value(current, b, cast_inst->value());
                 switch (cast_inst->op()) {
                     case xir::CastOp::STATIC_CAST: {
                         auto dst_type = cast_inst->type();
@@ -489,7 +582,7 @@ private:
             }
             case xir::DerivedInstructionTag::ASSERT: {
                 auto assert_inst = static_cast<const xir::AssertInst *>(inst);
-                auto llvm_condition = _lookup_value(current, assert_inst->condition());
+                auto llvm_condition = _lookup_value(current, b, assert_inst->condition());
                 auto llvm_message = _translate_string_or_null(b, assert_inst->message());
                 auto llvm_void_type = llvm::Type::getVoidTy(_llvm_context);
                 auto assert_func_type = llvm::FunctionType::get(llvm_void_type, {llvm_condition->getType(), llvm_message->getType()}, false);
