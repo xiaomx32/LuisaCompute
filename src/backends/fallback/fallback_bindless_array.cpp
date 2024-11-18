@@ -43,14 +43,14 @@ void FallbackBindlessArray::remove_buffer(size_t index) noexcept {
 
 void FallbackBindlessArray::remove_tex2d(size_t index) noexcept {
     if (auto &texture = _slots[index].tex2d) {
-        //_tracker.release(reinterpret_cast<uint64_t>(texture));
+        _tracker.release(reinterpret_cast<uint64_t>(texture));
         texture = nullptr;
     }
 }
 
 void FallbackBindlessArray::remove_tex3d(size_t index) noexcept {
     if (auto &texture = _slots[index].tex3d) {
-        //_tracker.release(reinterpret_cast<uint64_t>(texture));
+        _tracker.release(reinterpret_cast<uint64_t>(texture));
         texture = nullptr;
     }
 }

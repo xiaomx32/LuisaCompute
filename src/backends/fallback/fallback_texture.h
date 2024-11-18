@@ -235,18 +235,19 @@ public:
     FallbackTexture &operator=(const FallbackTexture &) noexcept = delete;
     [[nodiscard]] FallbackTextureView view(uint level) const noexcept;
     [[nodiscard]] auto storage() const noexcept { return _storage; }
+    [[nodiscard]] auto mip_levels() const noexcept { return _mip_levels; }
 
     // reading
-    [[nodiscard]] float4 read2d(uint level, uint2 uv) const noexcept;
-    [[nodiscard]] float4 read3d(uint level, uint3 uvw) const noexcept;
-
-    // sampling
-    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv) const noexcept;
-    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw) const noexcept;
-    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float lod) const noexcept;
-    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float lod) const noexcept;
-    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float2 dpdx, float2 dpdy) const noexcept;
-    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float3 dpdx, float3 dpdy) const noexcept;
+//    [[nodiscard]] float4 read2d(uint level, uint2 uv) const noexcept;
+//    [[nodiscard]] float4 read3d(uint level, uint3 uvw) const noexcept;
+//
+//    // sampling
+//    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv) const noexcept;
+//    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw) const noexcept;
+//    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float lod) const noexcept;
+//    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float lod) const noexcept;
+//    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float2 dpdx, float2 dpdy) const noexcept;
+//    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float3 dpdx, float3 dpdy) const noexcept;
 };
 
 class alignas(16u) FallbackTextureView {
@@ -262,7 +263,8 @@ private:
 
 public:
     static constexpr auto block_size = FallbackTexture::block_size;
-
+    const std::byte* data()const noexcept {return _data;}
+    const PixelStorage storage()const noexcept {return _storage;}
 private:
     [[nodiscard]] inline std::byte *_pixel2d(uint2 xy) const noexcept {
         auto block = xy / block_size;
@@ -341,13 +343,21 @@ void texture_write_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64
 void texture_write_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
 void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
 
-[[nodiscard]] float32x4_t bindless_texture_2d_read(const FallbackTexture *tex, uint level, uint x, uint y) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_3d_read(const FallbackTexture *tex, uint level, uint x, uint y, uint z) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_2d_sample(const FallbackTexture *tex, uint sampler, float u, float v) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_3d_sample(const FallbackTexture *tex, uint sampler, float u, float v, float w) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_2d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float lod) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_3d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float w, float lod) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_2d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v, int64_t dpdx, int64_t dpdy) noexcept;
-[[nodiscard]] float32x4_t bindless_texture_3d_sample_grad(const FallbackTexture *tex, int64_t sampler_w, int64_t uv, int64_t dudxy, int64_t dvdxy, int64_t dwdxy) noexcept;
+//swfly tries to write the accessors again
+[[nodiscard]] int4 texture_read_2d_int(const FallbackTextureView* tex, uint x, uint y) noexcept;
+[[nodiscard]] int4 texture_read_3d_int(const FallbackTextureView* tex, uint x, uint y, uint z) noexcept;
+[[nodiscard]] uint4 texture_read_2d_uint(const FallbackTextureView* tex, uint x, uint y) noexcept;
+[[nodiscard]] uint4 texture_read_3d_uint(const FallbackTextureView* tex, uint x, uint y, uint z) noexcept;
+[[nodiscard]] float4 texture_read_2d_float(const FallbackTextureView* tex, uint x, uint y) noexcept;
+[[nodiscard]] float4 texture_read_3d_float(const FallbackTextureView* tex, uint x, uint y, uint z) noexcept;
+
+[[nodiscard]] float4 bindless_texture_2d_read(const FallbackTexture *tex, uint level, uint x, uint y) noexcept;
+[[nodiscard]] float4 bindless_texture_3d_read(const FallbackTexture *tex, uint level, uint x, uint y, uint z) noexcept;
+[[nodiscard]] float4 bindless_texture_2d_sample(const FallbackTexture *tex, uint sampler, float u, float v) noexcept;
+[[nodiscard]] float4 bindless_texture_3d_sample(const FallbackTexture *tex, uint sampler, float u, float v, float w) noexcept;
+[[nodiscard]] float4 bindless_texture_2d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float lod) noexcept;
+[[nodiscard]] float4 bindless_texture_3d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float w, float lod) noexcept;
+[[nodiscard]] float4 bindless_texture_2d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v, int64_t dpdx, int64_t dpdy) noexcept;
+[[nodiscard]] float4 bindless_texture_3d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v, float w, int64_t dudxy, int64_t dvdxy, int64_t dwdxy) noexcept;
 
 }// namespace luisa::compute::llvm

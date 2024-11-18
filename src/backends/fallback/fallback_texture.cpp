@@ -250,13 +250,13 @@ FallbackTextureView FallbackTexture::view(uint level) const noexcept {
                            _dimension, size.x, size.y, size.z, _storage, _pixel_stride_shift};
 }
 
-float4 FallbackTexture::read2d(uint level, uint2 uv) const noexcept {
-    return view(level).read2d<float>(uv);
-}
-
-float4 FallbackTexture::read3d(uint level, uint3 uvw) const noexcept {
-    return view(level).read3d<float>(uvw);
-}
+//float4 FallbackTexture::read2d(uint level, uint2 uv) const noexcept {
+//    return view(level).read2d<float>(uv);
+//}
+//
+//float4 FallbackTexture::read3d(uint level, uint3 uvw) const noexcept {
+//    return view(level).read3d<float>(uvw);
+//}
 
 template<typename T>
 [[nodiscard]] inline auto texture_coord_point(Sampler::Address address, T uv, T s) noexcept {
@@ -273,13 +273,6 @@ template<typename T>
     return T{65536.f};
 }
 
-[[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float2 uv, float2 size) noexcept {
-    auto s = make_float2(size);
-    auto inv_s = 1.f / s;
-    auto c_min = texture_coord_point(address, uv - .5f * inv_s, s);
-    auto c_max = texture_coord_point(address, uv + .5f * inv_s, s);
-    return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
-}
 
 [[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float3 uv, float3 size) noexcept {
     auto s = make_float3(size);
@@ -287,20 +280,6 @@ template<typename T>
     auto c_min = texture_coord_point(address, uv - .5f * inv_s, s);
     auto c_max = texture_coord_point(address, uv + .5f * inv_s, s);
     return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
-}
-
-[[nodiscard]] inline auto texture_sample_linear(FallbackTextureView view, Sampler::Address address, float2 uv) noexcept {
-    auto size = make_float2(view.size2d());
-    auto [st_min, st_max] = texture_coord_linear(address, uv, size);
-    auto t = luisa::fract(st_max);
-    auto c0 = make_uint2(st_min);
-    auto c1 = make_uint2(st_max);
-    auto v00 = view.read2d<float>(c0);
-    auto v01 = view.read2d<float>(make_uint2(c1.x, c0.y));
-    auto v10 = view.read2d<float>(make_uint2(c0.x, c1.y));
-    auto v11 = view.read2d<float>(c1);
-    return luisa::lerp(luisa::lerp(v00, v01, t.x),
-                       luisa::lerp(v10, v11, t.x), t.y);
 }
 
 [[nodiscard]] inline auto texture_sample_linear(FallbackTextureView view, Sampler::Address address, float3 uvw) noexcept {
@@ -395,113 +374,113 @@ template<typename T>
     return texture_sample_linear(view, address, uvw);
 }
 
-float4 FallbackTexture::sample2d(Sampler sampler, float2 uv) const noexcept {
-    return sampler.filter() == Sampler::Filter::POINT ?
-               texture_sample_point(view(0), sampler.address(), uv) :
-               texture_sample_linear(view(0), sampler.address(), uv);
-}
+//float4 FallbackTexture::sample2d(Sampler sampler, float2 uv) const noexcept {
+//    return sampler.filter() == Sampler::Filter::POINT ?
+//               texture_sample_point(view(0), sampler.address(), uv) :
+//               texture_sample_linear(view(0), sampler.address(), uv);
+//}
 
-float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw) const noexcept {
-    return sampler.filter() == Sampler::Filter::POINT ?
-               texture_sample_point(view(0), sampler.address(), uvw) :
-               texture_sample_linear(view(0), sampler.address(), uvw);
-}
+//float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw) const noexcept {
+//    return sampler.filter() == Sampler::Filter::POINT ?
+//               texture_sample_point(view(0), sampler.address(), uvw) :
+//               texture_sample_linear(view(0), sampler.address(), uvw);
+//}
 
-float4 FallbackTexture::sample2d(Sampler sampler, float2 uv, float lod) const noexcept {
-    auto filter = sampler.filter();
-    if (lod <= 0.f || _mip_levels == 0u ||
-        filter == Sampler::Filter::POINT) {
-        return sample2d(sampler, uv);
-    }
-    auto level0 = std::min(static_cast<uint32_t>(lod),
-                           _mip_levels - 1u);
-    auto v0 = texture_sample_linear(
-        view(level0), sampler.address(), uv);
-    if (level0 == _mip_levels - 1u ||
-        filter == Sampler::Filter::LINEAR_POINT) {
-        return v0;
-    }
-    auto v1 = texture_sample_linear(
-        view(level0 + 1u), sampler.address(), uv);
-    return luisa::lerp(v0, v1, luisa::fract(lod));
-}
+//float4 FallbackTexture::sample2d(Sampler sampler, float2 uv, float lod) const noexcept {
+//    auto filter = sampler.filter();
+//    if (lod <= 0.f || _mip_levels == 0u ||
+//        filter == Sampler::Filter::POINT) {
+//        return sample2d(sampler, uv);
+//    }
+//    auto level0 = std::min(static_cast<uint32_t>(lod),
+//                           _mip_levels - 1u);
+//    auto v0 = texture_sample_linear(
+//        view(level0), sampler.address(), uv);
+//    if (level0 == _mip_levels - 1u ||
+//        filter == Sampler::Filter::LINEAR_POINT) {
+//        return v0;
+//    }
+//    auto v1 = texture_sample_linear(
+//        view(level0 + 1u), sampler.address(), uv);
+//    return luisa::lerp(v0, v1, luisa::fract(lod));
+//}
 
-float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw, float lod) const noexcept {
-    auto filter = sampler.filter();
-    if (lod <= 0.f || _mip_levels == 0u ||
-        filter == Sampler::Filter::POINT) {
-        return sample3d(sampler, uvw);
-    }
-    auto level0 = std::min(static_cast<uint32_t>(lod),
-                           _mip_levels - 1u);
-    auto v0 = texture_sample_linear(
-        view(level0), sampler.address(), uvw);
-    if (level0 == _mip_levels - 1u ||
-        filter == Sampler::Filter::LINEAR_POINT) {
-        return v0;
-    }
-    auto v1 = texture_sample_linear(
-        view(level0 + 1u), sampler.address(), uvw);
-    return luisa::lerp(v0, v1, luisa::fract(lod));
-}
+//float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw, float lod) const noexcept {
+//    auto filter = sampler.filter();
+//    if (lod <= 0.f || _mip_levels == 0u ||
+//        filter == Sampler::Filter::POINT) {
+//        return sample3d(sampler, uvw);
+//    }
+//    auto level0 = std::min(static_cast<uint32_t>(lod),
+//                           _mip_levels - 1u);
+//    auto v0 = texture_sample_linear(
+//        view(level0), sampler.address(), uvw);
+//    if (level0 == _mip_levels - 1u ||
+//        filter == Sampler::Filter::LINEAR_POINT) {
+//        return v0;
+//    }
+//    auto v1 = texture_sample_linear(
+//        view(level0 + 1u), sampler.address(), uvw);
+//    return luisa::lerp(v0, v1, luisa::fract(lod));
+//}
 
-float4 FallbackTexture::sample2d(Sampler sampler, float2 uv, float2 dpdx, float2 dpdy) const noexcept {
-    constexpr auto ll = [](float2 v) noexcept { return dot(v, v); };
-    if (all(dpdx == 0.f) || all(dpdy == 0.f)) { return sample2d(sampler, uv); }
-    if (sampler.filter() != Sampler::Filter::ANISOTROPIC) {
-        auto s = make_float2(_size[0], _size[1]);
-        auto level = .5f * std::log2(std::max(ll(dpdx * s), ll(dpdy * s)));
-        return sample2d(sampler, uv, level);
-    }
-    auto longer = length(dpdx);
-    auto shorter = length(dpdy);
-    if (longer < shorter) {
-        std::swap(longer, shorter);
-        std::swap(dpdx, dpdy);
-    }
-    constexpr auto max_anisotropy = 16.f;
-    if (auto s = shorter * max_anisotropy; s < longer) {
-        auto scale = longer / s;
-        dpdy *= scale;
-        shorter *= scale;
-    }
-    auto last_level = static_cast<float>(_mip_levels - 1u);
-    auto level = std::clamp(last_level + std::log2(shorter), 0.f, last_level);
-    auto level_uint = static_cast<uint>(level);
-    auto v0 = texture_sample_ewa(view(level_uint), sampler.address(), uv, dpdx, dpdy);
-    if (level == 0.f || level == last_level) { return v0; }
-    auto v1 = texture_sample_ewa(view(level_uint + 1u), sampler.address(), uv, dpdx, dpdy);
-    return luisa::lerp(v0, v1, luisa::fract(level));
-}
-
-float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw, float3 dpdx, float3 dpdy) const noexcept {
-    constexpr auto ll = [](float3 v) noexcept { return dot(v, v); };
-    if (all(dpdx == 0.f) || all(dpdy == 0.f)) { return sample3d(sampler, uvw); }
-    if (sampler.filter() != Sampler::Filter::ANISOTROPIC) {
-        auto s = make_float3(_size[0], _size[1], _size[2]);
-        auto level = .5f * std::log2(std::max(ll(dpdx * s), ll(dpdy * s)));
-        return sample3d(sampler, uvw, level);
-    }
-    auto longer = length(dpdx);
-    auto shorter = length(dpdy);
-    if (longer < shorter) {
-        std::swap(longer, shorter);
-        std::swap(dpdx, dpdy);
-    }
-    constexpr auto max_anisotropy = 16.f;
-    if (auto s = shorter * max_anisotropy; s < longer) {
-        auto scale = longer / s;
-        dpdy *= scale;
-        shorter *= scale;
-    }
-    auto last_level = static_cast<float>(_mip_levels - 1u);
-    auto level = std::clamp(last_level + std::log2(shorter), 0.f, last_level);
-    auto level_uint = static_cast<uint>(level);
-    auto v0 = texture_sample_ewa(view(level_uint), sampler.address(), uvw, dpdx, dpdy);
-    if (level == 0.f || level == last_level) { return v0; }
-    auto v1 = texture_sample_ewa(view(level_uint + 1u), sampler.address(), uvw, dpdx, dpdy);
-    return luisa::lerp(v0, v1, luisa::fract(level));
-}
+//float4 FallbackTexture::sample2d(Sampler sampler, float2 uv, float2 dpdx, float2 dpdy) const noexcept {
+//    constexpr auto ll = [](float2 v) noexcept { return dot(v, v); };
+//    if (all(dpdx == 0.f) || all(dpdy == 0.f)) { return sample2d(sampler, uv); }
+//    if (sampler.filter() != Sampler::Filter::ANISOTROPIC) {
+//        auto s = make_float2(_size[0], _size[1]);
+//        auto level = .5f * std::log2(std::max(ll(dpdx * s), ll(dpdy * s)));
+//        return sample2d(sampler, uv, level);
+//    }
+//    auto longer = length(dpdx);
+//    auto shorter = length(dpdy);
+//    if (longer < shorter) {
+//        std::swap(longer, shorter);
+//        std::swap(dpdx, dpdy);
+//    }
+//    constexpr auto max_anisotropy = 16.f;
+//    if (auto s = shorter * max_anisotropy; s < longer) {
+//        auto scale = longer / s;
+//        dpdy *= scale;
+//        shorter *= scale;
+//    }
+//    auto last_level = static_cast<float>(_mip_levels - 1u);
+//    auto level = std::clamp(last_level + std::log2(shorter), 0.f, last_level);
+//    auto level_uint = static_cast<uint>(level);
+//    auto v0 = texture_sample_ewa(view(level_uint), sampler.address(), uv, dpdx, dpdy);
+//    if (level == 0.f || level == last_level) { return v0; }
+//    auto v1 = texture_sample_ewa(view(level_uint + 1u), sampler.address(), uv, dpdx, dpdy);
+//    return luisa::lerp(v0, v1, luisa::fract(level));
+//}
+//
+//float4 FallbackTexture::sample3d(Sampler sampler, float3 uvw, float3 dpdx, float3 dpdy) const noexcept {
+//    constexpr auto ll = [](float3 v) noexcept { return dot(v, v); };
+//    if (all(dpdx == 0.f) || all(dpdy == 0.f)) { return sample3d(sampler, uvw); }
+//    if (sampler.filter() != Sampler::Filter::ANISOTROPIC) {
+//        auto s = make_float3(_size[0], _size[1], _size[2]);
+//        auto level = .5f * std::log2(std::max(ll(dpdx * s), ll(dpdy * s)));
+//        return sample3d(sampler, uvw, level);
+//    }
+//    auto longer = length(dpdx);
+//    auto shorter = length(dpdy);
+//    if (longer < shorter) {
+//        std::swap(longer, shorter);
+//        std::swap(dpdx, dpdy);
+//    }
+//    constexpr auto max_anisotropy = 16.f;
+//    if (auto s = shorter * max_anisotropy; s < longer) {
+//        auto scale = longer / s;
+//        dpdy *= scale;
+//        shorter *= scale;
+//    }
+//    auto last_level = static_cast<float>(_mip_levels - 1u);
+//    auto level = std::clamp(last_level + std::log2(shorter), 0.f, last_level);
+//    auto level_uint = static_cast<uint>(level);
+//    auto v0 = texture_sample_ewa(view(level_uint), sampler.address(), uvw, dpdx, dpdy);
+//    if (level == 0.f || level == last_level) { return v0; }
+//    auto v1 = texture_sample_ewa(view(level_uint + 1u), sampler.address(), uvw, dpdx, dpdy);
+//    return luisa::lerp(v0, v1, luisa::fract(level));
+//}
 
 void texture_write_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
     detail::decode_texture_view(t0, t1).write2d<int>(
@@ -570,49 +549,5 @@ float32x4_t texture_read_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1
             detail::decode_uint3(c0, c1)));
 }
 
-float32x4_t bindless_texture_2d_read(const FallbackTexture *tex, uint level, uint x, uint y) noexcept {
-    return detail::encode_float4(tex->read2d(level, make_uint2(x, y)));
-}
 
-float32x4_t bindless_texture_3d_read(const FallbackTexture *tex, uint level, uint x, uint y, uint z) noexcept {
-    return detail::encode_float4(tex->read3d(level, make_uint3(x, y, z)));
-}
-
-float32x4_t bindless_texture_2d_sample(const FallbackTexture *tex, uint sampler, float u, float v) noexcept {
-    return detail::encode_float4(tex->sample2d(Sampler::decode(sampler), make_float2(u, v)));
-}
-
-float32x4_t bindless_texture_3d_sample(const FallbackTexture *tex, uint sampler, float u, float v, float w) noexcept {
-    return detail::encode_float4(tex->sample3d(Sampler::decode(sampler), make_float3(u, v, w)));
-}
-
-float32x4_t bindless_texture_2d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float lod) noexcept {
-    return detail::encode_float4(tex->sample2d(Sampler::decode(sampler), make_float2(u, v), lod));
-}
-
-float32x4_t bindless_texture_3d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v, float w, float lod) noexcept {
-    return detail::encode_float4(tex->sample3d(Sampler::decode(sampler), make_float3(u, v, w), lod));
-}
-
-float32x4_t bindless_texture_2d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v, int64_t dpdx, int64_t dpdy) noexcept {
-    return detail::encode_float4(tex->sample2d(
-        Sampler::decode(sampler), make_float2(u, v),
-        detail::decode_float2(dpdx), detail::decode_float2(dpdy)));
-}
-
-float32x4_t bindless_texture_3d_sample_grad(const FallbackTexture *tex, int64_t sampler_w, int64_t uv, int64_t dudxy, int64_t dvdxy, int64_t dwdxy) noexcept {
-    struct alignas(8) sampler_and_float {
-        uint sampler;
-        float w;
-    };
-    auto du_dxy = detail::decode_float2(dudxy);
-    auto dv_dxy = detail::decode_float2(dvdxy);
-    auto dw_dxy = detail::decode_float2(dwdxy);
-    auto dpdx = make_float3(du_dxy.x, dv_dxy.x, dw_dxy.x);
-    auto dpdy = make_float3(du_dxy.y, dv_dxy.y, dw_dxy.y);
-    auto [sampler, w] = luisa::bit_cast<sampler_and_float>(sampler_w);
-    auto uvw = make_float3(detail::decode_float2(uv), w);
-    return detail::encode_float4(tex->sample3d(Sampler::decode(sampler), uvw, dpdx, dpdy));
-}
-
-}// namespace luisa::compute::llvm
+}// namespace luisa::compute::fallback
