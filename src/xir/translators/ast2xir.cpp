@@ -919,94 +919,84 @@ private:
     }
 
     void _translate_statements(Builder &b, luisa::span<const Statement *const> stmts) noexcept {
-        if (stmts.empty()) { return; }
-        auto car = stmts.front();
-        auto cdr = stmts.subspan(1);
-        switch (car->tag()) {
-            case Statement::Tag::BREAK: {
-                auto break_target = _current.break_continue_target.break_target;
-                LUISA_ASSERT(break_target != nullptr, "Invalid break statement.");
-                _commented(b.break_(break_target));
-                break;
-            }
-            case Statement::Tag::CONTINUE: {
-                auto continue_target = _current.break_continue_target.continue_target;
-                LUISA_ASSERT(continue_target != nullptr, "Invalid continue statement.");
-                _commented(b.continue_(continue_target));
-                break;
-            }
-            case Statement::Tag::RETURN: {
-                if (auto ast_expr = static_cast<const ReturnStmt *>(car)->expression()) {
-                    auto value = _translate_expression(b, ast_expr, true);
-                    _commented(b.return_(value));
-                } else {
-                    _commented(b.return_void());
+        while (!stmts.empty()) {
+            auto car = stmts.front();
+            auto cdr = stmts.subspan(1);
+            switch (car->tag()) {
+                case Statement::Tag::BREAK: {
+                    auto break_target = _current.break_continue_target.break_target;
+                    LUISA_ASSERT(break_target != nullptr, "Invalid break statement.");
+                    return static_cast<void>(_commented(b.break_(break_target)));
                 }
-                break;
-            }
-            case Statement::Tag::SCOPE: LUISA_ERROR_WITH_LOCATION("Unexpected scope statement.");
-            case Statement::Tag::IF: {
-                auto ast_if = static_cast<const IfStmt *>(car);
-                _translate_if_stmt(b, ast_if, cdr);
-                break;
-            }
-            case Statement::Tag::LOOP: {
-                auto ast_loop = static_cast<const LoopStmt *>(car);
-                _translate_loop_stmt(b, ast_loop, cdr);
-                break;
-            }
-            case Statement::Tag::EXPR: {
-                auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
-                auto last = _commented(_translate_expression(b, ast_expr, false));
-                if (last->derived_value_tag() != DerivedValueTag::INSTRUCTION ||
-                    !static_cast<Instruction *>(last)->is_terminator()) {
-                    _translate_statements(b, cdr);
+                case Statement::Tag::CONTINUE: {
+                    auto continue_target = _current.break_continue_target.continue_target;
+                    LUISA_ASSERT(continue_target != nullptr, "Invalid continue statement.");
+                    return static_cast<void>(_commented(b.continue_(continue_target)));
                 }
-                break;
-            }
-            case Statement::Tag::SWITCH: {
-                auto ast_switch = static_cast<const SwitchStmt *>(car);
-                _translate_switch_stmt(b, ast_switch, cdr);
-                break;
-            }
-            case Statement::Tag::SWITCH_CASE: LUISA_ERROR_WITH_LOCATION("Unexpected switch case statement.");
-            case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
-            case Statement::Tag::ASSIGN: {
-                auto assign = static_cast<const AssignStmt *>(car);
-                if (assign->lhs() != assign->rhs()) {
-                    auto variable = _translate_expression(b, assign->lhs(), false);
-                    auto value = _translate_expression(b, assign->rhs(), true);
-                    _commented(b.store(variable, value));
+                case Statement::Tag::RETURN: {
+                    if (auto ast_expr = static_cast<const ReturnStmt *>(car)->expression()) {
+                        auto value = _translate_expression(b, ast_expr, true);
+                        return static_cast<void>(_commented(b.return_(value)));
+                    }
+                    return static_cast<void>(_commented(b.return_void()));
                 }
-                _translate_statements(b, cdr);
-                break;
-            }
-            case Statement::Tag::FOR: {
-                auto ast_for = static_cast<const ForStmt *>(car);
-                _translate_for_stmt(b, ast_for, cdr);
-                break;
-            }
-            case Statement::Tag::COMMENT: {
-                _collect_comment(car);
-                _translate_statements(b, cdr);
-                break;
-            }
-            case Statement::Tag::RAY_QUERY: {
-                auto ast_ray_query = static_cast<const RayQueryStmt *>(car);
-                _translate_ray_query_stmt(b, ast_ray_query, cdr);
-                break;
-            }
-            case Statement::Tag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
-            case Statement::Tag::PRINT: {
-                auto ast_print = static_cast<const PrintStmt *>(car);
-                luisa::fixed_vector<Value *, 16u> args;
-                for (auto ast_arg : ast_print->arguments()) {
-                    args.emplace_back(_translate_expression(b, ast_arg, true));
+                case Statement::Tag::SCOPE: LUISA_ERROR_WITH_LOCATION("Unexpected scope statement.");
+                case Statement::Tag::IF: {
+                    auto ast_if = static_cast<const IfStmt *>(car);
+                    return _translate_if_stmt(b, ast_if, cdr);
                 }
-                _commented(b.print(luisa::string{ast_print->format()}, args));
-                _translate_statements(b, cdr);
-                break;
+                case Statement::Tag::LOOP: {
+                    auto ast_loop = static_cast<const LoopStmt *>(car);
+                    return _translate_loop_stmt(b, ast_loop, cdr);
+                }
+                case Statement::Tag::EXPR: {
+                    auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
+                    _commented(_translate_expression(b, ast_expr, false));
+                    // in case the expression is a terminator, e.g., unreachable, we should stop here
+                    if (b.insertion_point()->is_terminator()) { return; }
+                    // otherwise, continue to the next statement
+                    break;
+                }
+                case Statement::Tag::SWITCH: {
+                    auto ast_switch = static_cast<const SwitchStmt *>(car);
+                    return _translate_switch_stmt(b, ast_switch, cdr);
+                }
+                case Statement::Tag::SWITCH_CASE: LUISA_ERROR_WITH_LOCATION("Unexpected switch case statement.");
+                case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
+                case Statement::Tag::ASSIGN: {
+                    auto assign = static_cast<const AssignStmt *>(car);
+                    if (assign->lhs() != assign->rhs()) {
+                        auto variable = _translate_expression(b, assign->lhs(), false);
+                        auto value = _translate_expression(b, assign->rhs(), true);
+                        _commented(b.store(variable, value));
+                    }
+                    break;
+                }
+                case Statement::Tag::FOR: {
+                    auto ast_for = static_cast<const ForStmt *>(car);
+                    return _translate_for_stmt(b, ast_for, cdr);
+                }
+                case Statement::Tag::COMMENT: {
+                    _collect_comment(car);
+                    break;
+                }
+                case Statement::Tag::RAY_QUERY: {
+                    auto ast_ray_query = static_cast<const RayQueryStmt *>(car);
+                    return _translate_ray_query_stmt(b, ast_ray_query, cdr);
+                }
+                case Statement::Tag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
+                case Statement::Tag::PRINT: {
+                    auto ast_print = static_cast<const PrintStmt *>(car);
+                    luisa::fixed_vector<Value *, 16u> args;
+                    for (auto ast_arg : ast_print->arguments()) {
+                        args.emplace_back(_translate_expression(b, ast_arg, true));
+                    }
+                    _commented(b.print(luisa::string{ast_print->format()}, args));
+                    break;
+                }
             }
+            // update the statement list
+            stmts = cdr;
         }
     }
 
