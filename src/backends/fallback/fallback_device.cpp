@@ -5,11 +5,13 @@
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
 #include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/xir2text.h>
 
 #include "fallback_stream.h"
 #include "fallback_device.h"
@@ -234,12 +236,18 @@ ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Fun
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
+    // LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+
     llvm::LLVMContext llvm_ctx;
     auto llvm_module = luisa_fallback_backend_codegen(llvm_ctx, xir_module);
     if (!llvm_module) {
         LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
     }
-    llvm_module->print(llvm::errs(), nullptr, false, true);
+    llvm_module->print(llvm::errs(), nullptr, true, true);
+
+    if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
+        LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
+    }
 
     //    return ShaderCreationInfo
     //    {

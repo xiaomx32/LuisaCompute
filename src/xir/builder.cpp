@@ -150,6 +150,7 @@ LoadInst *Builder::load(const Type *type, Value *variable) noexcept {
 
 StoreInst *Builder::store(Value *variable, Value *value) noexcept {
     LUISA_ASSERT(variable->is_lvalue(), "Store destination must be an lvalue.");
+    LUISA_ASSERT(!value->is_lvalue(), "Store source cannot be an lvalue.");
     return _create_and_append_instruction<StoreInst>(variable, value);
 }
 
