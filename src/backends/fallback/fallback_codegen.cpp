@@ -1008,6 +1008,29 @@ private:
         }
         return _zext_i1_to_i8(b, result);
     }
+    [[nodiscard]] llvm::Value *_translate_unary_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, llvm::Intrinsic::ID intrinsic_id) noexcept {
+        // Lookup LLVM value for operand
+        auto llvm_operand = _lookup_value(current, b, operand);
+        auto operand_type = operand->type();
+
+        // Type and null checks
+        LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(operand_type->is_scalar() || operand_type->is_vector(), "Invalid operand type.");
+
+        // Check if the operand is a valid floating-point type
+        auto elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+        switch (elem_type->tag()) {
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64:
+                // Use LLVM's intrinsic function based on the provided intrinsic ID
+                return b.CreateUnaryIntrinsic(intrinsic_id, llvm_operand);
+            default:
+                break;
+        }
+
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.", intrinsic_id, elem_type->description());
+    }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
@@ -1070,24 +1093,24 @@ private:
             case xir::IntrinsicOp::ATAN: break;
             case xir::IntrinsicOp::ATAN2: break;
             case xir::IntrinsicOp::ATANH: break;
-            case xir::IntrinsicOp::COS: break;
+            case xir::IntrinsicOp::COS: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
             case xir::IntrinsicOp::COSH: break;
-            case xir::IntrinsicOp::SIN: break;
+            case xir::IntrinsicOp::SIN: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
             case xir::IntrinsicOp::SINH: break;
             case xir::IntrinsicOp::TAN: break;
             case xir::IntrinsicOp::TANH: break;
-            case xir::IntrinsicOp::EXP: break;
-            case xir::IntrinsicOp::EXP2: break;
-            case xir::IntrinsicOp::EXP10: break;
-            case xir::IntrinsicOp::LOG: break;
-            case xir::IntrinsicOp::LOG2: break;
-            case xir::IntrinsicOp::LOG10: break;
+            case xir::IntrinsicOp::EXP: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp);
+            case xir::IntrinsicOp::EXP2: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp2);
+            case xir::IntrinsicOp::EXP10: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp10);
+            case xir::IntrinsicOp::LOG: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log);
+            case xir::IntrinsicOp::LOG2: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log2);
+            case xir::IntrinsicOp::LOG10: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log10);
             case xir::IntrinsicOp::POW: break;
             case xir::IntrinsicOp::POW_INT: break;
-            case xir::IntrinsicOp::SQRT: break;
+            case xir::IntrinsicOp::SQRT: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sqrt);
             case xir::IntrinsicOp::RSQRT: break;
-            case xir::IntrinsicOp::CEIL: break;
-            case xir::IntrinsicOp::FLOOR: break;
+            case xir::IntrinsicOp::CEIL: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::ceil);
+            case xir::IntrinsicOp::FLOOR: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::floor);
             case xir::IntrinsicOp::FRACT: break;
             case xir::IntrinsicOp::TRUNC: break;
             case xir::IntrinsicOp::ROUND: break;
