@@ -48,7 +48,6 @@ private:
     luisa::unordered_map<const Type *, luisa::unique_ptr<LLVMStruct>> _llvm_struct_types;
     luisa::unordered_map<const xir::Constant *, llvm::Constant *> _llvm_constants;
     luisa::unordered_map<const xir::Function *, llvm::Function *> _llvm_functions;
-    luisa::unordered_map<const Type *, llvm::Constant *> _llvm_zeros;
 
 private:
     void _reset() noexcept {
@@ -296,10 +295,10 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_gep(CurrentFunction &current, IRBuilder &b,
-                                              const Type *expected_elem_type, const xir::Value *base,
+                                              const Type *expected_elem_type,
+                                              const Type *ptr_type, llvm::Value *llvm_ptr,
                                               luisa::span<const xir::Use *const> indices) noexcept {
-        auto ptr_type = base->type();
-        auto llvm_ptr = _lookup_value(current, b, base, false);
+        LUISA_ASSERT(llvm_ptr->getType()->isPointerTy(), "Invalid pointer type.");
         while (!indices.empty()) {
             // get the index
             auto index = indices.front()->value();
@@ -367,29 +366,410 @@ private:
             llvm_base = llvm_temp;
         }
         // GEP and load the element
-        auto llvm_gep = _translate_gep(current, b, inst->type(), base, indices);
+        auto llvm_gep = _translate_gep(current, b, inst->type(), base->type(), llvm_base, indices);
         auto llvm_type = _translate_type(inst->type(), true);
         return b.CreateAlignedLoad(llvm_type, llvm_gep, llvm::MaybeAlign{inst->type()->alignment()});
     }
 
-    [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
-
-        // extract needs special handling
-        if (inst->op() == xir::IntrinsicOp::EXTRACT) {
-            return _translate_extract(current, b, inst);
+    [[nodiscard]] llvm::Value *_translate_insert(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto base = inst->operand(0u);
+        auto value = inst->operand(1u);
+        auto indices = inst->operand_uses().subspan(2u);
+        auto llvm_base = _lookup_value(current, b, base, false);
+        auto llvm_value = _lookup_value(current, b, value, false);
+        // if we have an immediate vector, we can directly insert elements
+        if (base->type()->is_vector() && !llvm_base->getType()->isPointerTy()) {
+            LUISA_ASSERT(indices.size() == 1u, "Immediate vector should have only one index.");
+            auto llvm_index = _lookup_value(current, b, indices.front()->value());
+            return b.CreateInsertElement(llvm_base, llvm_value, llvm_index);
         }
-        auto llvm_type = _translate_type(inst->type(), true);
-        return llvm::Constant::getNullValue(llvm_type);
+        // otherwise we have to make a copy of the base, store the element, and load the modified value
+        auto llvm_base_type = _translate_type(base->type(), false);
+        auto llvm_temp = b.CreateAlloca(llvm_base_type);
+        auto alignment = base->type()->alignment();
+        if (llvm_temp->getAlign() < alignment) {
+            llvm_temp->setAlignment(llvm::Align{alignment});
+        }
+        // load the base if it is a pointer
+        if (llvm_base->getType()->isPointerTy()) {
+            llvm_base = b.CreateAlignedLoad(llvm_base_type, llvm_base, llvm::MaybeAlign{alignment});
+        }
+        // store the base
+        b.CreateAlignedStore(llvm_base, llvm_temp, llvm::MaybeAlign{alignment});
+        // GEP and store the element
+        auto llvm_gep = _translate_gep(current, b, value->type(), base->type(), llvm_temp, indices);
+        b.CreateAlignedStore(llvm_value, llvm_gep, llvm::MaybeAlign{value->type()->alignment()});
+        // load the modified value
+        return b.CreateAlignedLoad(llvm_base_type, llvm_temp, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_unary_plus(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
+        return _lookup_value(current, b, operand);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_unary_minus(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
+        auto llvm_operand = _lookup_value(current, b, operand);
+        auto operand_type = operand->type();
+        LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
+        auto operand_elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+        switch (operand_elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateNSWNeg(llvm_operand);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateNeg(llvm_operand);
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: return b.CreateFNeg(llvm_operand);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid unary minus operand type: {}.", operand_type->description());
+    }
+
+    [[nodiscard]] static llvm::Value *_cmp_ne_zero(IRBuilder &b, llvm::Value *value) noexcept {
+        auto zero = llvm::Constant::getNullValue(value->getType());
+        return value->getType()->isFPOrFPVectorTy() ?
+                   b.CreateFCmpUNE(value, zero) :
+                   b.CreateICmpNE(value, zero);
+    }
+
+    [[nodiscard]] static llvm::Value *_cmp_eq_zero(IRBuilder &b, llvm::Value *value) noexcept {
+        auto zero = llvm::Constant::getNullValue(value->getType());
+        return value->getType()->isFPOrFPVectorTy() ?
+                   b.CreateFCmpUEQ(value, zero) :
+                   b.CreateICmpEQ(value, zero);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_unary_logic_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
+        auto llvm_operand = _lookup_value(current, b, operand);
+        auto operand_type = operand->type();
+        LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(operand_type->is_scalar() || operand_type->is_vector(), "Invalid operand type.");
+        auto llvm_cmp = _cmp_eq_zero(b, llvm_operand);
+        auto llvm_i8_type = llvm::cast<llvm::Type>(llvm::Type::getInt8Ty(_llvm_context));
+        if (operand_type->is_vector()) {
+            auto dim = operand_type->dimension();
+            llvm_i8_type = llvm::VectorType::get(llvm_i8_type, dim, false);
+        }
+        return b.CreateZExt(llvm_cmp, llvm_i8_type);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_unary_bit_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
+        auto llvm_operand = _lookup_value(current, b, operand);
+        LUISA_ASSERT(llvm_operand->getType()->isIntOrIntVectorTy() &&
+                         !llvm_operand->getType()->isIntOrIntVectorTy(1),
+                     "Invalid operand type.");
+        return b.CreateNot(llvm_operand);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        switch (inst->op()) {
+            case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
+            case xir::IntrinsicOp::UNARY_PLUS: return _translate_unary_plus(current, b, inst->operand(0u));
+            case xir::IntrinsicOp::UNARY_MINUS: return _translate_unary_minus(current, b, inst->operand(0u));
+            case xir::IntrinsicOp::UNARY_LOGIC_NOT: return _translate_unary_logic_not(current, b, inst->operand(0u));
+            case xir::IntrinsicOp::UNARY_BIT_NOT: return _translate_unary_bit_not(current, b, inst->operand(0u));
+            case xir::IntrinsicOp::BINARY_ADD: break;
+            case xir::IntrinsicOp::BINARY_SUB: break;
+            case xir::IntrinsicOp::BINARY_MUL: break;
+            case xir::IntrinsicOp::BINARY_DIV: break;
+            case xir::IntrinsicOp::BINARY_MOD: break;
+            case xir::IntrinsicOp::BINARY_LOGIC_AND: break;
+            case xir::IntrinsicOp::BINARY_LOGIC_OR: break;
+            case xir::IntrinsicOp::BINARY_BIT_AND: break;
+            case xir::IntrinsicOp::BINARY_BIT_OR: break;
+            case xir::IntrinsicOp::BINARY_BIT_XOR: break;
+            case xir::IntrinsicOp::BINARY_SHIFT_LEFT: break;
+            case xir::IntrinsicOp::BINARY_SHIFT_RIGHT: break;
+            case xir::IntrinsicOp::BINARY_ROTATE_LEFT: break;
+            case xir::IntrinsicOp::BINARY_ROTATE_RIGHT: break;
+            case xir::IntrinsicOp::BINARY_LESS: break;
+            case xir::IntrinsicOp::BINARY_GREATER: break;
+            case xir::IntrinsicOp::BINARY_LESS_EQUAL: break;
+            case xir::IntrinsicOp::BINARY_GREATER_EQUAL: break;
+            case xir::IntrinsicOp::BINARY_EQUAL: break;
+            case xir::IntrinsicOp::BINARY_NOT_EQUAL: break;
+            case xir::IntrinsicOp::ASSUME: break;
+            case xir::IntrinsicOp::ASSERT: break;
+            case xir::IntrinsicOp::THREAD_ID: break;
+            case xir::IntrinsicOp::BLOCK_ID: break;
+            case xir::IntrinsicOp::WARP_LANE_ID: break;
+            case xir::IntrinsicOp::DISPATCH_ID: break;
+            case xir::IntrinsicOp::KERNEL_ID: break;
+            case xir::IntrinsicOp::OBJECT_ID: break;
+            case xir::IntrinsicOp::BLOCK_SIZE: break;
+            case xir::IntrinsicOp::WARP_SIZE: break;
+            case xir::IntrinsicOp::DISPATCH_SIZE: break;
+            case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: break;
+            case xir::IntrinsicOp::ALL: break;
+            case xir::IntrinsicOp::ANY: break;
+            case xir::IntrinsicOp::SELECT: break;
+            case xir::IntrinsicOp::CLAMP: break;
+            case xir::IntrinsicOp::SATURATE: break;
+            case xir::IntrinsicOp::LERP: break;
+            case xir::IntrinsicOp::SMOOTHSTEP: break;
+            case xir::IntrinsicOp::STEP: break;
+            case xir::IntrinsicOp::ABS: break;
+            case xir::IntrinsicOp::MIN: break;
+            case xir::IntrinsicOp::MAX: break;
+            case xir::IntrinsicOp::CLZ: break;
+            case xir::IntrinsicOp::CTZ: break;
+            case xir::IntrinsicOp::POPCOUNT: break;
+            case xir::IntrinsicOp::REVERSE: break;
+            case xir::IntrinsicOp::ISINF: break;
+            case xir::IntrinsicOp::ISNAN: break;
+            case xir::IntrinsicOp::ACOS: break;
+            case xir::IntrinsicOp::ACOSH: break;
+            case xir::IntrinsicOp::ASIN: break;
+            case xir::IntrinsicOp::ASINH: break;
+            case xir::IntrinsicOp::ATAN: break;
+            case xir::IntrinsicOp::ATAN2: break;
+            case xir::IntrinsicOp::ATANH: break;
+            case xir::IntrinsicOp::COS: break;
+            case xir::IntrinsicOp::COSH: break;
+            case xir::IntrinsicOp::SIN: break;
+            case xir::IntrinsicOp::SINH: break;
+            case xir::IntrinsicOp::TAN: break;
+            case xir::IntrinsicOp::TANH: break;
+            case xir::IntrinsicOp::EXP: break;
+            case xir::IntrinsicOp::EXP2: break;
+            case xir::IntrinsicOp::EXP10: break;
+            case xir::IntrinsicOp::LOG: break;
+            case xir::IntrinsicOp::LOG2: break;
+            case xir::IntrinsicOp::LOG10: break;
+            case xir::IntrinsicOp::POW: break;
+            case xir::IntrinsicOp::POW_INT: break;
+            case xir::IntrinsicOp::SQRT: break;
+            case xir::IntrinsicOp::RSQRT: break;
+            case xir::IntrinsicOp::CEIL: break;
+            case xir::IntrinsicOp::FLOOR: break;
+            case xir::IntrinsicOp::FRACT: break;
+            case xir::IntrinsicOp::TRUNC: break;
+            case xir::IntrinsicOp::ROUND: break;
+            case xir::IntrinsicOp::FMA: break;
+            case xir::IntrinsicOp::COPYSIGN: break;
+            case xir::IntrinsicOp::CROSS: break;
+            case xir::IntrinsicOp::DOT: break;
+            case xir::IntrinsicOp::LENGTH: break;
+            case xir::IntrinsicOp::LENGTH_SQUARED: break;
+            case xir::IntrinsicOp::NORMALIZE: break;
+            case xir::IntrinsicOp::FACEFORWARD: break;
+            case xir::IntrinsicOp::REFLECT: break;
+            case xir::IntrinsicOp::REDUCE_SUM: break;
+            case xir::IntrinsicOp::REDUCE_PRODUCT: break;
+            case xir::IntrinsicOp::REDUCE_MIN: break;
+            case xir::IntrinsicOp::REDUCE_MAX: break;
+            case xir::IntrinsicOp::OUTER_PRODUCT: break;
+            case xir::IntrinsicOp::MATRIX_COMP_MUL: break;
+            case xir::IntrinsicOp::DETERMINANT: break;
+            case xir::IntrinsicOp::TRANSPOSE: break;
+            case xir::IntrinsicOp::INVERSE: break;
+            case xir::IntrinsicOp::ATOMIC_EXCHANGE: break;
+            case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_ADD: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_SUB: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_AND: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_OR: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_XOR: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_MIN: break;
+            case xir::IntrinsicOp::ATOMIC_FETCH_MAX: break;
+            case xir::IntrinsicOp::BUFFER_READ: break;
+            case xir::IntrinsicOp::BUFFER_WRITE: break;
+            case xir::IntrinsicOp::BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
+            case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
+            case xir::IntrinsicOp::BYTE_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE2D_READ: break;
+            case xir::IntrinsicOp::TEXTURE2D_WRITE: break;
+            case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
+            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
+            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
+            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::TEXTURE3D_READ: break;
+            case xir::IntrinsicOp::TEXTURE3D_WRITE: break;
+            case xir::IntrinsicOp::TEXTURE3D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;
+            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
+            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
+            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_TYPE: break;
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: break;
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: break;
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: break;
+            case xir::IntrinsicOp::DEVICE_ADDRESS_READ: break;
+            case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: break;
+            case xir::IntrinsicOp::AGGREGATE: break;
+            case xir::IntrinsicOp::SHUFFLE: break;
+            case xir::IntrinsicOp::INSERT: return _translate_insert(current, b, inst);
+            case xir::IntrinsicOp::EXTRACT: return _translate_extract(current, b, inst);
+            case xir::IntrinsicOp::AUTODIFF_REQUIRES_GRADIENT: break;
+            case xir::IntrinsicOp::AUTODIFF_GRADIENT: break;
+            case xir::IntrinsicOp::AUTODIFF_GRADIENT_MARKER: break;
+            case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
+            case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
+            case xir::IntrinsicOp::AUTODIFF_DETACH: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: break;
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: break;
+            case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
+            case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: break;
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: break;
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: break;
+            case xir::IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: break;
+            case xir::IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: break;
+            case xir::IntrinsicOp::RAY_QUERY_COMMITTED_HIT: break;
+            case xir::IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE: break;
+            case xir::IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL: break;
+            case xir::IntrinsicOp::RAY_QUERY_TERMINATE: break;
+            case xir::IntrinsicOp::RAY_QUERY_PROCEED: break;
+            case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
+            case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
+            case xir::IntrinsicOp::RASTER_DISCARD: break;
+            case xir::IntrinsicOp::RASTER_DDX: break;
+            case xir::IntrinsicOp::RASTER_DDY: break;
+            case xir::IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE: break;
+            case xir::IntrinsicOp::WARP_FIRST_ACTIVE_LANE: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_ALL_EQUAL: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_AND: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_OR: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_XOR: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_COUNT_BITS: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_MAX: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_MIN: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_PRODUCT: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_SUM: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_ALL: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_ANY: break;
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_MASK: break;
+            case xir::IntrinsicOp::WARP_PREFIX_COUNT_BITS: break;
+            case xir::IntrinsicOp::WARP_PREFIX_SUM: break;
+            case xir::IntrinsicOp::WARP_PREFIX_PRODUCT: break;
+            case xir::IntrinsicOp::WARP_READ_LANE: break;
+            case xir::IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE: break;
+            case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
+            case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
+            case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: break;
+        }
+        // TODO: implement
+        if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
+            return llvm::Constant::getNullValue(llvm_ret_type);
+        }
+        return nullptr;
         LUISA_NOT_IMPLEMENTED();
     }
 
-    [[nodiscard]] llvm::Constant *_get_constant_zero(const Type *t) noexcept {
-        auto iter = _llvm_zeros.try_emplace(t, nullptr).first;
-        if (iter->second == nullptr) {
-            auto llvm_type = _translate_type(t, true);
-            iter->second = llvm::Constant::getNullValue(llvm_type);
+    [[nodiscard]] llvm::Value *_translate_cast_inst(CurrentFunction &current, IRBuilder &b,
+                                                    const Type *dst_type, xir::CastOp op,
+                                                    const xir::Value *src_value) noexcept {
+        auto llvm_value = _lookup_value(current, b, src_value);
+        auto src_type = src_value->type();
+        switch (op) {
+            case xir::CastOp::STATIC_CAST: {
+                if (dst_type == src_type) { return llvm_value; }
+                LUISA_ASSERT((dst_type->is_scalar() && src_type->is_scalar()) ||
+                                 (dst_type->is_vector() && src_type->is_vector() &&
+                                  dst_type->dimension() == src_type->dimension()),
+                             "Invalid static cast.");
+                auto dst_is_scalar = dst_type->is_scalar();
+                auto src_is_scalar = src_type->is_scalar();
+                auto dst_elem_type = dst_is_scalar ? dst_type : dst_type->element();
+                auto src_elem_type = src_is_scalar ? src_type : src_type->element();
+                // typeN -> boolN
+                auto llvm_src_type = _translate_type(src_type, true);
+                auto llvm_dst_type = _translate_type(dst_type, true);
+                if (dst_elem_type->is_bool()) {
+                    auto cmp = _cmp_ne_zero(b, llvm_value);
+                    return b.CreateZExt(cmp, llvm_dst_type);
+                }
+                // general case
+                auto classify = [](const Type *t) noexcept {
+                    return std::make_tuple(
+                        t->is_float16() || t->is_float32() || t->is_float64(),
+                        t->is_int8() || t->is_int16() || t->is_int32() || t->is_int64(),
+                        t->is_uint8() || t->is_uint16() || t->is_uint32() || t->is_uint64() || t->is_bool());
+                };
+                auto [dst_float, dst_int, dst_uint] = classify(dst_elem_type);
+                auto [src_float, src_int, src_uint] = classify(src_elem_type);
+                if (dst_float) {
+                    if (src_float) { return b.CreateFPCast(llvm_value, llvm_dst_type); }
+                    if (src_int) { return b.CreateSIToFP(llvm_value, llvm_dst_type); }
+                    if (src_uint) { return b.CreateUIToFP(llvm_value, llvm_dst_type); }
+                }
+                if (dst_int) {
+                    if (src_float) { return b.CreateFPToSI(llvm_value, llvm_dst_type); }
+                    if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
+                    if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
+                }
+                if (dst_uint) {
+                    if (src_float) { return b.CreateFPToUI(llvm_value, llvm_dst_type); }
+                    if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
+                    if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid static cast.");
+            }
+            case xir::CastOp::BITWISE_CAST: {
+                // create a temporary alloca
+                auto alignment = std::max(src_type->alignment(), dst_type->alignment());
+                LUISA_ASSERT(src_type->size() == dst_type->size(), "Bitwise cast size mismatch.");
+                auto llvm_src_type = _translate_type(src_type, true);
+                auto llvm_dst_type = _translate_type(dst_type, true);
+                auto llvm_temp = b.CreateAlloca(llvm_src_type);
+                if (llvm_temp->getAlign() < alignment) {
+                    llvm_temp->setAlignment(llvm::Align{alignment});
+                }
+                // store src value
+                b.CreateAlignedStore(llvm_value, llvm_temp, llvm::MaybeAlign{alignment});
+                // load dst value
+                return b.CreateAlignedLoad(llvm_dst_type, llvm_temp, llvm::MaybeAlign{alignment});
+            }
         }
-        return iter->second;
+        LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
     }
 
     [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
@@ -510,7 +890,9 @@ private:
             }
             case xir::DerivedInstructionTag::GEP: {
                 auto gep_inst = static_cast<const xir::GEPInst *>(inst);
-                return _translate_gep(current, b, gep_inst->type(), gep_inst->base(), gep_inst->index_uses());
+                auto ptr = gep_inst->base();
+                auto llvm_ptr = _lookup_value(current, b, ptr, false);
+                return _translate_gep(current, b, gep_inst->type(), ptr->type(), llvm_ptr, gep_inst->index_uses());
             }
             case xir::DerivedInstructionTag::CALL: {
                 auto call_inst = static_cast<const xir::CallInst *>(inst);
@@ -529,72 +911,7 @@ private:
             }
             case xir::DerivedInstructionTag::CAST: {
                 auto cast_inst = static_cast<const xir::CastInst *>(inst);
-                auto llvm_value = _lookup_value(current, b, cast_inst->value());
-                auto dst_type = cast_inst->type();
-                auto src_type = cast_inst->value()->type();
-                switch (cast_inst->op()) {
-                    case xir::CastOp::STATIC_CAST: {
-                        if (dst_type == src_type) { return llvm_value; }
-                        LUISA_ASSERT((dst_type->is_scalar() && src_type->is_scalar()) ||
-                                         (dst_type->is_vector() && src_type->is_vector() &&
-                                          dst_type->dimension() == src_type->dimension()),
-                                     "Invalid static cast.");
-                        auto dst_is_scalar = dst_type->is_scalar();
-                        auto src_is_scalar = src_type->is_scalar();
-                        auto dst_elem_type = dst_is_scalar ? dst_type : dst_type->element();
-                        auto src_elem_type = src_is_scalar ? src_type : src_type->element();
-                        // typeN -> boolN
-                        auto llvm_dst_type = _translate_type(dst_type, true);
-                        if (dst_elem_type->is_bool()) {
-                            auto zero = _get_constant_zero(src_type);
-                            auto cmp = src_elem_type->is_float16() || src_elem_type->is_float32() || src_elem_type->is_float64() ?
-                                           b.CreateFCmpONE(llvm_value, zero) :
-                                           b.CreateICmpNE(llvm_value, zero);
-                            return b.CreateZExt(cmp, llvm_dst_type);
-                        }
-                        // general case
-                        auto classify = [](const Type *t) noexcept {
-                            return std::make_tuple(
-                                t->is_float16() || t->is_float32() || t->is_float64(),
-                                t->is_int8() || t->is_int16() || t->is_int32() || t->is_int64(),
-                                t->is_uint8() || t->is_uint16() || t->is_uint32() || t->is_uint64() || t->is_bool());
-                        };
-                        auto [dst_float, dst_int, dst_uint] = classify(dst_elem_type);
-                        auto [src_float, src_int, src_uint] = classify(src_elem_type);
-                        if (dst_float) {
-                            if (src_float) { return b.CreateFPCast(llvm_value, llvm_dst_type); }
-                            if (src_int) { return b.CreateSIToFP(llvm_value, llvm_dst_type); }
-                            if (src_uint) { return b.CreateUIToFP(llvm_value, llvm_dst_type); }
-                        }
-                        if (dst_int) {
-                            if (src_float) { return b.CreateFPToSI(llvm_value, llvm_dst_type); }
-                            if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
-                            if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
-                        }
-                        if (dst_uint) {
-                            if (src_float) { return b.CreateFPToUI(llvm_value, llvm_dst_type); }
-                            if (src_int) { return b.CreateIntCast(llvm_value, llvm_dst_type, true); }
-                            if (src_uint) { return b.CreateIntCast(llvm_value, llvm_dst_type, false); }
-                        }
-                        LUISA_ERROR_WITH_LOCATION("Invalid static cast.");
-                    }
-                    case xir::CastOp::BITWISE_CAST: {
-                        // create a temporary alloca
-                        auto alignment = std::max(src_type->alignment(), dst_type->alignment());
-                        LUISA_ASSERT(src_type->size() == dst_type->size(), "Bitwise cast size mismatch.");
-                        auto llvm_src_type = _translate_type(src_type, true);
-                        auto llvm_dst_type = _translate_type(dst_type, true);
-                        auto llvm_temp = b.CreateAlloca(llvm_src_type);
-                        if (llvm_temp->getAlign() < alignment) {
-                            llvm_temp->setAlignment(llvm::Align{alignment});
-                        }
-                        // store src value
-                        b.CreateAlignedStore(llvm_value, llvm_temp, llvm::MaybeAlign{alignment});
-                        // load dst value
-                        return b.CreateAlignedLoad(llvm_dst_type, llvm_temp, llvm::MaybeAlign{alignment});
-                    }
-                }
-                LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
+                return _translate_cast_inst(current, b, cast_inst->type(), cast_inst->op(), cast_inst->value());
             }
             case xir::DerivedInstructionTag::PRINT: {
                 LUISA_WARNING_WITH_LOCATION("Ignoring print instruction.");// TODO...
