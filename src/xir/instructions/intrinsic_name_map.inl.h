@@ -82,6 +82,7 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::FRACT: return "fract";
         case IntrinsicOp::TRUNC: return "trunc";
         case IntrinsicOp::ROUND: return "round";
+        case IntrinsicOp::RINT: return "rint";
         case IntrinsicOp::FMA: return "fma";
         case IntrinsicOp::COPYSIGN: return "copysign";
         case IntrinsicOp::CROSS: return "cross";
@@ -320,6 +321,7 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"fract", IntrinsicOp::FRACT},
         {"trunc", IntrinsicOp::TRUNC},
         {"round", IntrinsicOp::ROUND},
+        {"rint", IntrinsicOp::RINT},
         {"fma", IntrinsicOp::FMA},
         {"copysign", IntrinsicOp::COPYSIGN},
         {"cross", IntrinsicOp::CROSS},

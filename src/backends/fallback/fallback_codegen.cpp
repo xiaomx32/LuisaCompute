@@ -640,7 +640,7 @@ private:
             case Type::Tag::UINT8: [[fallthrough]];
             case Type::Tag::UINT16: [[fallthrough]];
             case Type::Tag::UINT32: [[fallthrough]];
-            case Type::Tag::UINT64: b.CreateAnd(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT64: return b.CreateAnd(llvm_lhs, llvm_rhs);
             default: break;
         }
         LUISA_ERROR_WITH_LOCATION("Invalid binary bit and operand type: {}.", elem_type->description());
@@ -668,7 +668,7 @@ private:
             case Type::Tag::UINT8: [[fallthrough]];
             case Type::Tag::UINT16: [[fallthrough]];
             case Type::Tag::UINT32: [[fallthrough]];
-            case Type::Tag::UINT64: b.CreateOr(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT64: return b.CreateOr(llvm_lhs, llvm_rhs);
             default: break;
         }
         LUISA_ERROR_WITH_LOCATION("Invalid binary bit or operand type: {}.", elem_type->description());
@@ -696,7 +696,7 @@ private:
             case Type::Tag::UINT8: [[fallthrough]];
             case Type::Tag::UINT16: [[fallthrough]];
             case Type::Tag::UINT32: [[fallthrough]];
-            case Type::Tag::UINT64: b.CreateXor(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT64: return b.CreateXor(llvm_lhs, llvm_rhs);
             default: break;
         }
         LUISA_ERROR_WITH_LOCATION("Invalid binary bit xor operand type: {}.", elem_type->description());
@@ -1008,6 +1008,7 @@ private:
         }
         return _zext_i1_to_i8(b, result);
     }
+
     [[nodiscard]] llvm::Value *_translate_unary_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, llvm::Intrinsic::ID intrinsic_id) noexcept {
         // Lookup LLVM value for operand
         auto llvm_operand = _lookup_value(current, b, operand);
@@ -1028,8 +1029,87 @@ private:
             default:
                 break;
         }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
+                                  intrinsic_id, operand_type->description());
+    }
 
-        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.", intrinsic_id, elem_type->description());
+    [[nodiscard]] llvm::Value *_translate_binary_math_operation(CurrentFunction &current, IRBuilder &b,
+                                                                const xir::Value *op0, const xir::Value *op1,
+                                                                llvm::Intrinsic::ID intrinsic_id) noexcept {
+        auto llvm_op0 = _lookup_value(current, b, op0);
+        auto llvm_op1 = _lookup_value(current, b, op1);
+        auto op0_type = op0->type();
+        auto op1_type = op1->type();
+        LUISA_ASSERT(op0_type == op1_type, "Type mismatch.");
+        LUISA_ASSERT(op0_type != nullptr && (op0_type->is_scalar() || op0_type->is_vector()), "Invalid operand type.");
+        auto elem_type = op0_type->is_vector() ? op0_type->element() : op0_type;
+        switch (elem_type->tag()) {
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64:
+                return b.CreateBinaryIntrinsic(intrinsic_id, llvm_op0, llvm_op1);
+            default:
+                break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
+                                  intrinsic_id, op0_type->description());
+    }
+
+    [[nodiscard]] llvm::Value *_translate_vector_reduce(CurrentFunction &current, IRBuilder &b,
+                                                        xir::IntrinsicOp op, const xir::Value *operand) noexcept {
+        LUISA_ASSERT(operand->type() != nullptr && operand->type()->is_vector(),
+                     "Invalid operand type for reduce_sum operation.");
+        auto operand_elem_type = operand->type()->element();
+        auto llvm_operand = _lookup_value(current, b, operand);
+        switch (operand->type()->element()->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT64: {
+                switch (op) {
+                    case xir::IntrinsicOp::REDUCE_SUM: return b.CreateAddReduce(llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_PRODUCT: return b.CreateMulReduce(llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_MIN: return b.CreateIntMinReduce(llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_MAX: return b.CreateIntMaxReduce(llvm_operand);
+                    default: break;
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid reduce operation: {}.", xir::to_string(op));
+            }
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: {
+                auto llvm_elem_type = _translate_type(operand_elem_type, false);
+                auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+                switch (op) {
+                    case xir::IntrinsicOp::REDUCE_SUM: return b.CreateFAddReduce(llvm_zero, llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_PRODUCT: return b.CreateFMulReduce(llvm_zero, llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_MIN: return b.CreateFPMinReduce(llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_MAX: return b.CreateFPMaxReduce(llvm_operand);
+                    default: break;
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid reduce operation: {}.", xir::to_string(op));
+            }
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for reduce_sum operation: {}.",
+                                  operand_elem_type->description());
+    }
+
+    [[nodiscard]] llvm::Value *_translate_vector_dot(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_mul = _translate_binary_mul(current, b, lhs, rhs);
+        if (llvm_mul->getType()->isFPOrFPVectorTy()) {
+            auto llvm_zero = llvm::ConstantFP::get(llvm_mul->getType(), 0.);
+            return b.CreateFMulReduce(llvm_zero, llvm_mul);
+        }
+        return b.CreateAddReduce(llvm_mul);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_builtin_variable(CurrentFunction &current, IRBuilder &b, xir::IntrinsicOp op) noexcept {
+        LUISA_NOT_IMPLEMENTED();
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -1059,18 +1139,24 @@ private:
             case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::THREAD_ID: break;
-            case xir::IntrinsicOp::BLOCK_ID: break;
-            case xir::IntrinsicOp::WARP_LANE_ID: break;
-            case xir::IntrinsicOp::DISPATCH_ID: break;
-            case xir::IntrinsicOp::KERNEL_ID: break;
-            case xir::IntrinsicOp::OBJECT_ID: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::BLOCK_SIZE: break;
-            case xir::IntrinsicOp::WARP_SIZE: break;
-            case xir::IntrinsicOp::DISPATCH_SIZE: break;
+            case xir::IntrinsicOp::THREAD_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::THREAD_ID);
+            case xir::IntrinsicOp::BLOCK_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::BLOCK_ID);
+            case xir::IntrinsicOp::WARP_LANE_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::WARP_LANE_ID);
+            case xir::IntrinsicOp::DISPATCH_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::DISPATCH_ID);
+            case xir::IntrinsicOp::KERNEL_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::KERNEL_ID);
+            case xir::IntrinsicOp::OBJECT_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::OBJECT_ID);
+            case xir::IntrinsicOp::BLOCK_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::BLOCK_SIZE);
+            case xir::IntrinsicOp::WARP_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::WARP_SIZE);
+            case xir::IntrinsicOp::DISPATCH_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::DISPATCH_SIZE);
             case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::ALL: break;
-            case xir::IntrinsicOp::ANY: break;
+            case xir::IntrinsicOp::ALL: {
+                auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateAndReduce(llvm_operand);
+            }
+            case xir::IntrinsicOp::ANY: {
+                auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateOrReduce(llvm_operand);
+            }
             case xir::IntrinsicOp::SELECT: break;
             case xir::IntrinsicOp::CLAMP: break;
             case xir::IntrinsicOp::SATURATE: break;
@@ -1105,28 +1191,69 @@ private:
             case xir::IntrinsicOp::LOG: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log);
             case xir::IntrinsicOp::LOG2: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log2);
             case xir::IntrinsicOp::LOG10: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::log10);
-            case xir::IntrinsicOp::POW: break;
-            case xir::IntrinsicOp::POW_INT: break;
+            case xir::IntrinsicOp::POW: return _translate_binary_math_operation(current, b, inst->operand(0u), inst->operand(1u), llvm::Intrinsic::pow);
+            case xir::IntrinsicOp::POW_INT: {
+                auto base = inst->operand(0u);
+                auto index = inst->operand(1u);
+                auto llvm_base = _lookup_value(current, b, base);
+                auto llvm_index = _lookup_value(current, b, index);
+                LUISA_ASSERT(llvm_base->getType()->isFPOrFPVectorTy() &&
+                                 llvm_index->getType()->isIntOrIntVectorTy() &&
+                                 !llvm_index->getType()->isIntOrIntVectorTy(1),
+                             "Invalid operand type for pow_int operation.");
+                if (llvm_base->getType()->isVectorTy() || llvm_index->getType()->isVectorTy()) {
+                    LUISA_ASSERT(llvm_base->getType()->isVectorTy() && llvm_index->getType()->isVectorTy() &&
+                                     llvm::cast<llvm::VectorType>(llvm_base->getType())->getElementCount() ==
+                                         llvm::cast<llvm::VectorType>(llvm_index->getType())->getElementCount(),
+                                 "pow_int operation requires both operands to be vectors of the same dimension.");
+                }
+                return b.CreateBinaryIntrinsic(llvm::Intrinsic::powi, llvm_base, llvm_index);
+            }
             case xir::IntrinsicOp::SQRT: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sqrt);
-            case xir::IntrinsicOp::RSQRT: break;
+            case xir::IntrinsicOp::RSQRT: {
+                auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_sqrt = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_operand);
+                auto operand_type = inst->operand(0u)->type();
+                auto operand_elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+                auto llvm_elem_type = _translate_type(operand_elem_type, false);
+                auto llvm_one = llvm::ConstantFP::get(llvm_elem_type, 1.f);
+                if (operand_type->is_vector()) {
+                    auto dim = operand_type->dimension();
+                    llvm_one = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(dim), llvm_one);
+                }
+                return b.CreateFDiv(llvm_one, llvm_sqrt);
+            }
             case xir::IntrinsicOp::CEIL: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::ceil);
             case xir::IntrinsicOp::FLOOR: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::floor);
-            case xir::IntrinsicOp::FRACT: break;
-            case xir::IntrinsicOp::TRUNC: break;
-            case xir::IntrinsicOp::ROUND: break;
+            case xir::IntrinsicOp::FRACT: {
+                // fract(x) = x - floor(x)
+                auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_floor = _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::floor);
+                return b.CreateFSub(llvm_operand, llvm_floor);
+            }
+            case xir::IntrinsicOp::TRUNC: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::trunc);
+            case xir::IntrinsicOp::ROUND: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::round);
+            case xir::IntrinsicOp::RINT: return _translate_unary_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::rint);
             case xir::IntrinsicOp::FMA: break;
             case xir::IntrinsicOp::COPYSIGN: break;
             case xir::IntrinsicOp::CROSS: break;
-            case xir::IntrinsicOp::DOT: break;
-            case xir::IntrinsicOp::LENGTH: break;
-            case xir::IntrinsicOp::LENGTH_SQUARED: break;
+            case xir::IntrinsicOp::DOT: return _translate_vector_dot(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::LENGTH: {
+                auto v = inst->operand(0u);
+                auto llvm_length_squared = _translate_vector_dot(current, b, v, v);
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_length_squared);
+            }
+            case xir::IntrinsicOp::LENGTH_SQUARED: {
+                auto v = inst->operand(0u);
+                return _translate_vector_dot(current, b, v, v);
+            }
             case xir::IntrinsicOp::NORMALIZE: break;
             case xir::IntrinsicOp::FACEFORWARD: break;
             case xir::IntrinsicOp::REFLECT: break;
-            case xir::IntrinsicOp::REDUCE_SUM: break;
-            case xir::IntrinsicOp::REDUCE_PRODUCT: break;
-            case xir::IntrinsicOp::REDUCE_MIN: break;
-            case xir::IntrinsicOp::REDUCE_MAX: break;
+            case xir::IntrinsicOp::REDUCE_SUM: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_SUM, inst->operand(0u));
+            case xir::IntrinsicOp::REDUCE_PRODUCT: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_PRODUCT, inst->operand(0u));
+            case xir::IntrinsicOp::REDUCE_MIN: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MIN, inst->operand(0u));
+            case xir::IntrinsicOp::REDUCE_MAX: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MAX, inst->operand(0u));
             case xir::IntrinsicOp::OUTER_PRODUCT: break;
             case xir::IntrinsicOp::MATRIX_COMP_NEG: break;
             case xir::IntrinsicOp::MATRIX_COMP_ADD: break;

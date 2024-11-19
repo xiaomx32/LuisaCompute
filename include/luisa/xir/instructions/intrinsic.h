@@ -111,6 +111,7 @@ enum struct IntrinsicOp {
     FRACT,// (floatN)
     TRUNC,// (floatN)
     ROUND,// (floatN)
+    RINT, // (floatN)
 
     FMA,     // (a: floatN, b: floatN, c: floatN): return a * b + c
     COPYSIGN,// (floatN, floatN)
