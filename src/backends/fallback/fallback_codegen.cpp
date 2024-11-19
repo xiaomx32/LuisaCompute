@@ -443,18 +443,23 @@ private:
                    b.CreateICmpEQ(value, zero);
     }
 
+    [[nodiscard]] static llvm::Value *_zext_i1_to_i8(IRBuilder &b, llvm::Value *value) noexcept {
+        LUISA_DEBUG_ASSERT(value->getType()->isIntOrIntVectorTy(1), "Invalid value type.");
+        auto i8_type = llvm::cast<llvm::Type>(llvm::Type::getInt8Ty(b.getContext()));
+        if (value->getType()->isVectorTy()) {
+            auto vec_type = llvm::cast<llvm::VectorType>(value->getType());
+            i8_type = llvm::VectorType::get(i8_type, vec_type->getElementCount());
+        }
+        return b.CreateZExt(value, i8_type);
+    }
+
     [[nodiscard]] llvm::Value *_translate_unary_logic_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
         auto llvm_operand = _lookup_value(current, b, operand);
         auto operand_type = operand->type();
         LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
         LUISA_ASSERT(operand_type->is_scalar() || operand_type->is_vector(), "Invalid operand type.");
         auto llvm_cmp = _cmp_eq_zero(b, llvm_operand);
-        auto llvm_i8_type = llvm::cast<llvm::Type>(llvm::Type::getInt8Ty(_llvm_context));
-        if (operand_type->is_vector()) {
-            auto dim = operand_type->dimension();
-            llvm_i8_type = llvm::VectorType::get(llvm_i8_type, dim, false);
-        }
-        return b.CreateZExt(llvm_cmp, llvm_i8_type);
+        return _zext_i1_to_i8(b, llvm_cmp);
     }
 
     [[nodiscard]] llvm::Value *_translate_unary_bit_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
@@ -743,11 +748,9 @@ private:
                 auto dst_elem_type = dst_is_scalar ? dst_type : dst_type->element();
                 auto src_elem_type = src_is_scalar ? src_type : src_type->element();
                 // typeN -> boolN
-                auto llvm_src_type = _translate_type(src_type, true);
-                auto llvm_dst_type = _translate_type(dst_type, true);
                 if (dst_elem_type->is_bool()) {
                     auto cmp = _cmp_ne_zero(b, llvm_value);
-                    return b.CreateZExt(cmp, llvm_dst_type);
+                    return _zext_i1_to_i8(b, cmp);
                 }
                 // general case
                 auto classify = [](const Type *t) noexcept {
@@ -756,6 +759,7 @@ private:
                         t->is_int8() || t->is_int16() || t->is_int32() || t->is_int64(),
                         t->is_uint8() || t->is_uint16() || t->is_uint32() || t->is_uint64() || t->is_bool());
                 };
+                auto llvm_dst_type = _translate_type(dst_type, true);
                 auto [dst_float, dst_int, dst_uint] = classify(dst_elem_type);
                 auto [src_float, src_int, src_uint] = classify(src_elem_type);
                 if (dst_float) {
