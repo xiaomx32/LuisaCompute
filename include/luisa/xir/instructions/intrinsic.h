@@ -123,16 +123,22 @@ enum struct IntrinsicOp {
     FACEFORWARD,   // (floatN, floatN, floatN)
     REFLECT,       // (floatN, floatN)
 
-    REDUCE_SUM,    // (floatN)
-    REDUCE_PRODUCT,// (floatN)
-    REDUCE_MIN,    // (floatN)
-    REDUCE_MAX,    // (floatN)
+    REDUCE_SUM,    // (floatN) -> float
+    REDUCE_PRODUCT,// (floatN) -> float
+    REDUCE_MIN,    // (floatN) -> float
+    REDUCE_MAX,    // (floatN) -> float
 
-    OUTER_PRODUCT,  // (floatN | floatNxN)
-    MATRIX_COMP_MUL,// (floatNxN, floatNxN)
-    DETERMINANT,    // (floatNxN)
-    TRANSPOSE,      // (floatNxN)
-    INVERSE,        // (floatNxN)
+    OUTER_PRODUCT,// (floatN, floatN) -> floatNxN | (floatNxN, floatNxN) -> floatNxN
+
+    MATRIX_COMP_NEG,   // (floatNxN) -> floatNxN
+    MATRIX_COMP_ADD,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_SUB,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_MUL,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_DIV,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_LINALG_MUL, // (floatNxN, floatNxN) -> floatNxN | (floatNxN, floatN) -> floatN
+    MATRIX_DETERMINANT,// (floatNxN) -> float
+    MATRIX_TRANSPOSE,  // (floatNxN) -> floatNxN
+    MATRIX_INVERSE,    // (floatNxN) -> floatNxN
 
     // atomic operations
     ATOMIC_EXCHANGE,        /// [(atomic_ref, desired) -> old]: stores desired, returns old.

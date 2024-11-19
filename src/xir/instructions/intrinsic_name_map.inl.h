@@ -96,10 +96,15 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::REDUCE_MIN: return "reduce_min";
         case IntrinsicOp::REDUCE_MAX: return "reduce_max";
         case IntrinsicOp::OUTER_PRODUCT: return "outer_product";
+        case IntrinsicOp::MATRIX_COMP_NEG: return "matrix_comp_neg";
+        case IntrinsicOp::MATRIX_COMP_ADD: return "matrix_comp_add";
+        case IntrinsicOp::MATRIX_COMP_SUB: return "matrix_comp_sub";
         case IntrinsicOp::MATRIX_COMP_MUL: return "matrix_comp_mul";
-        case IntrinsicOp::DETERMINANT: return "determinant";
-        case IntrinsicOp::TRANSPOSE: return "transpose";
-        case IntrinsicOp::INVERSE: return "inverse";
+        case IntrinsicOp::MATRIX_COMP_DIV: return "matrix_comp_div";
+        case IntrinsicOp::MATRIX_LINALG_MUL: return "matrix_linalg_mul";
+        case IntrinsicOp::MATRIX_DETERMINANT: return "matrix_determinant";
+        case IntrinsicOp::MATRIX_TRANSPOSE: return "matrix_transpose";
+        case IntrinsicOp::MATRIX_INVERSE: return "matrix_inverse";
         case IntrinsicOp::ATOMIC_EXCHANGE: return "atomic_exchange";
         case IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: return "atomic_compare_exchange";
         case IntrinsicOp::ATOMIC_FETCH_ADD: return "atomic_fetch_add";
@@ -329,10 +334,15 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"reduce_min", IntrinsicOp::REDUCE_MIN},
         {"reduce_max", IntrinsicOp::REDUCE_MAX},
         {"outer_product", IntrinsicOp::OUTER_PRODUCT},
+        {"matrix_comp_neg", IntrinsicOp::MATRIX_COMP_NEG},
+        {"matrix_comp_add", IntrinsicOp::MATRIX_COMP_ADD},
+        {"matrix_comp_sub", IntrinsicOp::MATRIX_COMP_SUB},
         {"matrix_comp_mul", IntrinsicOp::MATRIX_COMP_MUL},
-        {"determinant", IntrinsicOp::DETERMINANT},
-        {"transpose", IntrinsicOp::TRANSPOSE},
-        {"inverse", IntrinsicOp::INVERSE},
+        {"matrix_comp_div", IntrinsicOp::MATRIX_COMP_DIV},
+        {"matrix_linalg_mul", IntrinsicOp::MATRIX_LINALG_MUL},
+        {"matrix_determinant", IntrinsicOp::MATRIX_DETERMINANT},
+        {"matrix_transpose", IntrinsicOp::MATRIX_TRANSPOSE},
+        {"matrix_inverse", IntrinsicOp::MATRIX_INVERSE},
         {"atomic_exchange", IntrinsicOp::ATOMIC_EXCHANGE},
         {"atomic_compare_exchange", IntrinsicOp::ATOMIC_COMPARE_EXCHANGE},
         {"atomic_fetch_add", IntrinsicOp::ATOMIC_FETCH_ADD},

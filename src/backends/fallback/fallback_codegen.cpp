@@ -1105,10 +1105,15 @@ private:
             case xir::IntrinsicOp::REDUCE_MIN: break;
             case xir::IntrinsicOp::REDUCE_MAX: break;
             case xir::IntrinsicOp::OUTER_PRODUCT: break;
+            case xir::IntrinsicOp::MATRIX_COMP_NEG: break;
+            case xir::IntrinsicOp::MATRIX_COMP_ADD: break;
+            case xir::IntrinsicOp::MATRIX_COMP_SUB: break;
             case xir::IntrinsicOp::MATRIX_COMP_MUL: break;
-            case xir::IntrinsicOp::DETERMINANT: break;
-            case xir::IntrinsicOp::TRANSPOSE: break;
-            case xir::IntrinsicOp::INVERSE: break;
+            case xir::IntrinsicOp::MATRIX_COMP_DIV: break;
+            case xir::IntrinsicOp::MATRIX_LINALG_MUL: break;
+            case xir::IntrinsicOp::MATRIX_DETERMINANT: break;
+            case xir::IntrinsicOp::MATRIX_TRANSPOSE: break;
+            case xir::IntrinsicOp::MATRIX_INVERSE: break;
             case xir::IntrinsicOp::ATOMIC_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_ADD: break;

@@ -73,6 +73,16 @@ private:
 private:
     [[nodiscard]] Value *_translate_unary_expr(Builder &b, const UnaryExpr *expr) noexcept {
         auto operand = _translate_expression(b, expr->operand(), true);
+        // matrices need special handling
+        if (operand->type()->is_matrix()) {
+            switch (expr->op()) {
+                case UnaryOp::PLUS: return operand;
+                case UnaryOp::MINUS: return b.call(expr->type(), IntrinsicOp::MATRIX_COMP_NEG, {operand});
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid unary operation.");
+        }
+        // normal cases
         auto op = [unary_op = expr->op()] {
             switch (unary_op) {
                 case UnaryOp::PLUS: return IntrinsicOp::UNARY_PLUS;
@@ -114,12 +124,19 @@ private:
     }
 
     [[nodiscard]] Value *_translate_binary_expr(Builder &b, const BinaryExpr *expr) noexcept {
-        auto op = [binary_op = expr->op()] {
+        auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
+        auto op = [binary_op = expr->op(), lhs = expr->lhs(), rhs = expr->rhs()] {
+            auto has_matrix = lhs->type()->is_matrix() || rhs->type()->is_matrix();
             switch (binary_op) {
-                case BinaryOp::ADD: return IntrinsicOp::BINARY_ADD;
-                case BinaryOp::SUB: return IntrinsicOp::BINARY_SUB;
-                case BinaryOp::MUL: return IntrinsicOp::BINARY_MUL;
-                case BinaryOp::DIV: return IntrinsicOp::BINARY_DIV;
+                case BinaryOp::ADD: return has_matrix ? IntrinsicOp::MATRIX_COMP_ADD : IntrinsicOp::BINARY_ADD;
+                case BinaryOp::SUB: return has_matrix ? IntrinsicOp::MATRIX_COMP_SUB : IntrinsicOp::BINARY_SUB;
+                case BinaryOp::MUL: {
+                    if (lhs->type()->is_matrix() && (rhs->type()->is_matrix() || rhs->type()->is_vector())) {
+                        return IntrinsicOp::MATRIX_LINALG_MUL;
+                    }
+                    return has_matrix ? IntrinsicOp::MATRIX_COMP_MUL : IntrinsicOp::BINARY_MUL;
+                }
+                case BinaryOp::DIV: return has_matrix ? IntrinsicOp::MATRIX_COMP_DIV : IntrinsicOp::BINARY_DIV;
                 case BinaryOp::MOD: return IntrinsicOp::BINARY_MOD;
                 case BinaryOp::BIT_AND: return IntrinsicOp::BINARY_BIT_AND;
                 case BinaryOp::BIT_OR: return IntrinsicOp::BINARY_BIT_OR;
@@ -137,7 +154,6 @@ private:
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected binary operation.");
         }();
-        auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
         auto lhs = _translate_expression(b, expr->lhs(), true);
         auto rhs = _translate_expression(b, expr->rhs(), true);
         lhs = _type_cast_if_necessary(b, type_promotion.lhs, lhs);
@@ -505,9 +521,9 @@ private:
             case CallOp::REDUCE_MAX: return pure_call(IntrinsicOp::REDUCE_MAX);
             case CallOp::OUTER_PRODUCT: return pure_call(IntrinsicOp::OUTER_PRODUCT);
             case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: return pure_call(IntrinsicOp::MATRIX_COMP_MUL);
-            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::DETERMINANT);
-            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::TRANSPOSE);
-            case CallOp::INVERSE: return pure_call(IntrinsicOp::INVERSE);
+            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::MATRIX_DETERMINANT);
+            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::MATRIX_TRANSPOSE);
+            case CallOp::INVERSE: return pure_call(IntrinsicOp::MATRIX_INVERSE);
             case CallOp::SYNCHRONIZE_BLOCK: return pure_call(IntrinsicOp::SYNCHRONIZE_BLOCK);
             case CallOp::ATOMIC_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_EXCHANGE);
             case CallOp::ATOMIC_COMPARE_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_COMPARE_EXCHANGE);
