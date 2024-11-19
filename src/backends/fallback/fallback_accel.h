@@ -47,17 +47,16 @@ private:
     [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
 
 public:
+    [[nodiscard]] RTCScene scene()const noexcept {return _handle;}
     FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
     ~FallbackAccel() noexcept;
     void build(ThreadPool &pool, size_t instance_count,
                luisa::span<const AccelBuildCommand::Modification> mods) noexcept;
-    //    [[nodiscard]] SurfaceHit trace_closest(Ray ray) const noexcept;
-    //    [[nodiscard]] bool trace_any(Ray ray) const noexcept;
     [[nodiscard]] auto handle() const noexcept { return Handle{this, _instances.data()}; }
 };
 
-[[nodiscard]] float32x4_t accel_trace_closest(const FallbackAccel *accel, int64_t r0, int64_t r1, int64_t r2, int64_t r3) noexcept;
-[[nodiscard]] bool accel_trace_any(const FallbackAccel *accel, int64_t r0, int64_t r1, int64_t r2, int64_t r3) noexcept;
+[[nodiscard]] void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept;
+[[nodiscard]] bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept;
 
 struct alignas(16) FallbackAccelInstance {
     float affine[12];

@@ -87,59 +87,52 @@ float4x4 FallbackAccel::_decompress(std::array<float, 12> m) noexcept {
         m[3], m[7], m[11], 1.f);
 }
 
-//Hit FallbackAccel::trace_closest(Ray ray) const noexcept {
-//    RTCIntersectContext ctx{};
-//    rtcInitIntersectContext(&ctx);
-//    RTCRayHit rh{};
-//    rh.ray.org_x = ray.compressed_origin[0];
-//    rh.ray.org_y = ray.compressed_origin[1];
-//    rh.ray.org_z = ray.compressed_origin[2];
-//    rh.ray.tnear = ray.compressed_t_min;
-//    rh.ray.dir_x = ray.compressed_direction[0];
-//    rh.ray.dir_y = ray.compressed_direction[1];
-//    rh.ray.dir_z = ray.compressed_direction[2];
-//    rh.ray.tfar = ray.compressed_t_max;
-//    rh.ray.mask = 0xffu;
-//    rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-//    rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
-//    rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
-//    rtcIntersect1(_handle, &ctx, &rh);
-//    return {.inst = rh.hit.instID[0], .prim = rh.hit.primID,
-//            .bary = make_float2(rh.hit.u, rh.hit.v)};
-//}
-//
-//bool FallbackAccel::trace_any(Ray ray) const noexcept {
-//    RTCIntersectContext ctx{};
-//    rtcInitIntersectContext(&ctx);
-//    RTCRay r{};
-//    r.org_x = ray.compressed_origin[0];
-//    r.org_y = ray.compressed_origin[1];
-//    r.org_z = ray.compressed_origin[2];
-//    r.tnear = ray.compressed_t_min;
-//    r.dir_x = ray.compressed_direction[0];
-//    r.dir_y = ray.compressed_direction[1];
-//    r.dir_z = ray.compressed_direction[2];
-//    r.tfar = ray.compressed_t_max;
-//    r.mask = 0xffu;
-//    rtcOccluded1(_handle, &ctx, &r);
-//    return r.tfar < 0.f;
-//}
 
 namespace detail {
 
-//[[nodiscard]] inline auto decode_ray(int64_t r0, int64_t r1, int64_t r2, int64_t r3) noexcept {
-//    return luisa::bit_cast<Ray>(std::array{r0, r1, r2, r3});
-//}
-//
-//}
-//
-//float32x4_t accel_trace_closest(const FallbackAccel *accel, int64_t r0, int64_t r1, int64_t r2, int64_t r3) noexcept {
-//    return luisa::bit_cast<float32x4_t>(accel->trace_closest(detail::decode_ray(r0, r1, r2, r3)));
-//}
-//
-//bool accel_trace_any(const FallbackAccel *accel, int64_t r0, int64_t r1, int64_t r2, int64_t r3) noexcept {
-//    return accel->trace_any(detail::decode_ray(r0, r1, r2, r3));
-//}
+void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept
+{
+    RTCIntersectContext ctx{};
+    rtcInitIntersectContext(&ctx);
+    RTCRayHit rh{};
+    rh.ray.org_x = ox;
+    rh.ray.org_y = oy;
+    rh.ray.org_z = oz;
+    rh.ray.dir_x = dx;
+    rh.ray.dir_y = dy;
+    rh.ray.dir_z = dz;
+    rh.ray.tnear = tmin;
+    rh.ray.tfar = tmax;
 
+    rh.ray.mask = mask;
+    rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+    rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
+    rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+    rh.ray.flags = 0;
+    rtcIntersect1(accel->scene(), &ctx, &rh);
+    hit->inst = rh.hit.instID[0];
+    hit->prim = rh.hit.primID;
+    hit->bary = make_float2(rh.hit.u, rh.hit.v);
+    hit->committed_ray_t = rh.ray.tfar;
+}
+bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept
+{
+    RTCIntersectContext ctx{};
+    rtcInitIntersectContext(&ctx);
+    RTCRay ray{};
+    ray.org_x = ox;
+    ray.org_y = oy;
+    ray.org_z = oz;
+    ray.dir_x = dx;
+    ray.dir_y = dy;
+    ray.dir_z = dz;
+    ray.tnear = tmin;
+    ray.tfar = tmax;
+
+    ray.mask = mask;
+    ray.flags = 0;
+    rtcOccluded1(accel->scene(), &ctx, &ray);
+    return ray.tfar < 0.f;
+}
 }// namespace luisa::compute::llvm
 }
