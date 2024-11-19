@@ -491,6 +491,539 @@ private:
         }
         LUISA_ERROR_WITH_LOCATION("Invalid binary add operand type: {}.", elem_type->description());
     }
+    //swfly tries to write more binary operations
+    [[nodiscard]] llvm::Value *_translate_binary_sub(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        LUISA_ASSERT(lhs->type() == rhs->type(), "Type mismatch.");
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateNSWSub(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateSub(llvm_lhs, llvm_rhs);
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: return b.CreateFSub(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary sub operand type: {}.", elem_type->description());
+    }
+
+    [[nodiscard]] llvm::Value *_translate_binary_mul(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        LUISA_ASSERT(lhs->type() == rhs->type(), "Type mismatch.");
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateNSWMul(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateMul(llvm_lhs, llvm_rhs);
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: return b.CreateFMul(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary mul operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_div(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        LUISA_ASSERT(lhs->type() == rhs->type(), "Type mismatch.");
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateSDiv(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateUDiv(llvm_lhs, llvm_rhs);
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: return b.CreateFDiv(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary add operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_mod(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        LUISA_ASSERT(lhs->type() == rhs->type(), "Type mismatch.");
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateSRem(llvm_lhs, llvm_rhs); // Signed integer remainder
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateURem(llvm_lhs, llvm_rhs); // Unsigned integer remainder
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary mod operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_logic_and(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for logic and.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+        LUISA_ASSERT(rhs_type->is_scalar() || rhs_type->is_vector(), "Invalid operand type.");
+        // Convert operands to boolean values (non-zero becomes true, zero becomes false)
+        auto llvm_lhs_bool = _cmp_ne_zero(b, llvm_lhs);
+        auto llvm_rhs_bool = _cmp_ne_zero(b, llvm_rhs);
+        // Perform logical AND (a && b)
+        auto llvm_and_result = b.CreateAnd(llvm_lhs_bool, llvm_rhs_bool);
+        // Convert result to i8 for consistency with your implementation needs
+        return _zext_i1_to_i8(b, llvm_and_result);
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_logic_or(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for logic and.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+        LUISA_ASSERT(rhs_type->is_scalar() || rhs_type->is_vector(), "Invalid operand type.");
+        // Convert operands to boolean values (non-zero becomes true, zero becomes false)
+        auto llvm_lhs_bool = _cmp_ne_zero(b, llvm_lhs);
+        auto llvm_rhs_bool = _cmp_ne_zero(b, llvm_rhs);
+        // Perform logical AND (a && b)
+        auto llvm_or_result = b.CreateOr(llvm_lhs_bool, llvm_rhs_bool);
+        // Convert result to i8 for consistency with your implementation needs
+        return _zext_i1_to_i8(b, llvm_or_result);
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_bit_and(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for bitwise and.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform bitwise AND operation
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: b.CreateAnd(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary bit and operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_bit_or(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for bitwise and.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform bitwise AND operation
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: b.CreateOr(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary bit or operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_bit_xor(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for bitwise and.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform bitwise AND operation
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: b.CreateXor(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary bit xor operand type: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_shift_left(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for shift left.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform shift left operation (only valid for integer types)
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateShl(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for shift left operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_shift_right(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for shift left.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform shift left operation (only valid for integer types)
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateAShr(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateLShr(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for shift left operation: {}.", elem_type->description());
+    }
+
+    //Dear, the rotate operation is too complex, i didn't check after GPT
+    [[nodiscard]] llvm::Value *_translate_binary_rotate_left(CurrentFunction &current, IRBuilder &b, const xir::Value *value, const xir::Value *shift) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_shift = _lookup_value(current, b, shift);
+        auto value_type = value->type();
+        auto elem_type = value_type->is_vector() ? value_type->element() : value_type;
+
+        // Type and null checks
+        LUISA_ASSERT(value_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(value_type->is_scalar() || value_type->is_vector(), "Invalid operand type.");
+
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::UINT8: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 8);
+                auto shifted_left = b.CreateShl(llvm_value, llvm_shift);
+                auto shifted_right = b.CreateLShr(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::UINT16: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 16);
+                auto shifted_left = b.CreateShl(llvm_value, llvm_shift);
+                auto shifted_right = b.CreateLShr(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::UINT32: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 32);
+                auto shifted_left = b.CreateShl(llvm_value, llvm_shift);
+                auto shifted_right = b.CreateLShr(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT64: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 64);
+                auto shifted_left = b.CreateShl(llvm_value, llvm_shift);
+                auto shifted_right = b.CreateLShr(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for rotate left operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_rotate_right(CurrentFunction &current, IRBuilder &b, const xir::Value *value, const xir::Value *shift) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_shift = _lookup_value(current, b, shift);
+        auto value_type = value->type();
+        auto elem_type = value_type->is_vector() ? value_type->element() : value_type;
+
+        // Type and null checks
+        LUISA_ASSERT(value_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(value_type->is_scalar() || value_type->is_vector(), "Invalid operand type.");
+
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::UINT8: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 8);
+                auto shifted_right = b.CreateLShr(llvm_value, llvm_shift);
+                auto shifted_left = b.CreateShl(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::UINT16: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 16);
+                auto shifted_right = b.CreateLShr(llvm_value, llvm_shift);
+                auto shifted_left = b.CreateShl(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::UINT32: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 32);
+                auto shifted_right = b.CreateLShr(llvm_value, llvm_shift);
+                auto shifted_left = b.CreateShl(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT64: {
+                auto bit_width = llvm::ConstantInt::get(llvm_shift->getType(), 64);
+                auto shifted_right = b.CreateLShr(llvm_value, llvm_shift);
+                auto shifted_left = b.CreateShl(llvm_value, b.CreateSub(bit_width, llvm_shift));
+                return b.CreateOr(shifted_left, shifted_right);
+            }
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for rotate right operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_less(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        // Lookup LLVM values for operands
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        // Type and null checks
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary less.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        // Perform less-than comparison based on the type
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: result = b.CreateICmpSLT(llvm_lhs, llvm_rhs); break; // Signed integer less-than comparison
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpULT(llvm_lhs, llvm_rhs); break; // Unsigned integer less-than comparison
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpOLT(llvm_lhs, llvm_rhs); break; // Floating-point unordered less-than comparison
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
+
+    [[nodiscard]] llvm::Value *_translate_binary_greater(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary greater.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: result = b.CreateICmpSGT(llvm_lhs, llvm_rhs); break; // Signed integer greater-than
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpUGT(llvm_lhs, llvm_rhs); break; // Unsigned integer greater-than
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpOGT(llvm_lhs, llvm_rhs); break; // Ordered greater-than
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_less_equal(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary less-equal.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: result = b.CreateICmpSLE(llvm_lhs, llvm_rhs); break; // Signed integer less-than-or-equal
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpULE(llvm_lhs, llvm_rhs); break; // Unsigned integer less-than-or-equal
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpOLE(llvm_lhs, llvm_rhs); break; // Ordered less-than-or-equal
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_greater_equal(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary greater-equal.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: result = b.CreateICmpSGE(llvm_lhs, llvm_rhs); break; // Signed integer greater-than-or-equal
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpUGE(llvm_lhs, llvm_rhs); break; // Unsigned integer greater-than-or-equal
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpOGE(llvm_lhs, llvm_rhs); break; // Ordered greater-than-or-equal
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_equal(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary equal.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpEQ(llvm_lhs, llvm_rhs); break; // Integer equality comparison
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpOEQ(llvm_lhs, llvm_rhs); break; // Ordered equality comparison
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
+    [[nodiscard]] llvm::Value *_translate_binary_not_equal(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto lhs_type = lhs->type();
+        auto rhs_type = rhs->type();
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+
+        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for binary equal.");
+        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
+
+        llvm::Value *result = nullptr;
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: [[fallthrough]];
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: result = b.CreateICmpNE(llvm_lhs, llvm_rhs); break; // Integer equality comparison
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: result = b.CreateFCmpONE(llvm_lhs, llvm_rhs); break; // Ordered equality comparison
+            default: break;
+        }
+        if (result) {
+            return _zext_i1_to_i8(b, result);
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary less-equal operation: {}.", elem_type->description());
+    }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
@@ -500,25 +1033,25 @@ private:
             case xir::IntrinsicOp::UNARY_LOGIC_NOT: return _translate_unary_logic_not(current, b, inst->operand(0u));
             case xir::IntrinsicOp::UNARY_BIT_NOT: return _translate_unary_bit_not(current, b, inst->operand(0u));
             case xir::IntrinsicOp::BINARY_ADD: return _translate_binary_add(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::BINARY_SUB: break;
-            case xir::IntrinsicOp::BINARY_MUL: break;
-            case xir::IntrinsicOp::BINARY_DIV: break;
-            case xir::IntrinsicOp::BINARY_MOD: break;
-            case xir::IntrinsicOp::BINARY_LOGIC_AND: break;
-            case xir::IntrinsicOp::BINARY_LOGIC_OR: break;
-            case xir::IntrinsicOp::BINARY_BIT_AND: break;
-            case xir::IntrinsicOp::BINARY_BIT_OR: break;
-            case xir::IntrinsicOp::BINARY_BIT_XOR: break;
-            case xir::IntrinsicOp::BINARY_SHIFT_LEFT: break;
-            case xir::IntrinsicOp::BINARY_SHIFT_RIGHT: break;
-            case xir::IntrinsicOp::BINARY_ROTATE_LEFT: break;
-            case xir::IntrinsicOp::BINARY_ROTATE_RIGHT: break;
-            case xir::IntrinsicOp::BINARY_LESS: break;
-            case xir::IntrinsicOp::BINARY_GREATER: break;
-            case xir::IntrinsicOp::BINARY_LESS_EQUAL: break;
-            case xir::IntrinsicOp::BINARY_GREATER_EQUAL: break;
-            case xir::IntrinsicOp::BINARY_EQUAL: break;
-            case xir::IntrinsicOp::BINARY_NOT_EQUAL: break;
+            case xir::IntrinsicOp::BINARY_SUB: return _translate_binary_sub(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_MUL: return _translate_binary_mul(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_DIV: return _translate_binary_div(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_MOD: return _translate_binary_mod(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_LOGIC_AND: return _translate_binary_logic_and(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_LOGIC_OR: return _translate_binary_logic_or(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_BIT_AND: return _translate_binary_bit_and(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_BIT_OR: return _translate_binary_bit_or(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_BIT_XOR: return _translate_binary_bit_xor(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_SHIFT_LEFT: return _translate_binary_shift_left(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_SHIFT_RIGHT: return _translate_binary_shift_right(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_ROTATE_LEFT: return _translate_binary_rotate_left(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_ROTATE_RIGHT: return _translate_binary_rotate_right(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_LESS: return _translate_binary_less(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_GREATER: return _translate_binary_greater(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_LESS_EQUAL: return _translate_binary_less_equal(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::ASSUME: break;
             case xir::IntrinsicOp::ASSERT: break;
             case xir::IntrinsicOp::THREAD_ID: break;
