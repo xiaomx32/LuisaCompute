@@ -465,6 +465,28 @@ private:
         return b.CreateNot(llvm_operand);
     }
 
+    [[nodiscard]] llvm::Value *_translate_binary_add(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+        LUISA_ASSERT(lhs->type() == rhs->type(), "Type mismatch.");
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto elem_type = lhs->type()->is_vector() ? lhs->type()->element() : lhs->type();
+        switch (elem_type->tag()) {
+            case Type::Tag::INT8: [[fallthrough]];
+            case Type::Tag::INT16: [[fallthrough]];
+            case Type::Tag::INT32: [[fallthrough]];
+            case Type::Tag::INT64: return b.CreateNSWAdd(llvm_lhs, llvm_rhs);
+            case Type::Tag::UINT8: [[fallthrough]];
+            case Type::Tag::UINT16: [[fallthrough]];
+            case Type::Tag::UINT32: [[fallthrough]];
+            case Type::Tag::UINT64: return b.CreateAdd(llvm_lhs, llvm_rhs);
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64: return b.CreateFAdd(llvm_lhs, llvm_rhs);
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid binary add operand type: {}.", elem_type->description());
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -472,7 +494,7 @@ private:
             case xir::IntrinsicOp::UNARY_MINUS: return _translate_unary_minus(current, b, inst->operand(0u));
             case xir::IntrinsicOp::UNARY_LOGIC_NOT: return _translate_unary_logic_not(current, b, inst->operand(0u));
             case xir::IntrinsicOp::UNARY_BIT_NOT: return _translate_unary_bit_not(current, b, inst->operand(0u));
-            case xir::IntrinsicOp::BINARY_ADD: break;
+            case xir::IntrinsicOp::BINARY_ADD: return _translate_binary_add(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_SUB: break;
             case xir::IntrinsicOp::BINARY_MUL: break;
             case xir::IntrinsicOp::BINARY_DIV: break;
