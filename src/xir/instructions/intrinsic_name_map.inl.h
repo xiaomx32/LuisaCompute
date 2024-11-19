@@ -27,8 +27,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINARY_GREATER_EQUAL: return "binary_greater_equal";
         case IntrinsicOp::BINARY_EQUAL: return "binary_equal";
         case IntrinsicOp::BINARY_NOT_EQUAL: return "binary_not_equal";
-        case IntrinsicOp::ASSUME: return "assume";
-        case IntrinsicOp::ASSERT: return "assert";
         case IntrinsicOp::THREAD_ID: return "thread_id";
         case IntrinsicOp::BLOCK_ID: return "block_id";
         case IntrinsicOp::WARP_LANE_ID: return "warp_lane_id";
@@ -262,8 +260,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"binary_greater_equal", IntrinsicOp::BINARY_GREATER_EQUAL},
         {"binary_equal", IntrinsicOp::BINARY_EQUAL},
         {"binary_not_equal", IntrinsicOp::BINARY_NOT_EQUAL},
-        {"assume", IntrinsicOp::ASSUME},
-        {"assert", IntrinsicOp::ASSERT},
         {"thread_id", IntrinsicOp::THREAD_ID},
         {"block_id", IntrinsicOp::BLOCK_ID},
         {"warp_lane_id", IntrinsicOp::WARP_LANE_ID},

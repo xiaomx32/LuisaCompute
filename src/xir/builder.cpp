@@ -62,6 +62,10 @@ AssertInst *Builder::assert_(Value *condition, luisa::string_view message) noexc
     return _create_and_append_instruction<AssertInst>(condition, luisa::string{message});
 }
 
+AssumeInst *Builder::assume_(Value *condition, luisa::string_view message) noexcept {
+    return _create_and_append_instruction<AssumeInst>(condition, luisa::string{message});
+}
+
 ReturnInst *Builder::return_(Value *value) noexcept {
     return _create_and_append_instruction<ReturnInst>(value);
 }

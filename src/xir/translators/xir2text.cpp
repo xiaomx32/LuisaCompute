@@ -6,6 +6,7 @@
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
+#include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/break.h>
@@ -232,6 +233,15 @@ private:
         _main << " " << _value_ident(inst->condition());
     }
 
+    void _emit_assume_inst(const AssumeInst *inst) noexcept {
+        _main << "assume";
+        if (!inst->message().empty()) {
+            _main << " ";
+            _emit_string_escaped(_main, inst->message());
+        }
+        _main << " " << _value_ident(inst->condition());
+    }
+
     void _emit_if_inst(const IfInst *inst, int indent) noexcept {
         _main << "if " << _value_ident(inst->condition()) << ", then ";
         _emit_basic_block(inst->true_block(), indent);
@@ -449,6 +459,9 @@ private:
                 break;
             case DerivedInstructionTag::ASSERT:
                 _emit_assert_inst(static_cast<const AssertInst *>(inst));
+                break;
+            case DerivedInstructionTag::ASSUME:
+                _emit_assume_inst(static_cast<const AssumeInst *>(inst));
                 break;
         }
         _main << ";";

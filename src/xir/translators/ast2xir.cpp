@@ -613,7 +613,14 @@ private:
             case CallOp::ASSUME: {
                 LUISA_ASSERT(!expr->arguments().empty(), "Assume requires at least one argument.");
                 auto cond = _translate_expression(b, expr->arguments()[0], true);
-                return b.call(nullptr, IntrinsicOp::ASSUME, {cond});
+                luisa::string_view message;
+                if (expr->arguments().size() >= 2u) {
+                    auto ast_msg_id = expr->arguments()[1];
+                    LUISA_ASSERT(ast_msg_id->tag() == Expression::Tag::STRING_ID, "Assume message must be a string.");
+                    auto msg_id = static_cast<const StringIDExpr *>(ast_msg_id);
+                    message = msg_id->data();
+                }
+                return b.assume_(cond, message);
             }
             case CallOp::UNREACHABLE: {
                 luisa::string_view message;

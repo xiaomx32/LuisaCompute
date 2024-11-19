@@ -41,10 +41,6 @@ enum struct IntrinsicOp {
     BINARY_EQUAL,
     BINARY_NOT_EQUAL,
 
-    // optimization/debugging
-    ASSUME,
-    ASSERT,
-
     // thread coordination
     THREAD_ID,
     BLOCK_ID,

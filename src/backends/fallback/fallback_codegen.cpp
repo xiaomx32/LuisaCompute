@@ -1036,18 +1036,16 @@ private:
             case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::ASSUME: break;
-            case xir::IntrinsicOp::ASSERT: break;
             case xir::IntrinsicOp::THREAD_ID: break;
             case xir::IntrinsicOp::BLOCK_ID: break;
             case xir::IntrinsicOp::WARP_LANE_ID: break;
             case xir::IntrinsicOp::DISPATCH_ID: break;
             case xir::IntrinsicOp::KERNEL_ID: break;
-            case xir::IntrinsicOp::OBJECT_ID: break;
+            case xir::IntrinsicOp::OBJECT_ID: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::BLOCK_SIZE: break;
             case xir::IntrinsicOp::WARP_SIZE: break;
             case xir::IntrinsicOp::DISPATCH_SIZE: break;
-            case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: break;
+            case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::ALL: break;
             case xir::IntrinsicOp::ANY: break;
             case xir::IntrinsicOp::SELECT: break;
@@ -1214,31 +1212,31 @@ private:
             case xir::IntrinsicOp::RAY_QUERY_PROCEED: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
-            case xir::IntrinsicOp::RASTER_DISCARD: break;
-            case xir::IntrinsicOp::RASTER_DDX: break;
-            case xir::IntrinsicOp::RASTER_DDY: break;
-            case xir::IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE: break;
-            case xir::IntrinsicOp::WARP_FIRST_ACTIVE_LANE: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_ALL_EQUAL: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_AND: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_OR: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_XOR: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_COUNT_BITS: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_MAX: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_MIN: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_PRODUCT: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_SUM: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_ALL: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_ANY: break;
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_MASK: break;
-            case xir::IntrinsicOp::WARP_PREFIX_COUNT_BITS: break;
-            case xir::IntrinsicOp::WARP_PREFIX_SUM: break;
-            case xir::IntrinsicOp::WARP_PREFIX_PRODUCT: break;
-            case xir::IntrinsicOp::WARP_READ_LANE: break;
-            case xir::IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE: break;
+            case xir::IntrinsicOp::RASTER_DISCARD: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::RASTER_DDX: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::RASTER_DDY: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_ALL_EQUAL: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_AND: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_OR: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_XOR: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_COUNT_BITS: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_MAX: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_MIN: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_PRODUCT: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_SUM: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_ALL: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_ANY: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_ACTIVE_BIT_MASK: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_PREFIX_COUNT_BITS: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_PREFIX_SUM: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_PREFIX_PRODUCT: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_READ_LANE: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
-            case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: break;
+            case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
         }
         // TODO: implement
         if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
@@ -1468,6 +1466,12 @@ private:
                 auto assert_func_type = llvm::FunctionType::get(llvm_void_type, {llvm_condition->getType(), llvm_message->getType()}, false);
                 auto external_assert = _llvm_module->getOrInsertFunction("luisa.assert", assert_func_type);
                 return b.CreateCall(external_assert, {llvm_condition, llvm_message});
+            }
+            case xir::DerivedInstructionTag::ASSUME: {
+                auto assume_inst = static_cast<const xir::AssumeInst *>(inst);
+                auto llvm_condition = _lookup_value(current, b, assume_inst->condition());
+                // TODO: we ignore assumption message for now
+                return b.CreateAssumption(llvm_condition);
             }
             case xir::DerivedInstructionTag::OUTLINE: {
                 auto outline_inst = static_cast<const xir::OutlineInst *>(inst);
