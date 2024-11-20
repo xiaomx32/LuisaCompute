@@ -1221,15 +1221,117 @@ private:
                 auto llvm_diff = b.CreateFSub(llvm_vb, llvm_va);
                 return b.CreateIntrinsic(llvm_va->getType(), llvm::Intrinsic::fma, {llvm_t, llvm_diff, llvm_va});
             }
-            case xir::IntrinsicOp::SMOOTHSTEP: break;
-            case xir::IntrinsicOp::STEP: break;
-            case xir::IntrinsicOp::ABS: break;
-            case xir::IntrinsicOp::MIN: break;
-            case xir::IntrinsicOp::MAX: break;
-            case xir::IntrinsicOp::CLZ: break;
-            case xir::IntrinsicOp::CTZ: break;
-            case xir::IntrinsicOp::POPCOUNT: break;
-            case xir::IntrinsicOp::REVERSE: break;
+            case xir::IntrinsicOp::SMOOTHSTEP: {
+                // smoothstep(edge0, edge1, x) = t * t * (3.0 - 2.0 * t), where t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+                auto type = inst->type();
+                LUISA_ASSERT(type != nullptr &&
+                                 type == inst->operand(0u)->type() &&
+                                 type == inst->operand(1u)->type() &&
+                                 type == inst->operand(2u)->type(),
+                             "Type mismatch for smoothstep.");
+                auto elem_type = type->is_vector() ? type->element() : type;
+                LUISA_ASSERT(elem_type->is_float16() || elem_type->is_float32() || elem_type->is_float64(),
+                             "Invalid operand type for smoothstep operation.");
+                auto llvm_edge0 = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_edge1 = _lookup_value(current, b, inst->operand(1u));
+                auto llvm_x = _lookup_value(current, b, inst->operand(2u));
+                // constant 0, 1, -2, and 3
+                auto llvm_elem_type = _translate_type(elem_type, false);
+                auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+                auto llvm_one = llvm::ConstantFP::get(llvm_elem_type, 1.);
+                auto llvm_minus_two = llvm::ConstantFP::get(llvm_elem_type, -2.);
+                auto llvm_three = llvm::ConstantFP::get(llvm_elem_type, 3.);
+                if (type->is_vector()) {
+                    auto dim = llvm::ElementCount::getFixed(type->dimension());
+                    llvm_zero = llvm::ConstantVector::getSplat(dim, llvm_zero);
+                    llvm_one = llvm::ConstantVector::getSplat(dim, llvm_one);
+                    llvm_minus_two = llvm::ConstantVector::getSplat(dim, llvm_minus_two);
+                    llvm_three = llvm::ConstantVector::getSplat(dim, llvm_three);
+                }
+                // t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
+                auto llvm_x_minus_edge0 = b.CreateFSub(llvm_x, llvm_edge0);
+                auto llvm_edge1_minus_edge0 = b.CreateFSub(llvm_edge1, llvm_edge0);
+                auto llvm_t = b.CreateFDiv(llvm_x_minus_edge0, llvm_edge1_minus_edge0);
+                // clamp t
+                llvm_t = b.CreateBinaryIntrinsic(llvm::Intrinsic::maxnum, llvm_zero, llvm_t);
+                llvm_t = b.CreateBinaryIntrinsic(llvm::Intrinsic::minnum, llvm_one, llvm_t);
+                // smoothstep
+                auto llvm_tt = b.CreateFMul(llvm_t, llvm_t);
+                auto llvm_three_minus_two_t = b.CreateIntrinsic(llvm_t->getType(), llvm::Intrinsic::fma, {llvm_minus_two, llvm_t, llvm_three});
+                return b.CreateFMul(llvm_tt, llvm_three_minus_two_t);
+            }
+            case xir::IntrinsicOp::STEP: {
+                // step(edge, x) = x < edge ? 0 : 1 = uitofp(x >= edge)
+                auto llvm_edge = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_x = _lookup_value(current, b, inst->operand(1u));
+                auto llvm_cmp = b.CreateFCmpOGE(llvm_x, llvm_edge);
+                return b.CreateUIToFP(llvm_cmp, llvm_x->getType());
+            }
+            case xir::IntrinsicOp::ABS: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_intrinsic = llvm_x->getType()->isFPOrFPVectorTy() ?
+                                          llvm::Intrinsic::fabs :
+                                          llvm::Intrinsic::abs;
+                return b.CreateUnaryIntrinsic(llvm_intrinsic, llvm_x);
+            }
+            case xir::IntrinsicOp::MIN: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_y = _lookup_value(current, b, inst->operand(1u));
+                auto elem_type = inst->type()->is_vector() ? inst->type()->element() : inst->type();
+                switch (elem_type->tag()) {
+                    case Type::Tag::INT8: [[fallthrough]];
+                    case Type::Tag::INT16: [[fallthrough]];
+                    case Type::Tag::INT32: [[fallthrough]];
+                    case Type::Tag::INT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::smin, llvm_x, llvm_y);
+                    case Type::Tag::UINT8: [[fallthrough]];
+                    case Type::Tag::UINT16: [[fallthrough]];
+                    case Type::Tag::UINT32: [[fallthrough]];
+                    case Type::Tag::UINT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::umin, llvm_x, llvm_y);
+                    case Type::Tag::FLOAT16: [[fallthrough]];
+                    case Type::Tag::FLOAT32: [[fallthrough]];
+                    case Type::Tag::FLOAT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::minnum, llvm_x, llvm_y);
+                    default: break;
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid operand type for min operation: {}.",
+                                          inst->type()->description());
+            }
+            case xir::IntrinsicOp::MAX: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_y = _lookup_value(current, b, inst->operand(1u));
+                auto elem_type = inst->type()->is_vector() ? inst->type()->element() : inst->type();
+                switch (elem_type->tag()) {
+                    case Type::Tag::INT8: [[fallthrough]];
+                    case Type::Tag::INT16: [[fallthrough]];
+                    case Type::Tag::INT32: [[fallthrough]];
+                    case Type::Tag::INT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::smax, llvm_x, llvm_y);
+                    case Type::Tag::UINT8: [[fallthrough]];
+                    case Type::Tag::UINT16: [[fallthrough]];
+                    case Type::Tag::UINT32: [[fallthrough]];
+                    case Type::Tag::UINT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::umax, llvm_x, llvm_y);
+                    case Type::Tag::FLOAT16: [[fallthrough]];
+                    case Type::Tag::FLOAT32: [[fallthrough]];
+                    case Type::Tag::FLOAT64: return b.CreateBinaryIntrinsic(llvm::Intrinsic::maxnum, llvm_x, llvm_y);
+                    default: break;
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid operand type for max operation: {}.",
+                                          inst->type()->description());
+            }
+            case xir::IntrinsicOp::CLZ: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::ctlz, llvm_x);
+            }
+            case xir::IntrinsicOp::CTZ: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::cttz, llvm_x);
+            }
+            case xir::IntrinsicOp::POPCOUNT: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::ctpop, llvm_x);
+            }
+            case xir::IntrinsicOp::REVERSE: {
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::bitreverse, llvm_x);
+            }
             case xir::IntrinsicOp::ISINF: break;
             case xir::IntrinsicOp::ISNAN: break;
             case xir::IntrinsicOp::ACOS: break;
