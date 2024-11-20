@@ -1084,9 +1084,10 @@ private:
             case Type::Tag::FLOAT64: {
                 auto llvm_elem_type = _translate_type(operand_elem_type, false);
                 auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+                auto llvm_one = llvm::ConstantFP::get(llvm_elem_type, 1.);
                 switch (op) {
                     case xir::IntrinsicOp::REDUCE_SUM: return b.CreateFAddReduce(llvm_zero, llvm_operand);
-                    case xir::IntrinsicOp::REDUCE_PRODUCT: return b.CreateFMulReduce(llvm_zero, llvm_operand);
+                    case xir::IntrinsicOp::REDUCE_PRODUCT: return b.CreateFMulReduce(llvm_one, llvm_operand);
                     case xir::IntrinsicOp::REDUCE_MIN: return b.CreateFPMinReduce(llvm_operand);
                     case xir::IntrinsicOp::REDUCE_MAX: return b.CreateFPMaxReduce(llvm_operand);
                     default: break;
@@ -1102,10 +1103,48 @@ private:
     [[nodiscard]] llvm::Value *_translate_vector_dot(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
         auto llvm_mul = _translate_binary_mul(current, b, lhs, rhs);
         if (llvm_mul->getType()->isFPOrFPVectorTy()) {
-            auto llvm_zero = llvm::ConstantFP::get(llvm_mul->getType(), 0.);
-            return b.CreateFMulReduce(llvm_zero, llvm_mul);
+            auto llvm_elem_type = llvm_mul->getType()->isVectorTy() ?
+                                      llvm::cast<llvm::VectorType>(llvm_mul->getType())->getElementType() :
+                                      llvm_mul->getType();
+            auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+            return b.CreateFAddReduce(llvm_zero, llvm_mul);
         }
         return b.CreateAddReduce(llvm_mul);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_isinf_isnan(CurrentFunction &current, IRBuilder &b, xir::IntrinsicOp op, const xir::Value *x) noexcept {
+        auto type = x->type();
+        auto elem_type = type->is_vector() ? type->element() : type;
+        auto llvm_x = _lookup_value(current, b, x);
+        auto [llvm_mask, llvm_test] = [&] {
+            switch (elem_type->tag()) {
+                case Type::Tag::FLOAT16: return std::make_pair(
+                    llvm::cast<llvm::Constant>(b.getInt16(0x7fffu)),
+                    llvm::cast<llvm::Constant>(b.getInt16(0x7c00u)));
+                case Type::Tag::FLOAT32: return std::make_pair(
+                    llvm::cast<llvm::Constant>(b.getInt32(0x7fffffffu)),
+                    llvm::cast<llvm::Constant>(b.getInt32(0x7f800000u)));
+                case Type::Tag::FLOAT64: return std::make_pair(
+                    llvm::cast<llvm::Constant>(b.getInt64(0x7fffffffffffffffull)),
+                    llvm::cast<llvm::Constant>(b.getInt64(0x7ff0000000000000ull)));
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid operand type for isinf/isnan operation: {}.", type->description());
+        }();
+        if (type->is_vector()) {
+            auto dim = llvm::ElementCount::getFixed(type->dimension());
+            llvm_mask = llvm::ConstantVector::getSplat(dim, llvm_mask);
+            llvm_test = llvm::ConstantVector::getSplat(dim, llvm_test);
+        }
+        auto llvm_int_type = llvm_mask->getType();
+        auto llvm_bits = b.CreateBitCast(llvm_x, llvm_int_type);
+        auto llvm_and = b.CreateAnd(llvm_bits, llvm_mask);
+        LUISA_DEBUG_ASSERT(op == xir::IntrinsicOp::ISINF || op == xir::IntrinsicOp::ISNAN,
+                           "Unexpected intrinsic operation.");
+        auto llvm_cmp = op == xir::IntrinsicOp::ISINF ?
+                            b.CreateICmpEQ(llvm_and, llvm_test) :
+                            b.CreateICmpUGE(llvm_and, llvm_test);
+        return _zext_i1_to_i8(b, llvm_cmp);
     }
 
     [[nodiscard]] llvm::Value *_translate_builtin_variable(CurrentFunction &current, IRBuilder &b, xir::IntrinsicOp op) noexcept {
@@ -1162,7 +1201,9 @@ private:
                 auto llvm_false_value = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_true_value = _lookup_value(current, b, inst->operand(1u));
                 auto llvm_condition = _lookup_value(current, b, inst->operand(2u));
-                return b.CreateSelect(llvm_condition, llvm_true_value, llvm_false_value);
+                auto llvm_zero = llvm::Constant::getNullValue(llvm_condition->getType());
+                auto llvm_cmp = b.CreateICmpNE(llvm_condition, llvm_zero);
+                return b.CreateSelect(llvm_cmp, llvm_true_value, llvm_false_value);
             }
             case xir::IntrinsicOp::CLAMP: {
                 // clamp(x, lb, ub) = min(max(x, lb), ub)
@@ -1332,8 +1373,8 @@ private:
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 return b.CreateUnaryIntrinsic(llvm::Intrinsic::bitreverse, llvm_x);
             }
-            case xir::IntrinsicOp::ISINF: break;
-            case xir::IntrinsicOp::ISNAN: break;
+            case xir::IntrinsicOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
+            case xir::IntrinsicOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::IntrinsicOp::ACOS: break;
             case xir::IntrinsicOp::ACOSH: break;
             case xir::IntrinsicOp::ASIN: break;
@@ -1463,7 +1504,8 @@ private:
                 auto llvm_length_squared = _translate_vector_dot(current, b, v, v);
                 auto llvm_length = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_length_squared);
                 auto llvm_v = _lookup_value(current, b, v);
-                return b.CreateFDiv(llvm_v, llvm_length);
+                auto llvm_length_splat = b.CreateVectorSplat(v->type()->dimension(), llvm_length);
+                return b.CreateFDiv(llvm_v, llvm_length_splat);
             }
             case xir::IntrinsicOp::FACEFORWARD: {
                 // faceforward(n, i, n_ref) = dot(i, n_ref) < 0 ? n : -n
