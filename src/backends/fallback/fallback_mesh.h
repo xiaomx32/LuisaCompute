@@ -5,7 +5,7 @@
 #pragma once
 
 #include <luisa/runtime/rtx/mesh.h>
-#include "fallback_accel.h"
+#include "fallback_embree.h"
 
 namespace luisa::compute::fallback {
 

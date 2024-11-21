@@ -3,6 +3,7 @@
 //
 
 #include <luisa/core/stl.h>
+
 #include "fallback_mesh.h"
 #include "fallback_accel.h"
 #include "thread_pool.h"
@@ -29,8 +30,7 @@ void FallbackAccel::build(ThreadPool &pool, size_t instance_count,
                           luisa::span<const AccelBuildCommand::Modification> mods) noexcept {
 
     using Mod = AccelBuildCommand::Modification;
-    pool.async([this, instance_count, mods = luisa::vector<Mod>{mods.cbegin(), mods.cend()}]()
-       {
+    pool.async([this, instance_count, mods = luisa::vector<Mod>{mods.cbegin(), mods.cend()}]() {
         if (instance_count < _instances.size()) {// remove redundant geometries
             for (auto i = instance_count; i < _instances.size(); i++) { rtcDetachGeometry(_handle, i); }
             _instances.resize(instance_count);
@@ -47,8 +47,7 @@ void FallbackAccel::build(ThreadPool &pool, size_t instance_count,
         }
         for (auto m : mods) {
             auto geometry = _instances[m.index].geometry;
-            if (m.flags & Mod::flag_primitive)
-            {
+            if (m.flags & Mod::flag_primitive) {
                 rtcSetGeometryInstancedScene(geometry, reinterpret_cast<const FallbackMesh *>(m.primitive)->handle());
             }
             if (m.flags & Mod::flag_transform) { std::memcpy(
@@ -87,13 +86,17 @@ float4x4 FallbackAccel::_decompress(std::array<float, 12> m) noexcept {
         m[3], m[7], m[11], 1.f);
 }
 
-
 namespace detail {
 
-void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept
-{
+void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit *hit) noexcept {
+#if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
     rtcInitIntersectContext(&ctx);
+#else
+    RTCRayQueryContext ctx{};
+    rtcInitRayQueryContext(&ctx);
+    RTCIntersectArguments args{.context = &ctx};
+#endif
     RTCRayHit rh{};
     rh.ray.org_x = ox;
     rh.ray.org_y = oy;
@@ -109,16 +112,25 @@ void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float o
     rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
     rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
     rh.ray.flags = 0;
+#if LUISA_COMPUTE_EMBREE_VERSION == 3
     rtcIntersect1(accel->scene(), &ctx, &rh);
+#else
+    rtcIntersect1(accel->scene(), &rh, &args);
+#endif
     hit->inst = rh.hit.instID[0];
     hit->prim = rh.hit.primID;
     hit->bary = make_float2(rh.hit.u, rh.hit.v);
     hit->committed_ray_t = rh.ray.tfar;
 }
-bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept
-{
+bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept {
+#if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
     rtcInitIntersectContext(&ctx);
+#else
+    RTCRayQueryContext ctx{};
+    rtcInitRayQueryContext(&ctx);
+    RTCOccludedArguments args{.context = &ctx};
+#endif
     RTCRay ray{};
     ray.org_x = ox;
     ray.org_y = oy;
@@ -131,8 +143,14 @@ bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, f
 
     ray.mask = mask;
     ray.flags = 0;
+#if LUISA_COMPUTE_EMBREE_VERSION == 3
     rtcOccluded1(accel->scene(), &ctx, &ray);
+#else
+    rtcOccluded1(accel->scene(), &ray, &args);
+#endif
     return ray.tfar < 0.f;
 }
-}// namespace luisa::compute::llvm
-}
+
+}// namespace detail
+
+}// namespace luisa::compute::fallback
