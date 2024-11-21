@@ -40,6 +40,18 @@ private:
         llvm::Function *func = nullptr;
         luisa::unordered_map<const xir::Value *, llvm::Value *> value_map;
         luisa::unordered_set<const llvm::BasicBlock *> translated_basic_blocks;
+
+        // builtin variables
+#define LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(NAME, INDEX) \
+    static constexpr size_t builtin_variable_index_##NAME = INDEX;
+        LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(thread_id, 0)
+        LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(block_id, 1)
+        LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(dispatch_id, 2)
+        LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(block_size, 3)
+        LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(dispatch_size, 4)
+#undef LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE
+        static constexpr size_t builtin_variable_count = 5;
+        llvm::Value *builtin_variables[builtin_variable_count] = {};
     };
 
 private:
@@ -1147,23 +1159,19 @@ private:
         return _zext_i1_to_i8(b, llvm_cmp);
     }
 
-    [[nodiscard]] llvm::Value *_translate_builtin_variable(CurrentFunction &current, IRBuilder &b, xir::IntrinsicOp op) noexcept {
-        LUISA_NOT_IMPLEMENTED();
-    }
-
     [[nodiscard]] llvm::Value *translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
         auto value = inst->operand(2u);
-        auto llvm_buffer = _lookup_value(current, b, buffer); // Get the buffer pointer
-        auto llvm_slot = _lookup_value(current, b, slot);     // Get the slot index
-        auto llvm_value = _lookup_value(current, b, value);   // Get the value to write
-        auto element_type = llvm_value->getType(); // Type of the value being written
+        auto llvm_buffer = _lookup_value(current, b, buffer);// Get the buffer pointer
+        auto llvm_slot = _lookup_value(current, b, slot);    // Get the slot index
+        auto llvm_value = _lookup_value(current, b, value);  // Get the value to write
+        auto element_type = llvm_value->getType();           // Type of the value being written
         auto target_address = b.CreateGEP(
-            element_type,                 // Element type
-            llvm_buffer,                  // Base pointer
-            llvm_slot                    // Index
+            element_type,// Element type
+            llvm_buffer, // Base pointer
+            llvm_slot    // Index
         );
         return b.CreateStore(llvm_value, target_address);
     }
@@ -1194,15 +1202,15 @@ private:
             case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::THREAD_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::THREAD_ID);
-            case xir::IntrinsicOp::BLOCK_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::BLOCK_ID);
-            case xir::IntrinsicOp::WARP_LANE_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::WARP_LANE_ID);
-            case xir::IntrinsicOp::DISPATCH_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::DISPATCH_ID);
-            case xir::IntrinsicOp::KERNEL_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::KERNEL_ID);
-            case xir::IntrinsicOp::OBJECT_ID: return _translate_builtin_variable(current, b, xir::IntrinsicOp::OBJECT_ID);
-            case xir::IntrinsicOp::BLOCK_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::BLOCK_SIZE);
-            case xir::IntrinsicOp::WARP_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::WARP_SIZE);
-            case xir::IntrinsicOp::DISPATCH_SIZE: return _translate_builtin_variable(current, b, xir::IntrinsicOp::DISPATCH_SIZE);
+            case xir::IntrinsicOp::THREAD_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_thread_id];
+            case xir::IntrinsicOp::BLOCK_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_id];
+            case xir::IntrinsicOp::WARP_LANE_ID: return llvm::ConstantInt::get(b.getInt32Ty(), 0);// CPU only has one lane
+            case xir::IntrinsicOp::DISPATCH_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_id];
+            case xir::IntrinsicOp::KERNEL_ID: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::OBJECT_ID: LUISA_NOT_IMPLEMENTED();
+            case xir::IntrinsicOp::BLOCK_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_size];
+            case xir::IntrinsicOp::WARP_SIZE: return llvm::ConstantInt::get(b.getInt32Ty(), 1);// CPU only has one lane
+            case xir::IntrinsicOp::DISPATCH_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_size];
             case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::ALL: {
                 auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
@@ -1898,6 +1906,10 @@ private:
                     auto llvm_arg = _lookup_value(current, b, call_inst->argument(i));
                     llvm_args.emplace_back(llvm_arg);
                 }
+                // built-in variables
+                for (auto &builtin_variable : current.builtin_variables) {
+                    llvm_args.emplace_back(builtin_variable);
+                }
                 return b.CreateCall(llvm_func, llvm_args);
             }
             case xir::DerivedInstructionTag::INTRINSIC: {
@@ -1968,77 +1980,207 @@ private:
     }
 
     [[nodiscard]] llvm::Function *_translate_kernel_function(const xir::KernelFunction *f) noexcept {
-        //Swfly tries to generate kernel functions
-        //Kernels are always void type
-        auto llvm_ret_type = _translate_type(nullptr, true);
-        llvm::SmallVector<llvm::Type *, 2u> llvm_arg_types;
+        // create a wrapper function for the kernel with the following template:
+        // struct Params { params... };
+        // struct LaunchConfig {
+        //   uint3 block_id;
+        //   uint3 dispatch_size;
+        //   uint3 block_size;
+        // };
+        // void kernel_wrapper(Params *params, LaunchConfig *config) {
+        // entry:
+        //   block_id = config->block_id;
+        //   block_size = config->block_size;
+        //   /* assume(block_size == f.block_size) */
+        //   dispatch_size = config->dispatch_size;
+        //   thread_count = block_size.x * block_size.y * block_size.z;
+        //   pi = alloca i32;
+        //   store 0, pi;
+        //   br loop;
+        // loop:
+        //   i = load pi;
+        //   thread_id_x = i % block_size.x;
+        //   thread_id_y = (i / block_size.x) % block_size.y;
+        //   thread_id_z = i / (block_size.x * block_size.y);
+        //   thread_id = (thread_id_x, thread_id_y, thread_id_z);
+        //   dispatch_id = block_id * block_size + thread_id;
+        //   in_range = reduce_and(dispatch_id < dispatch_size);
+        //   br in_range, body, update;
+        // body:
+        //   call f(params, thread_id, block_id, dispatch_id, block_size, dispatch_size);
+        //   br update;
+        // update:
+        //   next_i = i + 1;
+        //   store next_i, pi;
+        //   br next_i < thread_count, loop, merge;
+        // merge:
+        //   ret;
 
+        // create the kernel function
+        auto llvm_kernel = _translate_function_definition(f, llvm::Function::PrivateLinkage, "kernel");
 
-        // Seems we are going to pack all the parameters into a buffer and only pass its pointer
-        // like *void kernel(struct Params *params, struct LaunchConfig *config)*
-        // so arguments of kernels are always two pointers
+        // create the wrapper function
+        auto llvm_void_type = llvm::Type::getVoidTy(_llvm_context);
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        auto function_name = luisa::format("kernel.main", luisa::string_view{llvm_kernel->getName()});
+        auto llvm_wrapper_type = llvm::FunctionType::get(llvm_void_type, {llvm_ptr_type, llvm_ptr_type}, false);
+        auto llvm_wrapper_function = llvm::Function::Create(llvm_wrapper_type, llvm::Function::ExternalLinkage, llvm::Twine{function_name}, _llvm_module);
+        llvm_wrapper_function->getArg(0)->setName("launch.params");
+        llvm_wrapper_function->getArg(1)->setName("launch.config");
+        _llvm_functions.emplace(f, llvm_wrapper_function);
 
-        llvm::StructType *params_struct_type = llvm::StructType::create(
-            _llvm_context, "Params"
-        );
-        //Add the arguments to the struct
-        llvm::SmallVector<llvm::Type *, 32u> param_fields{};
-        LUISA_INFO("has {} argument(s)", f->arguments().size());
-        for (auto& arg : f->arguments()) {
-            LUISA_ASSUME(!arg->is_reference());
-            param_fields.emplace_back(_translate_type(arg->type(), false));
-            LUISA_INFO("arg is type {}", int(arg->type()->tag()));
-        }
-        params_struct_type->setBody(param_fields);
-        llvm::StructType *config_struct_type = llvm::StructType::create(
-            _llvm_context, "LaunchConfig"
-        );
+        // create the entry block for the wrapper function
+        auto llvm_entry_block = llvm::BasicBlock::Create(_llvm_context, "entry", llvm_wrapper_function);
+        IRBuilder b{llvm_entry_block};
 
-        llvm_arg_types.emplace_back(params_struct_type->getPointerTo());
-        llvm_arg_types.emplace_back(config_struct_type->getPointerTo());
+        auto arg_count = f->arguments().size();
 
-        // create function
-        auto llvm_func_type = llvm::FunctionType::get(llvm_ret_type, llvm_arg_types, false);
-        auto name_md = f->find_metadata<xir::NameMD>();
-        auto func_name = name_md ? name_md->name() : "kernel";
-        auto llvm_func = llvm::Function::Create(llvm_func_type, llvm::Function::ExternalLinkage, llvm::Twine{func_name}, _llvm_module);
-        _llvm_functions.emplace(f, llvm_func);
-        // create current translation context
-        CurrentFunction current{.func = llvm_func};
-        // map arguments
-        auto arg_index = 0u;
-        auto llvm_bb = _find_or_create_basic_block(current, f->body_block());
-        IRBuilder builder{llvm_bb};
-        for (auto &llvm_arg : current.func->args()) {
-            if (arg_index == 0) {
-                // First argument: Pointer to the Params struct
-                llvm::Value *params_ptr = &llvm_arg;
-                // Map each real argument to its corresponding field in the Params struct
-                unsigned field_index = 0;
-                for (auto &arg : f->arguments()) {
-                    // Calculate the GEP to get the field's address in the Params struct
-                    llvm::Value *field_ptr = builder.CreateGEP(
-                        params_struct_type, params_ptr,
-                        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(_llvm_context), 0),  // Dereference the pointer
-                         llvm::ConstantInt::get(llvm::Type::getInt32Ty(_llvm_context), field_index++)}); // Field index
-
-                    // For pointers, load the pointer itself (not dereferencing yet)
-                    llvm::Value *field_value;
-                    field_value = builder.CreateLoad(
-                        _translate_type(arg->type(), false), field_ptr, ("input_"+std::to_string(field_index)).c_str());
-                    // Map the field's value or pointer for later use
-                    current.value_map.emplace(arg, field_value);
-                }
+        // create the params struct type
+        auto llvm_i8_type = llvm::Type::getInt8Ty(_llvm_context);
+        llvm::SmallVector<size_t, 32u> padded_param_indices;
+        llvm::SmallVector<llvm::Type *, 32u> llvm_param_types;
+        constexpr auto param_alignment = 16u;
+        auto param_size_accum = static_cast<size_t>(0);
+        for (auto i = 0u; i < arg_count; i++) {
+            auto arg_type = f->arguments()[i]->type();
+            LUISA_ASSERT(arg_type->alignment() < param_alignment, "Invalid argument alignment.");
+            auto param_offset = luisa::align(param_size_accum, param_alignment);
+            // pad if necessary
+            if (param_offset > param_size_accum) {
+                auto llvm_padding_type = llvm::ArrayType::get(llvm_i8_type, param_offset - param_size_accum);
+                llvm_param_types.emplace_back(llvm_padding_type);
             }
-            ++arg_index;
+            padded_param_indices.emplace_back(llvm_param_types.size());
+            auto param_type = _translate_type(arg_type, false);
+            llvm_param_types.emplace_back(param_type);
+            param_size_accum = param_offset + arg_type->size();
         }
-        // translate body
-        auto body = _translate_basic_block(current, f->body_block());
-        // return
-        return llvm_func;
+        // pad the last argument
+        if (auto total_size = luisa::align(param_size_accum, param_alignment);
+            total_size > param_size_accum) {
+            auto llvm_padding_type = llvm::ArrayType::get(llvm_i8_type, total_size - param_size_accum);
+            llvm_param_types.emplace_back(llvm_padding_type);
+        }
+        auto llvm_params_struct_type = llvm::StructType::create(_llvm_context, llvm_param_types, "LaunchParams");
+        // load the params
+        auto llvm_param_ptr = llvm_wrapper_function->getArg(0);
+        llvm::SmallVector<llvm::Value *, 32u> llvm_args;
+        for (auto i = 0u; i < arg_count; i++) {
+            auto arg_type = f->arguments()[i]->type();
+            auto padded_index = padded_param_indices[i];
+            auto arg_name = luisa::format("arg{}", i);
+            auto llvm_gep = b.CreateStructGEP(llvm_params_struct_type, llvm_param_ptr, padded_index,
+                                              llvm::Twine{arg_name}.concat(".ptr"));
+            auto llvm_arg_type = _translate_type(arg_type, true);
+            auto llvm_arg = b.CreateAlignedLoad(llvm_arg_type, llvm_gep,
+                                                llvm::MaybeAlign{arg_type->alignment()},
+                                                llvm::Twine{arg_name});
+            llvm_args.emplace_back(llvm_arg);
+        }
+        // load the launch config
+        auto llvm_builtin_storage_type = _translate_type(Type::of<uint3>(), false);
+        auto llvm_launch_config_struct_type = llvm::StructType::create(
+            _llvm_context,
+            {
+                llvm_builtin_storage_type,// block_id
+                llvm_builtin_storage_type,// dispatch_size
+                llvm_builtin_storage_type,// block_size (optionally read)
+            },
+            "LaunchConfig");
+        auto llvm_i32_type = llvm::Type::getInt32Ty(_llvm_context);
+        auto llvm_builtin_type = llvm::VectorType::get(llvm_i32_type, 3, false);
+        auto llvm_config_ptr = llvm_wrapper_function->getArg(1);
+        auto load_builtin = [&](const char *name, size_t index) noexcept {
+            auto llvm_gep = b.CreateStructGEP(llvm_launch_config_struct_type, llvm_config_ptr, index, llvm::Twine{name}.concat(".ptr"));
+            return b.CreateAlignedLoad(llvm_builtin_type, llvm_gep, llvm::MaybeAlign{alignof(uint3)}, llvm::Twine{name});
+        };
+        auto llvm_block_id = load_builtin("block_id", 0);
+        auto llvm_dispatch_size = load_builtin("dispatch_size", 1);
+        auto static_block_size = f->block_size();
+        auto llvm_block_size = !all(static_block_size == 0u) ?
+                                   llvm::cast<llvm::Value>(_translate_literal(Type::of<uint3>(), &static_block_size, true)) :
+                                   llvm::cast<llvm::Value>(load_builtin("block_size", 2));
+        // compute number of threads per block
+        auto llvm_block_size_x = b.CreateExtractElement(llvm_block_size, static_cast<uint64_t>(0));
+        auto llvm_block_size_y = b.CreateExtractElement(llvm_block_size, static_cast<uint64_t>(1));
+        auto llvm_block_size_z = b.CreateExtractElement(llvm_block_size, static_cast<uint64_t>(2));
+        // hint that block size is power of two if we are using dynamic block size
+        if (all(static_block_size == 0u)) {
+            auto assume_power_of_two = [&](llvm::Value *v) noexcept {
+                // power of two check: (v & (v - 1)) == 0
+                auto v_minus_one = b.CreateNUWSub(v, b.getInt32(1));
+                auto v_and_v_minus_one = b.CreateAnd(v, v_minus_one);
+                auto is_zero = b.CreateICmpEQ(v_and_v_minus_one, b.getInt32(0));
+                return b.CreateAssumption(is_zero);
+            };
+            assume_power_of_two(llvm_block_size_x);
+            assume_power_of_two(llvm_block_size_y);
+            assume_power_of_two(llvm_block_size_z);
+        }
+        auto llvm_thread_count = b.CreateNUWMul(llvm_block_size_x, llvm_block_size_y, "thread_count");
+        llvm_thread_count = b.CreateNUWMul(llvm_thread_count, llvm_block_size_z);
+        // thread-in-block loop
+        auto llvm_ptr_i = b.CreateAlloca(llvm_i32_type, nullptr, "loop.i.ptr");
+        b.CreateStore(b.getInt32(0), llvm_ptr_i);
+        // loop head
+        auto llvm_loop_block = llvm::BasicBlock::Create(_llvm_context, "loop.head", llvm_wrapper_function);
+        b.CreateBr(llvm_loop_block);
+        b.SetInsertPoint(llvm_loop_block);
+        // compute thread id
+        auto llvm_i = b.CreateLoad(llvm_i32_type, llvm_ptr_i, "loop.i");
+        auto llvm_thread_id_x = b.CreateURem(llvm_i, llvm_block_size_x, "thread_id.x");
+        auto llvm_thread_id_yz = b.CreateUDiv(llvm_i, llvm_block_size_x);
+        auto llvm_thread_id_y = b.CreateURem(llvm_thread_id_yz, llvm_block_size_y, "thread_id.y");
+        auto llvm_thread_id_z = b.CreateUDiv(llvm_thread_id_yz, llvm_block_size_y, "thread_id.z");
+        auto llvm_thread_id = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_builtin_type));
+        llvm_thread_id = b.CreateInsertElement(llvm_thread_id, llvm_thread_id_x, static_cast<uint64_t>(0));
+        llvm_thread_id = b.CreateInsertElement(llvm_thread_id, llvm_thread_id_y, static_cast<uint64_t>(1));
+        llvm_thread_id = b.CreateInsertElement(llvm_thread_id, llvm_thread_id_z, static_cast<uint64_t>(2));
+        llvm_thread_id->setName("thread_id");
+        // compute dispatch id
+        auto llvm_dispatch_id = b.CreateNUWMul(llvm_block_id, llvm_block_size);
+        llvm_dispatch_id = b.CreateNUWAdd(llvm_dispatch_id, llvm_thread_id, "dispatch_id");
+        // check if in range
+        auto llvm_in_range = b.CreateICmpULT(llvm_dispatch_id, llvm_dispatch_size);
+        llvm_in_range = b.CreateAndReduce(llvm_in_range);
+        llvm_in_range->setName("thread_id.in.range");
+        // branch
+        auto llvm_loop_body_block = llvm::BasicBlock::Create(_llvm_context, "loop.body", llvm_wrapper_function);
+        auto llvm_loop_update_block = llvm::BasicBlock::Create(_llvm_context, "loop.update", llvm_wrapper_function);
+        b.CreateCondBr(llvm_in_range, llvm_loop_body_block, llvm_loop_update_block);
+        // loop body
+        b.SetInsertPoint(llvm_loop_body_block);
+        // call the kernel
+        auto call_args = llvm_args;
+        for (auto i = 0u; i < CurrentFunction::builtin_variable_count; i++) {
+            switch (i) {
+                case CurrentFunction::builtin_variable_index_thread_id: call_args.emplace_back(llvm_thread_id); break;
+                case CurrentFunction::builtin_variable_index_block_id: call_args.emplace_back(llvm_block_id); break;
+                case CurrentFunction::builtin_variable_index_dispatch_id: call_args.emplace_back(llvm_dispatch_id); break;
+                case CurrentFunction::builtin_variable_index_block_size: call_args.emplace_back(llvm_block_size); break;
+                case CurrentFunction::builtin_variable_index_dispatch_size: call_args.emplace_back(llvm_dispatch_size); break;
+                default: LUISA_ERROR_WITH_LOCATION("Invalid builtin variable index.");
+            }
+        }
+        b.CreateCall(llvm_kernel, call_args);
+        b.CreateBr(llvm_loop_update_block);
+        // loop update
+        b.SetInsertPoint(llvm_loop_update_block);
+        auto llvm_next_i = b.CreateNUWAdd(llvm_i, b.getInt32(1), "loop.i.next");
+        b.CreateStore(llvm_next_i, llvm_ptr_i);
+        auto llvm_loop_cond = b.CreateICmpULT(llvm_next_i, llvm_thread_count, "loop.cond");
+        auto llvm_loop_merge_block = llvm::BasicBlock::Create(_llvm_context, "loop.merge", llvm_wrapper_function);
+        b.CreateCondBr(llvm_loop_cond, llvm_loop_block, llvm_loop_merge_block);
+        // loop merge
+        b.SetInsertPoint(llvm_loop_merge_block);
+        b.CreateRetVoid();
+
+        return llvm_wrapper_function;
     }
 
-    [[nodiscard]] llvm::Function *_translate_callable_function(const xir::CallableFunction *f) noexcept {
+    [[nodiscard]] llvm::Function *_translate_function_definition(const xir::FunctionDefinition *f,
+                                                                 llvm::Function::LinkageTypes linkage,
+                                                                 llvm::StringRef default_name) noexcept {
         auto llvm_ret_type = _translate_type(f->type(), true);
         llvm::SmallVector<llvm::Type *, 16u> llvm_arg_types;
         for (auto arg : f->arguments()) {
@@ -2050,24 +2192,48 @@ private:
                 llvm_arg_types.emplace_back(_translate_type(arg->type(), true));
             }
         }
+        // built-in variables
+        auto llvm_i32_type = llvm::Type::getInt32Ty(_llvm_context);
+        auto llvm_i32x3_type = llvm::VectorType::get(llvm_i32_type, 3, false);
+        for (auto builtin = 0u; builtin < CurrentFunction::builtin_variable_count; builtin++) {
+            llvm_arg_types.emplace_back(llvm_i32x3_type);
+        }
+
         // create function
         auto llvm_func_type = llvm::FunctionType::get(llvm_ret_type, llvm_arg_types, false);
-        auto name_md = f->find_metadata<xir::NameMD>();
-        auto func_name = name_md ? name_md->name() : "callable";
-        auto llvm_func = llvm::Function::Create(llvm_func_type, llvm::Function::PrivateLinkage, llvm::Twine{func_name}, _llvm_module);
+        auto func_name = _get_name_from_metadata(f, default_name);
+        auto llvm_func = llvm::Function::Create(llvm_func_type, linkage, llvm::Twine{func_name}, _llvm_module);
         _llvm_functions.emplace(f, llvm_func);
         // create current translation context
         CurrentFunction current{.func = llvm_func};
         // map arguments
         auto arg_index = 0u;
         for (auto &llvm_arg : current.func->args()) {
-            auto arg = f->arguments()[arg_index++];
-            current.value_map.emplace(arg, &llvm_arg);
+            auto non_builtin_count = f->arguments().size();
+            if (auto arg_i = arg_index++; arg_i < non_builtin_count) {
+                auto arg = f->arguments()[arg_i];
+                current.value_map.emplace(arg, &llvm_arg);
+            } else {// built-in variable
+                auto builtin = arg_i - non_builtin_count;
+                switch (builtin) {
+                    case CurrentFunction::builtin_variable_index_thread_id: llvm_arg.setName("thread_id"); break;
+                    case CurrentFunction::builtin_variable_index_block_id: llvm_arg.setName("block_id"); break;
+                    case CurrentFunction::builtin_variable_index_dispatch_id: llvm_arg.setName("dispatch_id"); break;
+                    case CurrentFunction::builtin_variable_index_block_size: llvm_arg.setName("block_size"); break;
+                    case CurrentFunction::builtin_variable_index_dispatch_size: llvm_arg.setName("dispatch_size"); break;
+                    default: LUISA_ERROR_WITH_LOCATION("Invalid builtin variable index.");
+                }
+                current.builtin_variables[builtin] = &llvm_arg;
+            }
         }
         // translate body
         static_cast<void>(_translate_basic_block(current, f->body_block()));
         // return
         return llvm_func;
+    }
+
+    [[nodiscard]] llvm::Function *_translate_callable_function(const xir::CallableFunction *f) noexcept {
+        return _translate_function_definition(f, llvm::Function::PrivateLinkage, "callable");
     }
 
     [[nodiscard]] llvm::Function *_translate_function(const xir::Function *f) noexcept {
@@ -2077,11 +2243,9 @@ private:
         auto llvm_func = [&] {
             switch (f->derived_function_tag()) {
                 case xir::DerivedFunctionTag::KERNEL:
-                    return _translate_kernel_function(
-                        static_cast<const xir::KernelFunction *>(f));
+                    return _translate_kernel_function(static_cast<const xir::KernelFunction *>(f));
                 case xir::DerivedFunctionTag::CALLABLE:
-                    return _translate_callable_function(
-                        static_cast<const xir::CallableFunction *>(f));
+                    return _translate_callable_function(static_cast<const xir::CallableFunction *>(f));
                 case xir::DerivedFunctionTag::EXTERNAL: LUISA_NOT_IMPLEMENTED();
             }
             LUISA_ERROR_WITH_LOCATION("Invalid function type.");

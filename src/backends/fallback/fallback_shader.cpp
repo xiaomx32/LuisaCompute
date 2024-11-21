@@ -49,7 +49,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, 
             LUISA_WARNING_WITH_LOCATION("LLJIT::addIRModule(): {}", err.message());
         });
     }
-    auto addr = jit->lookup("kernel");
+    auto addr = jit->lookup("kernel.main");
     if(!addr)
     {
         ::llvm::handleAllErrors(addr.takeError(), [](const ::llvm::ErrorInfoBase &err)
@@ -60,6 +60,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, 
     LUISA_ASSERT(addr, "JIT compilation failed with error [{}]");
     _kernel_entry = addr->toPtr<kernel_entry_t>();
 }
+
 void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCommand *command)const noexcept
 {
     static thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
@@ -126,6 +127,17 @@ void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCo
     };
     for (auto &&arg : _bound_arguments) { encode_argument(arg); }
     for (auto &&arg : command->arguments()) { encode_argument(arg); }
+    struct LaunchConfig {
+        uint3 block_id;
+        uint3 dispatch_size;
+        uint3 block_size;
+    };
+    // TODO: fill in true values
+    LaunchConfig config{
+        .block_id = make_uint3(0u),
+        .dispatch_size = command->dispatch_size(),
+        .block_size = make_uint3(0u),
+    };
     (*_kernel_entry)(argument_buffer.data(), argument_buffer.data());
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel)
