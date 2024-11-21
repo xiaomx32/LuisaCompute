@@ -241,7 +241,7 @@ private:
         return _translate_typed_literal(key);
     }
 
-    [[nodiscard]] Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
+    [[nodiscard]] static Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
         LUISA_ASSERT(ast_var.is_builtin(), "Unresolved variable reference.");
         auto op = [tag = ast_var.tag(), t = ast_var.type()] {
             switch (tag) {
