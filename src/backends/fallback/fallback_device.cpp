@@ -10,16 +10,13 @@
 
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
-#include <luisa/xir/translators/ast2xir.h>
-#include <luisa/xir/translators/xir2text.h>
-
 #include "fallback_stream.h"
 #include "fallback_device.h"
 #include "fallback_texture.h"
 #include "fallback_mesh.h"
 #include "fallback_accel.h"
 #include "fallback_bindless_array.h"
-#include "fallback_codegen.h"
+#include "fallback_shader.h"
 
 //#include "llvm_event.h"
 //#include "llvm_shader.h"
@@ -231,31 +228,13 @@ SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &op
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
-    xir::Pool pool;
-    xir::PoolGuard guard{&pool};
-    auto xir_module = xir::ast_to_xir_translate(kernel, {});
-    xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
-    if (!option.name.empty()) { xir_module->set_location(option.name); }
-    // LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
-
-    llvm::LLVMContext llvm_ctx;
-    auto llvm_module = luisa_fallback_backend_codegen(llvm_ctx, xir_module);
-    if (!llvm_module) {
-        LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
-    }
-    llvm_module->print(llvm::errs(), nullptr, true, true);
-
-    if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
-        LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
-    }
-
-    //    return ShaderCreationInfo
-    //    {
-    //            ResourceCreationInfo
-    //            {
-    //                .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<LLVMShader>(this, kernel))
-    //            }
-    //    };
+    return ShaderCreationInfo
+    {
+        ResourceCreationInfo
+        {
+            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_jit.get(), option, kernel))
+        }
+    };
     return ShaderCreationInfo();
 }
 

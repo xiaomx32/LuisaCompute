@@ -1952,7 +1952,52 @@ private:
     }
 
     [[nodiscard]] llvm::Function *_translate_kernel_function(const xir::KernelFunction *f) noexcept {
-        return nullptr;
+        //Swfly tries to generate kernel functions
+        //Kernels are always void type
+        auto llvm_ret_type = _translate_type(nullptr, true);
+        llvm::SmallVector<llvm::Type *, 2u> llvm_arg_types;
+
+
+        // Seems we are going to pack all the parameters into a buffer and only pass its pointer
+        // like *void kernel(struct Params *params, struct LaunchConfig *config)*
+        // so arguments of kernels are always two pointers
+
+        llvm::StructType *params_struct_type = llvm::StructType::create(
+            _llvm_context, "Params"
+        );
+        //Add the arguments to the struct
+        llvm::SmallVector<llvm::Type *, 32u> param_fields{};
+        for (auto arg : f->arguments()) {
+            LUISA_ASSUME(!arg->is_reference());
+            // value and resource arguments are passed by value
+            param_fields.emplace_back(_translate_type(arg->type(), false));
+            LUISA_INFO("arg[{}] is type {}", (int)arg->type());
+        }
+        llvm::StructType *config_struct_type = llvm::StructType::create(
+            _llvm_context, "LaunchConfig"
+        );
+
+        llvm_arg_types.emplace_back(params_struct_type->getPointerTo());
+        llvm_arg_types.emplace_back(config_struct_type->getPointerTo());
+
+        // create function
+        auto llvm_func_type = llvm::FunctionType::get(llvm_ret_type, llvm_arg_types, false);
+        auto name_md = f->find_metadata<xir::NameMD>();
+        auto func_name = name_md ? name_md->name() : "kernel";
+        auto llvm_func = llvm::Function::Create(llvm_func_type, llvm::Function::ExternalLinkage, llvm::Twine{func_name}, _llvm_module);
+        _llvm_functions.emplace(f, llvm_func);
+        // create current translation context
+        CurrentFunction current{.func = llvm_func};
+        // map arguments
+        auto arg_index = 0u;
+//        for (auto &llvm_arg : current.func->args()) {
+//            auto arg = f->arguments()[arg_index++];
+//            current.value_map.emplace(arg, &llvm_arg);
+//        }
+        // translate body
+        static_cast<void>(_translate_basic_block(current, f->body_block()));
+        // return
+        return llvm_func;
     }
 
     [[nodiscard]] llvm::Function *_translate_callable_function(const xir::CallableFunction *f) noexcept {
