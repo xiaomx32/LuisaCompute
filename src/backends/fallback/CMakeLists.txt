@@ -24,6 +24,7 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_texture_sampling.cpp
             fallback_codegen.cpp
             fallback_shader.cpp
+            fallback_buffer.cpp
     )
     luisa_compute_add_backend(fallback SOURCES ${LC_BACKEND_FALLBACK_SRC})
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")

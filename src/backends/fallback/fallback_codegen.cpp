@@ -126,7 +126,7 @@ private:
                 return llvm::ArrayType::get(elem_type, t->dimension());
             }
             case Type::Tag::STRUCTURE: return _translate_struct_type(t)->type;
-            case Type::Tag::BUFFER: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::BUFFER: return llvm::PointerType::get(_llvm_context, 0);
             case Type::Tag::TEXTURE: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
@@ -1151,6 +1151,22 @@ private:
         LUISA_NOT_IMPLEMENTED();
     }
 
+    [[nodiscard]] llvm::Value *translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        //LUISA_NOT_IMPLEMENTED();
+        auto buffer = inst->operand(0u);
+        auto slot = inst->operand(1u);
+        auto value = inst->operand(2u);
+        auto llvm_buffer = _lookup_value(current, b, buffer); // Get the buffer pointer
+        auto llvm_slot = _lookup_value(current, b, slot);     // Get the slot index
+        auto llvm_value = _lookup_value(current, b, value);   // Get the value to write
+        auto element_type = llvm_value->getType(); // Type of the value being written
+        auto target_address = b.CreateGEP(
+            element_type,                 // Element type
+            llvm_buffer,                  // Base pointer
+            llvm_slot                    // Index
+        );
+        return b.CreateStore(llvm_value, target_address);
+    }
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -1557,7 +1573,7 @@ private:
             case xir::IntrinsicOp::ATOMIC_FETCH_MIN: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_MAX: break;
             case xir::IntrinsicOp::BUFFER_READ: break;
-            case xir::IntrinsicOp::BUFFER_WRITE: break;
+            case xir::IntrinsicOp::BUFFER_WRITE: return translate_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BUFFER_SIZE: break;
             case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
@@ -1967,12 +1983,13 @@ private:
         );
         //Add the arguments to the struct
         llvm::SmallVector<llvm::Type *, 32u> param_fields{};
-        for (auto arg : f->arguments()) {
+        LUISA_INFO("has {} argument(s)", f->arguments().size());
+        for (auto& arg : f->arguments()) {
             LUISA_ASSUME(!arg->is_reference());
-            // value and resource arguments are passed by value
             param_fields.emplace_back(_translate_type(arg->type(), false));
-            LUISA_INFO("arg[{}] is type {}", (int)arg->type());
+            LUISA_INFO("arg is type {}", int(arg->type()->tag()));
         }
+        params_struct_type->setBody(param_fields);
         llvm::StructType *config_struct_type = llvm::StructType::create(
             _llvm_context, "LaunchConfig"
         );
@@ -1990,12 +2007,33 @@ private:
         CurrentFunction current{.func = llvm_func};
         // map arguments
         auto arg_index = 0u;
-//        for (auto &llvm_arg : current.func->args()) {
-//            auto arg = f->arguments()[arg_index++];
-//            current.value_map.emplace(arg, &llvm_arg);
-//        }
+        auto llvm_bb = _find_or_create_basic_block(current, f->body_block());
+        IRBuilder builder{llvm_bb};
+        for (auto &llvm_arg : current.func->args()) {
+            if (arg_index == 0) {
+                // First argument: Pointer to the Params struct
+                llvm::Value *params_ptr = &llvm_arg;
+                // Map each real argument to its corresponding field in the Params struct
+                unsigned field_index = 0;
+                for (auto &arg : f->arguments()) {
+                    // Calculate the GEP to get the field's address in the Params struct
+                    llvm::Value *field_ptr = builder.CreateGEP(
+                        params_struct_type, params_ptr,
+                        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(_llvm_context), 0),  // Dereference the pointer
+                         llvm::ConstantInt::get(llvm::Type::getInt32Ty(_llvm_context), field_index++)}); // Field index
+
+                    // For pointers, load the pointer itself (not dereferencing yet)
+                    llvm::Value *field_value;
+                    field_value = builder.CreateLoad(
+                        _translate_type(arg->type(), false), field_ptr, ("input_"+std::to_string(field_index)).c_str());
+                    // Map the field's value or pointer for later use
+                    current.value_map.emplace(arg, field_value);
+                }
+            }
+            ++arg_index;
+        }
         // translate body
-        static_cast<void>(_translate_basic_block(current, f->body_block()));
+        auto body = _translate_basic_block(current, f->body_block());
         // return
         return llvm_func;
     }
