@@ -7,6 +7,7 @@
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
+#include <luisa/core/clock.h>
 
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -14,11 +15,15 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Passes/PassBuilder.h>
 
 #include "fallback_codegen.h"
 
 using namespace luisa;
-luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept
+luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept
 {
     build_bound_arguments(kernel);
     xir::Pool pool;
@@ -38,6 +43,39 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, 
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
+
+    // optimize
+    llvm_module->setDataLayout(machine->createDataLayout());
+    llvm_module->setTargetTriple(machine->getTargetTriple().str());
+
+    // optimize with the new pass manager
+    ::llvm::LoopAnalysisManager LAM;
+    ::llvm::FunctionAnalysisManager FAM;
+    ::llvm::CGSCCAnalysisManager CGAM;
+    ::llvm::ModuleAnalysisManager MAM;
+    ::llvm::PipelineTuningOptions PTO;
+    PTO.LoopInterleaving = true;
+    PTO.LoopVectorization = true;
+    PTO.SLPVectorization = true;
+    PTO.LoopUnrolling = true;
+    PTO.MergeFunctions = true;
+    ::llvm::PassBuilder PB{machine, PTO};
+    FAM.registerPass([&] { return PB.buildDefaultAAPipeline(); });
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    machine->registerPassBuilderCallbacks(PB);
+    Clock clk;
+    clk.tic();
+    auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
+    MPM.run(*llvm_module, MAM);
+    LUISA_INFO("Optimized LLVM module in {} ms.", clk.toc());
+    if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
+        LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
+    }
+    llvm_module->print(llvm::outs(), nullptr, true, true);
 
 
     // compile to machine code

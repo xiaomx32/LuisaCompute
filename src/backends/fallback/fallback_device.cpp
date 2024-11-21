@@ -200,7 +200,7 @@ ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Fun
     {
         ResourceCreationInfo
         {
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_jit.get(), option, kernel))
+            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_target_machine.get(), _jit.get(), option, kernel))
         }
     };
     return ShaderCreationInfo();

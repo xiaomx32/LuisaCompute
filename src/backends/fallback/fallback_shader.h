@@ -4,7 +4,6 @@
 
 #pragma once
 
-
 #include <luisa/core/stl/unordered_map.h>
 #include <luisa/ast/function.h>
 #include <luisa/ast/function_builder.h>
@@ -29,7 +28,7 @@ using luisa::compute::detail::FunctionBuilder;
 class FallbackShader {
 
 public:
-    using kernel_entry_t = void(void*, void*);
+    using kernel_entry_t = void(const void *, const void *);
 
 private:
     luisa::string _name;
@@ -44,10 +43,9 @@ private:
     void build_bound_arguments(Function kernel);
 public:
 
-    void dispatch(const ShaderDispatchCommand *command)const noexcept;
-    FallbackShader(llvm::orc::LLJIT* jit, const ShaderOption &option, Function kernel) noexcept;
+    void dispatch(const ShaderDispatchCommand *command) const noexcept;
+    FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const ShaderOption &option, Function kernel) noexcept;
     ~FallbackShader() noexcept;
-
 
     [[nodiscard]] auto argument_buffer_size() const noexcept { return _argument_buffer_size; }
     [[nodiscard]] auto shared_memory_size() const noexcept { return _shared_memory_size; }
@@ -55,4 +53,4 @@ public:
     //[[nodiscard]] auto callbacks() const noexcept { return _callbacks.data(); }
 };
 
-}// namespace luisa::compute::llvm
+}// namespace luisa::compute::fallback

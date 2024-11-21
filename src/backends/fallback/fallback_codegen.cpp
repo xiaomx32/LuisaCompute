@@ -1159,7 +1159,7 @@ private:
         return _zext_i1_to_i8(b, llvm_cmp);
     }
 
-    [[nodiscard]] llvm::Value *translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
@@ -1168,13 +1168,29 @@ private:
         auto llvm_slot = _lookup_value(current, b, slot);    // Get the slot index
         auto llvm_value = _lookup_value(current, b, value);  // Get the value to write
         auto element_type = llvm_value->getType();           // Type of the value being written
-        auto target_address = b.CreateGEP(
+        auto target_address = b.CreateInBoundsGEP(
             element_type,// Element type
             llvm_buffer, // Base pointer
             llvm_slot    // Index
         );
-        return b.CreateStore(llvm_value, target_address);
+        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign(value->type()->alignment()));
     }
+
+    [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        //LUISA_NOT_IMPLEMENTED();
+        auto buffer = inst->operand(0u);
+        auto slot = inst->operand(1u);
+        auto llvm_buffer = _lookup_value(current, b, buffer);   // Get the buffer pointer
+        auto llvm_slot = _lookup_value(current, b, slot);       // Get the slot index
+        auto element_type = _translate_type(inst->type(), true);// Type of the value being read
+        auto target_address = b.CreateInBoundsGEP(
+            element_type,// Element type
+            llvm_buffer, // Base pointer
+            llvm_slot    // Index
+        );
+        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign(inst->type()->alignment()));
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -1580,8 +1596,8 @@ private:
             case xir::IntrinsicOp::ATOMIC_FETCH_XOR: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_MIN: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_MAX: break;
-            case xir::IntrinsicOp::BUFFER_READ: break;
-            case xir::IntrinsicOp::BUFFER_WRITE: return translate_buffer_write(current, b, inst);
+            case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
+            case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BUFFER_SIZE: break;
             case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
@@ -1931,6 +1947,9 @@ private:
                 auto llvm_void_type = llvm::Type::getVoidTy(_llvm_context);
                 auto assert_func_type = llvm::FunctionType::get(llvm_void_type, {llvm_condition->getType(), llvm_message->getType()}, false);
                 auto external_assert = _llvm_module->getOrInsertFunction("luisa.assert", assert_func_type);
+                auto external_assert_signature = llvm::cast<llvm::Function>(external_assert.getCallee());
+                external_assert_signature->addFnAttr(llvm::Attribute::NoCapture);
+                external_assert_signature->addFnAttr(llvm::Attribute::ReadOnly);
                 return b.CreateCall(external_assert, {llvm_condition, llvm_message});
             }
             case xir::DerivedInstructionTag::ASSUME: {
