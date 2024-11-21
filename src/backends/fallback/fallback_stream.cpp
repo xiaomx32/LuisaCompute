@@ -7,6 +7,7 @@
 #include "fallback_accel.h"
 #include "fallback_mesh.h"
 #include "fallback_texture.h"
+#include "fallback_shader.h"
 
 namespace luisa::compute::fallback {
 
@@ -77,7 +78,8 @@ void FallbackStream::visit(const BufferToTextureCopyCommand *command) noexcept {
 
 void FallbackStream::visit(const ShaderDispatchCommand *command) noexcept
 {
-//    auto shader = reinterpret_cast<const LLVMShader *>(command->handle());
+    auto shader = reinterpret_cast<const FallbackShader *>(command->handle());
+    shader->dispatch(command);
 //    luisa::vector<std::byte> argument_buffer(shader->argument_buffer_size() +
 //                                             shader->shared_memory_size() * _pool.size());
 //    command->decode([&](auto argument) noexcept {

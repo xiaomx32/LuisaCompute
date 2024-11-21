@@ -20,6 +20,7 @@
 using namespace luisa;
 luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept
 {
+    build_bound_arguments(kernel);
     xir::Pool pool;
     xir::PoolGuard guard{&pool};
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
@@ -58,5 +59,102 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::orc::LLJIT *jit, 
     }
     LUISA_ASSERT(addr, "JIT compilation failed with error [{}]");
     _kernel_entry = addr->toPtr<kernel_entry_t>();
+}
+void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCommand *command)const noexcept
+{
+    static thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
 
+    auto argument_buffer_offset = static_cast<size_t>(0u);
+    auto allocate_argument = [&](size_t bytes) noexcept {
+        static constexpr auto alignment = 16u;
+        auto offset = (argument_buffer_offset + alignment - 1u) / alignment * alignment;
+        LUISA_ASSERT(offset + bytes <= argument_buffer.size(),
+                     "Too many arguments in ShaderDispatchCommand");
+        argument_buffer_offset = offset + bytes;
+        return argument_buffer.data() + offset;
+    };
+
+    auto encode_argument = [&allocate_argument, command](const auto &arg) noexcept {
+        using Tag = ShaderDispatchCommand::Argument::Tag;
+        switch (arg.tag) {
+            case Tag::BUFFER: {
+                //What is indirect?
+//                if (reinterpret_cast<const CUDABufferBase *>(arg.buffer.handle)->is_indirect())
+//                {
+//                    auto buffer = reinterpret_cast<const CUDAIndirectDispatchBuffer *>(arg.buffer.handle);
+//                    auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
+//                    auto ptr = allocate_argument(sizeof(binding));
+//                    std::memcpy(ptr, &binding, sizeof(binding));
+//                }
+//                else
+                {
+                    auto buffer = reinterpret_cast<const void*>(arg.buffer.handle);
+                    //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
+                    auto ptr = allocate_argument(sizeof(buffer));
+                    std::memcpy(ptr, &buffer, sizeof(buffer));
+                }
+                break;
+            }
+            case Tag::TEXTURE: {
+//                auto texture = reinterpret_cast<const CUDATexture *>(arg.texture.handle);
+//                auto binding = texture->binding(arg.texture.level);
+//                auto ptr = allocate_argument(sizeof(binding));
+//                std::memcpy(ptr, &binding, sizeof(binding));
+                break;
+            }
+            case Tag::UNIFORM: {
+                auto uniform = command->uniform(arg.uniform);
+                auto ptr = allocate_argument(uniform.size_bytes());
+                std::memcpy(ptr, uniform.data(), uniform.size_bytes());
+                break;
+            }
+            case Tag::BINDLESS_ARRAY: {
+//                auto array = reinterpret_cast<const CUDABindlessArray *>(arg.bindless_array.handle);
+//                auto binding = array->binding();
+//                auto ptr = allocate_argument(sizeof(binding));
+//                std::memcpy(ptr, &binding, sizeof(binding));
+                break;
+            }
+            case Tag::ACCEL: {
+//                auto accel = reinterpret_cast<const CUDAAccel *>(arg.accel.handle);
+//                auto binding = accel->binding();
+//                auto ptr = allocate_argument(sizeof(binding));
+//                std::memcpy(ptr, &binding, sizeof(binding));
+                break;
+            }
+        }
+    };
+    for (auto &&arg : _bound_arguments) { encode_argument(arg); }
+    for (auto &&arg : command->arguments()) { encode_argument(arg); }
+    (*_kernel_entry)(argument_buffer.data(), argument_buffer.data());
+}
+void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel)
+{;
+    _bound_arguments.reserve(kernel.bound_arguments().size());
+    for (auto &&arg : kernel.bound_arguments()) {
+        luisa::visit(
+            [&]<typename T>(T binding) noexcept {
+                ShaderDispatchCommand::Argument argument{};
+                if constexpr (std::is_same_v<T, Function::BufferBinding>) {
+                    argument.tag = ShaderDispatchCommand::Argument::Tag::BUFFER;
+                    argument.buffer.handle = binding.handle;
+                    argument.buffer.offset = binding.offset;
+                    argument.buffer.size = binding.size;
+                } else if constexpr (std::is_same_v<T, Function::TextureBinding>) {
+                    argument.tag = ShaderDispatchCommand::Argument::Tag::TEXTURE;
+                    argument.texture.handle = binding.handle;
+                    argument.texture.level = binding.level;
+                } else if constexpr (std::is_same_v<T, Function::BindlessArrayBinding>) {
+                    argument.tag = ShaderDispatchCommand::Argument::Tag::BINDLESS_ARRAY;
+                    argument.bindless_array.handle = binding.handle;
+                } else if constexpr (std::is_same_v<T, Function::AccelBinding>) {
+                    argument.tag = ShaderDispatchCommand::Argument::Tag::ACCEL;
+                    argument.accel.handle = binding.handle;
+                } else {
+                    LUISA_ERROR_WITH_LOCATION("Unsupported binding type.");
+                }
+                _bound_arguments.emplace_back(argument);
+            },
+            arg);
+    }
 }
