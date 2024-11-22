@@ -20,6 +20,10 @@ class ExecutionEngine;
 namespace llvm::orc {
 class LLJIT;
 }// namespace llvm::orc
+namespace luisa
+{
+    class ThreadPool;
+}
 
 namespace luisa::compute::fallback {
 
@@ -40,10 +44,13 @@ private:
     unique_ptr<llvm::Module> _module{};
     luisa::vector<ShaderDispatchCommand::Argument> _bound_arguments;
 
+    uint3 _block_size;
+
+
     void build_bound_arguments(Function kernel);
 public:
 
-    void dispatch(const ShaderDispatchCommand *command) const noexcept;
+    void dispatch(ThreadPool& pool, const ShaderDispatchCommand *command) const noexcept;
     FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const ShaderOption &option, Function kernel) noexcept;
     ~FallbackShader() noexcept;
 

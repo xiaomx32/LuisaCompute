@@ -79,50 +79,7 @@ void FallbackStream::visit(const BufferToTextureCopyCommand *command) noexcept {
 void FallbackStream::visit(const ShaderDispatchCommand *command) noexcept
 {
     auto shader = reinterpret_cast<const FallbackShader *>(command->handle());
-    shader->dispatch(command);
-//    luisa::vector<std::byte> argument_buffer(shader->argument_buffer_size() +
-//                                             shader->shared_memory_size() * _pool.size());
-//    command->decode([&](auto argument) noexcept {
-//        auto ptr = argument_buffer.data() + shader->argument_offset(argument.variable_uid);
-//        using T = decltype(argument);
-//        if constexpr (std::is_same_v<T, ShaderDispatchCommand::BufferArgument>) {
-//            auto buffer = reinterpret_cast<void *>(argument.handle + argument.offset);
-//            std::memcpy(ptr, &buffer, sizeof(buffer));
-//        } else if constexpr (std::is_same_v<T, ShaderDispatchCommand::TextureArgument>) {
-//            auto texture = reinterpret_cast<const FallbackTexture *>(argument.handle);
-//            auto handle = texture->view(argument.level);
-//            std::memcpy(ptr, &handle, sizeof(handle));
-//        } else if constexpr (std::is_same_v<T, ShaderDispatchCommand::BindlessArrayArgument>) {
-//            auto array = reinterpret_cast<const LLVMBindlessArray *>(argument.handle);
-//            auto handle = array->handle();
-//            std::memcpy(ptr, &handle, sizeof(handle));
-//        } else if constexpr (std::is_same_v<T, ShaderDispatchCommand::AccelArgument>) {
-//            auto handle = reinterpret_cast<LLVMAccel *>(argument.handle)->handle();
-//            std::memcpy(ptr, &handle, sizeof(handle));
-//        } else {// uniform
-//            static_assert(std::same_as<T, ShaderDispatchCommand::UniformArgument>);
-//            std::memcpy(ptr, argument.data, argument.size);
-//        }
-//    });
-//    // Append callback dispatcher to the end of argument buffer
-//    {
-//        auto ptr = argument_buffer.data() + argument_buffer.size() - 16u;
-//        std::memcpy(ptr, reinterpret_cast<const void *>(&llvm_callback_dispatch), 8);
-//        auto callbacks = shader->callbacks();
-//        std::memcpy(ptr + 8, &callbacks, 8);
-//    }
-//    auto arg_buffer = luisa::make_shared<luisa::vector<std::byte>>(std::move(argument_buffer));
-//    auto dispatch_size = command->dispatch_size();
-//    auto block_size = command->kernel().block_size();
-//    auto grid_size = (dispatch_size + block_size - 1u) / block_size;
-//    auto smem_size = shader->shared_memory_size();
-//    auto shared_mem = shader->shared_memory_size() == 0u ? nullptr : arg_buffer->data() + shader->argument_buffer_size();
-//    _pool.parallel(grid_size.x, grid_size.y, grid_size.z,
-//                   [shader, arg_buffer, shared_mem, smem_size, dispatch_size](auto bx, auto by, auto bz) noexcept {
-//                       shader->invoke(arg_buffer->data(),
-//                                      shared_mem + smem_size * ThreadPool::worker_thread_index(),
-//                                      dispatch_size, make_uint3(bx, by, bz));
-//                   });
+    shader->dispatch(_pool, command);
 }
 
 void FallbackStream::visit(const TextureUploadCommand *command) noexcept {

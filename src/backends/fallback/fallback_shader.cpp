@@ -21,10 +21,13 @@
 #include <llvm/Passes/PassBuilder.h>
 
 #include "fallback_codegen.h"
+#include "fallback_texture.h"
+#include "thread_pool.h"
 
 using namespace luisa;
 luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept
 {
+    _block_size = kernel.block_size();
     build_bound_arguments(kernel);
     xir::Pool pool;
     xir::PoolGuard guard{&pool};
@@ -66,7 +69,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     PB.registerFunctionAnalyses(FAM);
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    machine->registerPassBuilderCallbacks(PB);
+    machine->registerPassBuilderCallbacks(PB, false);
     Clock clk;
     clk.tic();
     auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
@@ -99,9 +102,9 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     _kernel_entry = addr->toPtr<kernel_entry_t>();
 }
 
-void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCommand *command)const noexcept
+void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute::ShaderDispatchCommand *command)const noexcept
 {
-    static thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
+    thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
 
     auto argument_buffer_offset = static_cast<size_t>(0u);
     auto allocate_argument = [&](size_t bytes) noexcept {
@@ -127,7 +130,7 @@ void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCo
 //                }
 //                else
                 {
-                    auto buffer = reinterpret_cast<const void*>(arg.buffer.handle);
+                    auto buffer = reinterpret_cast<const void*>(arg.buffer.handle + arg.buffer.offset);
                     //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
                     auto ptr = allocate_argument(sizeof(buffer));
                     std::memcpy(ptr, &buffer, sizeof(buffer));
@@ -135,10 +138,11 @@ void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCo
                 break;
             }
             case Tag::TEXTURE: {
-//                auto texture = reinterpret_cast<const CUDATexture *>(arg.texture.handle);
-//                auto binding = texture->binding(arg.texture.level);
-//                auto ptr = allocate_argument(sizeof(binding));
-//                std::memcpy(ptr, &binding, sizeof(binding));
+                auto texture = reinterpret_cast<const FallbackTexture*>(arg.texture.handle);
+                auto view = texture->view(arg.texture.level);
+                auto ptr = allocate_argument(sizeof(view));
+                FallbackTextureView* v = reinterpret_cast<FallbackTextureView*>(ptr);
+                std::memcpy(ptr, &view, sizeof(view));
                 break;
             }
             case Tag::UNIFORM: {
@@ -174,9 +178,38 @@ void compute::fallback::FallbackShader::dispatch(const compute::ShaderDispatchCo
     LaunchConfig config{
         .block_id = make_uint3(0u),
         .dispatch_size = command->dispatch_size(),
-        .block_size = make_uint3(0u),
+        .block_size = _block_size,
     };
-    (*_kernel_entry)(argument_buffer.data(), argument_buffer.data());
+
+    auto round_up_division = [](unsigned a, unsigned b)
+    {
+        return (a + b - 1) / b;
+    };
+    auto dispatch_counts = make_uint3(
+        round_up_division(config.dispatch_size.x, _block_size.x),
+          round_up_division(config.dispatch_size.y, _block_size.y),
+        round_up_division(config.dispatch_size.z, _block_size.z)
+    );
+
+    auto data = argument_buffer.data();
+
+    for (int i = 0;i<dispatch_counts.x;++i) {
+        for (int j = 0;j<dispatch_counts.y;++j) {
+            for (int k = 0;k<dispatch_counts.z;++k) {
+                auto c = config;
+                c.block_id = make_uint3(i,j,k);
+                (*_kernel_entry)(data,&c);
+            }
+        }
+    }
+
+    // pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
+    //    [this, config, data](auto bx, auto by, auto bz) noexcept {
+    //         auto c = config;
+    //        c.block_id = make_uint3(bx, by, bz);
+    //        (*_kernel_entry)(data, &c);
+    // });
+    // pool.synchronize();
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel)
 {;

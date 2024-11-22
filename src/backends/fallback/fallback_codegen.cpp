@@ -139,7 +139,7 @@ private:
             }
             case Type::Tag::STRUCTURE: return _translate_struct_type(t)->type;
             case Type::Tag::BUFFER: return llvm::PointerType::get(_llvm_context, 0);
-            case Type::Tag::TEXTURE: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false); //I don't know why but yeah a texture view is 16bytes
             case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
@@ -1191,6 +1191,53 @@ private:
         return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign(inst->type()->alignment()));
     }
 
+    [[nodiscard]] llvm::Value *_translate_texture_read(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::Value *view_struct,
+        const xir::Value *coord) noexcept {
+
+        // Get LLVM values for the arguments
+        auto llvm_view_struct = _lookup_value(current, b, view_struct);
+        auto llvm_coord = _lookup_value(current, b, coord);
+
+        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
+        b.CreateStore(llvm_view_struct, texture_struct_alloca);
+
+
+        auto outType = llvm::VectorType::get(b.getFloatTy(), 4u, false);
+        // Allocate space for the result locally
+        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+
+        // Extract x and y from uint2 coordinate
+        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "coord_x");
+        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "coord_y");
+
+        // Define the function type: void(void*, uint, uint, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {b.getPtrTy(), // void* texture_ptr
+             b.getInt32Ty(),   // uint x
+             b.getInt32Ty(),   // uint y
+             b.getPtrTy()},// void* result
+            false);
+
+        // Get the function pointer from the symbol map
+        llvm::AttributeList al{};
+        al.addFnAttribute(_llvm_context, llvm::Attribute::ReadOnly);
+        al.addFnAttribute(_llvm_context, llvm::Attribute::NoCapture);
+        auto func = _llvm_module->getOrInsertFunction("texture.read.2d.float", func_type, al);
+
+        // Bitcast the result allocation to `void*`
+        auto result_ptr = b.CreateBitCast(result_alloca, b.getPtrTy(), "");
+
+        // Call the function
+        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_ptr});
+
+        // Return the loaded result
+        return b.CreateLoad(outType, result_alloca, "loaded_result");
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -1602,7 +1649,7 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: break;
-            case xir::IntrinsicOp::TEXTURE2D_READ: break;
+            case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::TEXTURE2D_WRITE: break;
             case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
@@ -2072,7 +2119,7 @@ private:
             padded_param_indices.emplace_back(llvm_param_types.size());
             auto param_type = _translate_type(arg_type, false);
             llvm_param_types.emplace_back(param_type);
-            param_size_accum = param_offset + arg_type->size();
+            param_size_accum = param_offset + arg_type->is_texture()?16u:arg_type->size(); //so evil, save me please
         }
         // pad the last argument
         if (auto total_size = luisa::align(param_size_accum, param_alignment);

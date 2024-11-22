@@ -22,8 +22,39 @@
 //#include "llvm_shader.h"
 //#include "llvm_codegen.h"
 
+#include <llvm/IRReader/IRReader.h>
+#include <llvm/Support/SourceMgr.h>
+
+//#include "fallback_texture_sampling_wrapper.ll";
+
 namespace luisa::compute::fallback {
 
+static void loadLLVMModuleFromString(::llvm::orc::LLJIT &jit, const char *ir_string) {
+    // Create an LLVM context
+    auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
+    // Wrap the string in a MemoryBuffer
+    auto buffer = ::llvm::MemoryBuffer::getMemBuffer(ir_string, "embedded_ir");
+    // Parse the IR
+    ::llvm::SMDiagnostic err;
+    auto module = ::llvm::parseIR(buffer->getMemBufferRef(), err, *llvm_ctx);
+    if (!module) {
+        throw std::runtime_error("Failed to parse embedded LLVM IR: " + err.getMessage().str());
+    }
+    // Wrap the module in a ThreadSafeModule
+    auto tsm = ::llvm::orc::ThreadSafeModule(std::move(module), std::move(llvm_ctx));
+
+    // Add the module to the JIT
+    if (auto err = jit.addIRModule(std::move(tsm))) {
+        ::llvm::handleAllErrors(std::move(err), [](const ::llvm::ErrorInfoBase &err) {
+            LUISA_WARNING_WITH_LOCATION("LLJIT::addIRModule(): {}", err.message());
+        });
+    }
+}
+
+extern "C" int my_function(int x, int y) {
+    printf("my_function called with arguments: %d, %d\n", x, y);
+    return x + y;
+}
 FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     : DeviceInterface{std::move(ctx)},
       _rtc_device{rtcNewDevice(nullptr)} {
@@ -32,6 +63,7 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
         ::llvm::InitializeNativeTarget();
         ::llvm::InitializeNativeTargetAsmPrinter();
     });
+
     // build JIT engine
     ::llvm::orc::LLJITBuilder jit_builder;
     if (auto host = ::llvm::orc::JITTargetMachineBuilder::detectHost()) {
@@ -84,6 +116,23 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     }
 
     // map symbols
+    llvm::orc::SymbolMap symbol_map{};
+    auto map_symbol = [jit = _jit.get(), &symbol_map]<typename T>(const char *name, T *f) noexcept {
+        static_assert(std::is_function_v<T>);
+        auto addr = llvm::orc::ExecutorAddr::fromPtr(f);
+        auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Exported};
+        symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
+    };
+    map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
+    map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
+    if (auto error = _jit->getMainJITDylib().define(
+            ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
+        ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
+            LUISA_WARNING_WITH_LOCATION("LLJIT::define(): {}", err.message());
+        });
+        LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
+    }
+
     if (auto generator = ::llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             _jit->getDataLayout().getGlobalPrefix())) {
         _jit->getMainJITDylib().addGenerator(std::move(generator.get()));
@@ -196,13 +245,9 @@ SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &op
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
-    return ShaderCreationInfo
-    {
-        ResourceCreationInfo
-        {
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_target_machine.get(), _jit.get(), option, kernel))
-        }
-    };
+    return ShaderCreationInfo{
+        ResourceCreationInfo{
+            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_target_machine.get(), _jit.get(), option, kernel))}};
     return ShaderCreationInfo();
 }
 

@@ -330,18 +330,20 @@ public:
 
 static_assert(sizeof(FallbackTextureView) == 16u);
 
-[[nodiscard]] float32x4_t texture_read_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-[[nodiscard]] float32x4_t texture_read_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-[[nodiscard]] float32x4_t texture_read_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-[[nodiscard]] float32x4_t texture_read_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-[[nodiscard]] float32x4_t texture_read_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-[[nodiscard]] float32x4_t texture_read_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-void texture_write_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-void texture_write_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-void texture_write_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-void texture_write_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-void texture_write_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+void texture_write_2d_float_wrapper(void* ptr, uint x, uint y, void* val);
+void texture_read_2d_float_wrapper(void *ptr, uint x, uint y, void *out);
+// [[nodiscard]] float32x4_t texture_read_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// [[nodiscard]] float32x4_t texture_read_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// [[nodiscard]] float32x4_t texture_read_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// [[nodiscard]] float32x4_t texture_read_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// [[nodiscard]] float32x4_t texture_read_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// [[nodiscard]] float32x4_t texture_read_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
+// void texture_write_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+// void texture_write_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+// void texture_write_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+// void texture_write_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+// void texture_write_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
+// void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
 
 //swfly tries to write the accessors again
 [[nodiscard]] int4 texture_read_2d_int(const FallbackTextureView* tex, uint x, uint y) noexcept;
@@ -350,7 +352,15 @@ void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int6
 [[nodiscard]] uint4 texture_read_3d_uint(const FallbackTextureView* tex, uint x, uint y, uint z) noexcept;
 [[nodiscard]] float4 texture_read_2d_float(const FallbackTextureView* tex, uint x, uint y) noexcept;
 [[nodiscard]] float4 texture_read_3d_float(const FallbackTextureView* tex, uint x, uint y, uint z) noexcept;
-
+//
+//
+[[nodiscard]] void texture_write_2d_int(const FallbackTextureView* tex, uint x, uint y, int4 val) noexcept;
+[[nodiscard]] void texture_write_3d_int(const FallbackTextureView* tex, uint x, uint y, uint z, int4 val) noexcept;
+[[nodiscard]] void texture_write_2d_uint(const FallbackTextureView* tex, uint x, uint y, uint4 val) noexcept;
+[[nodiscard]] void texture_write_3d_uint(const FallbackTextureView* tex, uint x, uint y, uint z, uint4 val) noexcept;
+[[nodiscard]] void texture_write_2d_float(const FallbackTextureView* tex, uint x, uint y, float4 val) noexcept;
+[[nodiscard]] void texture_write_3d_float(const FallbackTextureView* tex, uint x, uint y, uint z, float4 val) noexcept;
+//
 [[nodiscard]] float4 bindless_texture_2d_read(const FallbackTexture *tex, uint level, uint x, uint y) noexcept;
 [[nodiscard]] float4 bindless_texture_3d_read(const FallbackTexture *tex, uint level, uint x, uint y, uint z) noexcept;
 [[nodiscard]] float4 bindless_texture_2d_sample(const FallbackTexture *tex, uint sampler, float u, float v) noexcept;
