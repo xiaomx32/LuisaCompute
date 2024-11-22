@@ -24,6 +24,9 @@
 
 #include "fallback_codegen.h"
 
+#include "fallback_buffer.h"
+#include "fallback_texture.h"
+
 namespace luisa::compute::fallback {
 
 class FallbackCodegen {
@@ -75,6 +78,38 @@ private:
         return name_md ? llvm::StringRef{name_md->name()} : fallback;
     }
 
+    [[nodiscard]] static size_t _get_type_size(const Type *t) noexcept {
+        LUISA_ASSERT(t != nullptr, "Type is nullptr.");
+        if (!t->is_resource() && !t->is_custom()) {
+            return t->size();
+        }
+        switch (t->tag()) {
+            case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
+            case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
+            case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid type: {}.", t->description());
+    }
+
+    [[nodiscard]] static size_t _get_type_alignment(const Type *t) noexcept {
+        LUISA_ASSERT(t != nullptr, "Type is nullptr.");
+        if (!t->is_resource() && !t->is_custom()) {
+            return t->alignment();
+        }
+        switch (t->tag()) {
+            case Type::Tag::BUFFER: return alignof(FallbackBufferView);
+            case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
+            case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
+            default: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid type: {}.", t->description());
+    }
+
     [[nodiscard]] LLVMStruct *_translate_struct_type(const Type *t) noexcept {
         auto iter = _llvm_struct_types.try_emplace(t, nullptr).first;
         if (iter->second) { return iter->second.get(); }
@@ -84,7 +119,7 @@ private:
         luisa::vector<uint> field_indices;
         size_t size = 0u;
         for (auto member : t->members()) {
-            auto aligned_offset = luisa::align(size, member->alignment());
+            auto aligned_offset = luisa::align(size, _get_type_alignment(member));
             if (aligned_offset > size) {
                 auto byte_type = ::llvm::Type::getInt8Ty(_llvm_context);
                 auto padding = ::llvm::ArrayType::get(byte_type, aligned_offset - size);
@@ -94,14 +129,14 @@ private:
             auto member_type = _translate_type(member, false);
             field_types.emplace_back(member_type);
             field_indices.emplace_back(member_index++);
-            size = aligned_offset + member->size();
+            size = aligned_offset + _get_type_size(member);
         }
-        if (t->size() > size) {// last padding
+        if (_get_type_size(t) > size) {// last padding
             auto byte_type = ::llvm::Type::getInt8Ty(_llvm_context);
-            auto padding = ::llvm::ArrayType::get(byte_type, t->size() - size);
+            auto padding = ::llvm::ArrayType::get(byte_type, _get_type_size(t) - size);
             field_types.emplace_back(padding);
         }
-        struct_type->type = ::llvm::StructType::create(_llvm_context, field_types);
+        struct_type->type = ::llvm::StructType::get(_llvm_context, field_types);
         struct_type->padded_field_indices = std::move(field_indices);
         return struct_type;
     }
@@ -138,8 +173,12 @@ private:
                 return llvm::ArrayType::get(elem_type, t->dimension());
             }
             case Type::Tag::STRUCTURE: return _translate_struct_type(t)->type;
-            case Type::Tag::BUFFER: return llvm::PointerType::get(_llvm_context, 0);
-            case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false); //I don't know why but yeah a texture view is 16bytes
+            case Type::Tag::BUFFER: {
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
+            }
+            case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
             case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
@@ -164,7 +203,7 @@ private:
             case Type::Tag::FLOAT64: return llvm::ConstantFP::get(llvm_type, *static_cast<const double *>(data));
             case Type::Tag::VECTOR: {
                 auto elem_type = t->element();
-                auto stride = elem_type->size();
+                auto stride = _get_type_size(elem_type);
                 auto dim = t->dimension();
                 llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
@@ -187,7 +226,7 @@ private:
                 LUISA_ASSERT(llvm_type->isArrayTy(), "Matrix type should be an array type.");
                 auto dim = t->dimension();
                 auto col_type = Type::vector(t->element(), dim);
-                auto col_stride = col_type->size();
+                auto col_stride = _get_type_size(col_type);
                 llvm::SmallVector<llvm::Constant *, 4u> elements;
                 for (auto i = 0u; i < dim; i++) {
                     auto col_data = static_cast<const std::byte *>(data) + i * col_stride;
@@ -198,7 +237,7 @@ private:
             case Type::Tag::ARRAY: {
                 LUISA_ASSERT(llvm_type->isArrayTy(), "Array type should be an array type.");
                 auto elem_type = t->element();
-                auto stride = elem_type->size();
+                auto stride = _get_type_size(elem_type);
                 auto dim = t->dimension();
                 llvm::SmallVector<llvm::Constant *> elements;
                 elements.reserve(dim);
@@ -220,9 +259,9 @@ private:
                 size_t data_offset = 0u;
                 for (auto i = 0u; i < t->members().size(); i++) {
                     auto field_type = t->members()[i];
-                    data_offset = luisa::align(data_offset, field_type->alignment());
+                    data_offset = luisa::align(data_offset, _get_type_alignment(field_type));
                     auto field_data = static_cast<const std::byte *>(data) + data_offset;
-                    data_offset += field_type->size();
+                    data_offset += _get_type_size(field_type);
                     auto padded_index = struct_type->padded_field_indices[i];
                     fields[padded_index] = _translate_literal(field_type, field_data, false);
                 }
@@ -283,7 +322,7 @@ private:
                 auto c = _translate_constant(static_cast<const xir::Constant *>(v));
                 if (load_global && c->getType()->isPointerTy()) {
                     auto llvm_type = _translate_type(v->type(), true);
-                    auto alignment = v->type()->alignment();
+                    auto alignment = _get_type_alignment(v->type());
                     return b.CreateAlignedLoad(llvm_type, c, llvm::MaybeAlign{alignment});
                 }
                 return c;
@@ -370,7 +409,7 @@ private:
         if (!llvm_base->getType()->isPointerTy()) {// create a temporary alloca if base is not a pointer
             auto llvm_base_type = _translate_type(base->type(), false);
             auto llvm_temp = b.CreateAlloca(llvm_base_type);
-            auto alignment = base->type()->alignment();
+            auto alignment = _get_type_alignment(base->type());
             if (llvm_temp->getAlign() < alignment) {
                 llvm_temp->setAlignment(llvm::Align{alignment});
             }
@@ -380,7 +419,7 @@ private:
         // GEP and load the element
         auto llvm_gep = _translate_gep(current, b, inst->type(), base->type(), llvm_base, indices);
         auto llvm_type = _translate_type(inst->type(), true);
-        return b.CreateAlignedLoad(llvm_type, llvm_gep, llvm::MaybeAlign{inst->type()->alignment()});
+        return b.CreateAlignedLoad(llvm_type, llvm_gep, llvm::MaybeAlign{_get_type_alignment(inst->type())});
     }
 
     [[nodiscard]] llvm::Value *_translate_insert(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -398,7 +437,7 @@ private:
         // otherwise we have to make a copy of the base, store the element, and load the modified value
         auto llvm_base_type = _translate_type(base->type(), false);
         auto llvm_temp = b.CreateAlloca(llvm_base_type);
-        auto alignment = base->type()->alignment();
+        auto alignment = _get_type_alignment(base->type());
         if (llvm_temp->getAlign() < alignment) {
             llvm_temp->setAlignment(llvm::Align{alignment});
         }
@@ -410,7 +449,7 @@ private:
         b.CreateAlignedStore(llvm_base, llvm_temp, llvm::MaybeAlign{alignment});
         // GEP and store the element
         auto llvm_gep = _translate_gep(current, b, value->type(), base->type(), llvm_temp, indices);
-        b.CreateAlignedStore(llvm_value, llvm_gep, llvm::MaybeAlign{value->type()->alignment()});
+        b.CreateAlignedStore(llvm_value, llvm_gep, llvm::MaybeAlign{_get_type_alignment(value->type())});
         // load the modified value
         return b.CreateAlignedLoad(llvm_base_type, llvm_temp, llvm::MaybeAlign{alignment});
     }
@@ -1164,31 +1203,38 @@ private:
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
         auto value = inst->operand(2u);
-        auto llvm_buffer = _lookup_value(current, b, buffer);// Get the buffer pointer
-        auto llvm_slot = _lookup_value(current, b, slot);    // Get the slot index
-        auto llvm_value = _lookup_value(current, b, value);  // Get the value to write
-        auto element_type = llvm_value->getType();           // Type of the value being written
+        auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
+        auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
+        auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
+        auto llvm_value = _lookup_value(current, b, value);            // Get the value to write
+        auto element_type = llvm_value->getType();                     // Type of the value being written
         auto target_address = b.CreateInBoundsGEP(
-            element_type,// Element type
-            llvm_buffer, // Base pointer
-            llvm_slot    // Index
+            element_type,    // Element type
+            llvm_buffer_addr,// Base pointer
+            llvm_slot        // Index
         );
-        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign(value->type()->alignment()));
+        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{_get_type_alignment(value->type())});
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
-        auto llvm_buffer = _lookup_value(current, b, buffer);   // Get the buffer pointer
-        auto llvm_slot = _lookup_value(current, b, slot);       // Get the slot index
-        auto element_type = _translate_type(inst->type(), true);// Type of the value being read
+        auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
+        auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
+        auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
+        auto element_type = _translate_type(inst->type(), true);       // Type of the value being read
         auto target_address = b.CreateInBoundsGEP(
-            element_type,// Element type
-            llvm_buffer, // Base pointer
-            llvm_slot    // Index
+            element_type,    // Element type
+            llvm_buffer_addr,// Base pointer
+            llvm_slot        // Index
         );
-        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign(inst->type()->alignment()));
+        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{_get_type_alignment(inst->type())});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_buffer = _lookup_value(current, b, inst->operand(0u));
+        return b.CreateExtractValue(llvm_buffer, {1});
     }
 
     [[nodiscard]] llvm::Value *_translate_texture_read(
@@ -1204,7 +1250,6 @@ private:
         auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
         b.CreateStore(llvm_view_struct, texture_struct_alloca);
 
-
         auto outType = llvm::VectorType::get(b.getFloatTy(), 4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
@@ -1216,10 +1261,10 @@ private:
         // Define the function type: void(void*, uint, uint, void*)
         auto func_type = llvm::FunctionType::get(
             b.getVoidTy(),
-            {b.getPtrTy(), // void* texture_ptr
-             b.getInt32Ty(),   // uint x
-             b.getInt32Ty(),   // uint y
-             b.getPtrTy()},// void* result
+            {b.getPtrTy(),  // void* texture_ptr
+             b.getInt32Ty(),// uint x
+             b.getInt32Ty(),// uint y
+             b.getPtrTy()}, // void* result
             false);
 
         // Get the function pointer from the symbol map
@@ -1645,7 +1690,7 @@ private:
             case xir::IntrinsicOp::ATOMIC_FETCH_MAX: break;
             case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
-            case xir::IntrinsicOp::BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
             case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: break;
@@ -1821,8 +1866,9 @@ private:
             }
             case xir::CastOp::BITWISE_CAST: {
                 // create a temporary alloca
-                auto alignment = std::max(src_type->alignment(), dst_type->alignment());
-                LUISA_ASSERT(src_type->size() == dst_type->size(), "Bitwise cast size mismatch.");
+                auto alignment = std::max(_get_type_alignment(src_type),
+                                          _get_type_alignment(dst_type));
+                LUISA_ASSERT(_get_type_size(src_type) == _get_type_size(dst_type), "Bitwise cast size mismatch.");
                 auto llvm_src_type = _translate_type(src_type, true);
                 auto llvm_dst_type = _translate_type(dst_type, true);
                 auto llvm_temp = b.CreateAlloca(llvm_src_type);
@@ -1934,7 +1980,7 @@ private:
             case xir::DerivedInstructionTag::ALLOCA: {
                 auto llvm_type = _translate_type(inst->type(), false);
                 auto llvm_inst = b.CreateAlloca(llvm_type);
-                auto alignment = inst->type()->alignment();
+                auto alignment = _get_type_alignment(inst->type());
                 if (llvm_inst->getAlign() < alignment) {
                     llvm_inst->setAlignment(llvm::Align{alignment});
                 }
@@ -1942,14 +1988,14 @@ private:
             }
             case xir::DerivedInstructionTag::LOAD: {
                 auto load_inst = static_cast<const xir::LoadInst *>(inst);
-                auto alignment = load_inst->variable()->type()->alignment();
+                auto alignment = _get_type_alignment(load_inst->variable()->type());
                 auto llvm_type = _translate_type(load_inst->type(), true);
                 auto llvm_ptr = _lookup_value(current, b, load_inst->variable());
                 return b.CreateAlignedLoad(llvm_type, llvm_ptr, llvm::MaybeAlign{alignment});
             }
             case xir::DerivedInstructionTag::STORE: {
                 auto store_inst = static_cast<const xir::StoreInst *>(inst);
-                auto alignment = store_inst->variable()->type()->alignment();
+                auto alignment = _get_type_alignment(store_inst->variable()->type());
                 auto llvm_ptr = _lookup_value(current, b, store_inst->variable());
                 auto llvm_value = _lookup_value(current, b, store_inst->value());
                 return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
@@ -2109,7 +2155,7 @@ private:
         auto param_size_accum = static_cast<size_t>(0);
         for (auto i = 0u; i < arg_count; i++) {
             auto arg_type = f->arguments()[i]->type();
-            LUISA_ASSERT(arg_type->alignment() < param_alignment, "Invalid argument alignment.");
+            LUISA_ASSERT(_get_type_alignment(arg_type) <= param_alignment, "Invalid argument alignment.");
             auto param_offset = luisa::align(param_size_accum, param_alignment);
             // pad if necessary
             if (param_offset > param_size_accum) {
@@ -2119,7 +2165,7 @@ private:
             padded_param_indices.emplace_back(llvm_param_types.size());
             auto param_type = _translate_type(arg_type, false);
             llvm_param_types.emplace_back(param_type);
-            param_size_accum = param_offset + arg_type->is_texture()?16u:arg_type->size(); //so evil, save me please
+            param_size_accum = param_offset + _get_type_size(arg_type);//so evil, save me please
         }
         // pad the last argument
         if (auto total_size = luisa::align(param_size_accum, param_alignment);
@@ -2139,7 +2185,7 @@ private:
                                               llvm::Twine{arg_name}.concat(".ptr"));
             auto llvm_arg_type = _translate_type(arg_type, true);
             auto llvm_arg = b.CreateAlignedLoad(llvm_arg_type, llvm_gep,
-                                                llvm::MaybeAlign{arg_type->alignment()},
+                                                llvm::MaybeAlign{_get_type_alignment(arg_type)},
                                                 llvm::Twine{arg_name});
             llvm_args.emplace_back(llvm_arg);
         }

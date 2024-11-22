@@ -3,12 +3,14 @@
 //
 
 #include "fallback_shader.h"
+
+#include "fallback_buffer.h"
+
 #include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
 #include <luisa/core/clock.h>
-
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -25,8 +27,7 @@
 #include "thread_pool.h"
 
 using namespace luisa;
-luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept
-{
+luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept {
     _block_size = kernel.block_size();
     build_bound_arguments(kernel);
     xir::Pool pool;
@@ -69,7 +70,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     PB.registerFunctionAnalyses(FAM);
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    machine->registerPassBuilderCallbacks(PB, false);
+    machine->registerPassBuilderCallbacks(PB);
     Clock clk;
     clk.tic();
     auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
@@ -80,21 +81,17 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     }
     llvm_module->print(llvm::outs(), nullptr, true, true);
 
-
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));
     auto error = jit->addIRModule(std::move(m));
-    if(error)
-    {
+    if (error) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
             LUISA_WARNING_WITH_LOCATION("LLJIT::addIRModule(): {}", err.message());
         });
     }
     auto addr = jit->lookup("kernel.main");
-    if(!addr)
-    {
-        ::llvm::handleAllErrors(addr.takeError(), [](const ::llvm::ErrorInfoBase &err)
-        {
+    if (!addr) {
+        ::llvm::handleAllErrors(addr.takeError(), [](const ::llvm::ErrorInfoBase &err) {
             LUISA_WARNING_WITH_LOCATION("LLJIT::lookup(): {}", err.message());
         });
     }
@@ -102,8 +99,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     _kernel_entry = addr->toPtr<kernel_entry_t>();
 }
 
-void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute::ShaderDispatchCommand *command)const noexcept
-{
+void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCommand *command) const noexcept {
     thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
 
     auto argument_buffer_offset = static_cast<size_t>(0u);
@@ -121,27 +117,28 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute
         switch (arg.tag) {
             case Tag::BUFFER: {
                 //What is indirect?
-//                if (reinterpret_cast<const CUDABufferBase *>(arg.buffer.handle)->is_indirect())
-//                {
-//                    auto buffer = reinterpret_cast<const CUDAIndirectDispatchBuffer *>(arg.buffer.handle);
-//                    auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
-//                    auto ptr = allocate_argument(sizeof(binding));
-//                    std::memcpy(ptr, &binding, sizeof(binding));
-//                }
-//                else
+                //                if (reinterpret_cast<const CUDABufferBase *>(arg.buffer.handle)->is_indirect())
+                //                {
+                //                    auto buffer = reinterpret_cast<const CUDAIndirectDispatchBuffer *>(arg.buffer.handle);
+                //                    auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
+                //                    auto ptr = allocate_argument(sizeof(binding));
+                //                    std::memcpy(ptr, &binding, sizeof(binding));
+                //                }
+                //                else
                 {
-                    auto buffer = reinterpret_cast<const void*>(arg.buffer.handle + arg.buffer.offset);
+                    auto buffer = reinterpret_cast<FallbackBuffer *>(arg.buffer.handle);
+                    auto buffer_view = buffer->view(arg.buffer.offset);
                     //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
-                    auto ptr = allocate_argument(sizeof(buffer));
-                    std::memcpy(ptr, &buffer, sizeof(buffer));
+                    auto ptr = allocate_argument(sizeof(buffer_view));
+                    std::memcpy(ptr, &buffer, sizeof(buffer_view));
                 }
                 break;
             }
             case Tag::TEXTURE: {
-                auto texture = reinterpret_cast<const FallbackTexture*>(arg.texture.handle);
+                auto texture = reinterpret_cast<const FallbackTexture *>(arg.texture.handle);
                 auto view = texture->view(arg.texture.level);
                 auto ptr = allocate_argument(sizeof(view));
-                FallbackTextureView* v = reinterpret_cast<FallbackTextureView*>(ptr);
+                FallbackTextureView *v = reinterpret_cast<FallbackTextureView *>(ptr);
                 std::memcpy(ptr, &view, sizeof(view));
                 break;
             }
@@ -152,17 +149,17 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute
                 break;
             }
             case Tag::BINDLESS_ARRAY: {
-//                auto array = reinterpret_cast<const CUDABindlessArray *>(arg.bindless_array.handle);
-//                auto binding = array->binding();
-//                auto ptr = allocate_argument(sizeof(binding));
-//                std::memcpy(ptr, &binding, sizeof(binding));
+                //                auto array = reinterpret_cast<const CUDABindlessArray *>(arg.bindless_array.handle);
+                //                auto binding = array->binding();
+                //                auto ptr = allocate_argument(sizeof(binding));
+                //                std::memcpy(ptr, &binding, sizeof(binding));
                 break;
             }
             case Tag::ACCEL: {
-//                auto accel = reinterpret_cast<const CUDAAccel *>(arg.accel.handle);
-//                auto binding = accel->binding();
-//                auto ptr = allocate_argument(sizeof(binding));
-//                std::memcpy(ptr, &binding, sizeof(binding));
+                //                auto accel = reinterpret_cast<const CUDAAccel *>(arg.accel.handle);
+                //                auto binding = accel->binding();
+                //                auto ptr = allocate_argument(sizeof(binding));
+                //                std::memcpy(ptr, &binding, sizeof(binding));
                 break;
             }
         }
@@ -181,24 +178,22 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute
         .block_size = _block_size,
     };
 
-    auto round_up_division = [](unsigned a, unsigned b)
-    {
+    auto round_up_division = [](unsigned a, unsigned b) {
         return (a + b - 1) / b;
     };
     auto dispatch_counts = make_uint3(
         round_up_division(config.dispatch_size.x, _block_size.x),
-          round_up_division(config.dispatch_size.y, _block_size.y),
-        round_up_division(config.dispatch_size.z, _block_size.z)
-    );
+        round_up_division(config.dispatch_size.y, _block_size.y),
+        round_up_division(config.dispatch_size.z, _block_size.z));
 
     auto data = argument_buffer.data();
 
-    for (int i = 0;i<dispatch_counts.x;++i) {
-        for (int j = 0;j<dispatch_counts.y;++j) {
-            for (int k = 0;k<dispatch_counts.z;++k) {
+    for (int i = 0; i < dispatch_counts.x; ++i) {
+        for (int j = 0; j < dispatch_counts.y; ++j) {
+            for (int k = 0; k < dispatch_counts.z; ++k) {
                 auto c = config;
-                c.block_id = make_uint3(i,j,k);
-                (*_kernel_entry)(data,&c);
+                c.block_id = make_uint3(i, j, k);
+                (*_kernel_entry)(data, &c);
             }
         }
     }
@@ -211,8 +206,7 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool& pool, const compute
     // });
     // pool.synchronize();
 }
-void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel)
-{;
+void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {
     _bound_arguments.reserve(kernel.bound_arguments().size());
     for (auto &&arg : kernel.bound_arguments()) {
         luisa::visit(
