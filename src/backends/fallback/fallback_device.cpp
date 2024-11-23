@@ -125,6 +125,8 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     };
     map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
     map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
+
+    map_symbol("intersect.closest", &intersect_closest_wrapper);
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {

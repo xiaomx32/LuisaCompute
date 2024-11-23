@@ -154,3 +154,7 @@ bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, f
 }// namespace detail
 
 }// namespace luisa::compute::fallback
+
+void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit)
+{
+}

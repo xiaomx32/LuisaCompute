@@ -24,6 +24,7 @@
 
 #include "fallback_codegen.h"
 #include "fallback_texture.h"
+#include "fallback_accel.h"
 #include "thread_pool.h"
 
 using namespace luisa;
@@ -35,7 +36,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    //LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
@@ -156,10 +157,9 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
                 break;
             }
             case Tag::ACCEL: {
-                //                auto accel = reinterpret_cast<const CUDAAccel *>(arg.accel.handle);
-                //                auto binding = accel->binding();
-                //                auto ptr = allocate_argument(sizeof(binding));
-                //                std::memcpy(ptr, &binding, sizeof(binding));
+                auto accel = reinterpret_cast<FallbackAccel *>(arg.accel.handle);
+                auto ptr = allocate_argument(sizeof(accel));
+                std::memcpy(ptr, &accel, sizeof(accel));
                 break;
             }
         }
@@ -204,7 +204,7 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
     //        c.block_id = make_uint3(bx, by, bz);
     //        (*_kernel_entry)(data, &c);
     // });
-    // pool.synchronize();
+    pool.synchronize();
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {
     _bound_arguments.reserve(kernel.bound_arguments().size());

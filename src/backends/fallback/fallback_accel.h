@@ -71,3 +71,6 @@ struct alignas(16) FallbackAccelInstance {
 
 LUISA_STRUCT(luisa::compute::fallback::FallbackAccelInstance,
              affine, visible, dirty, pad, geom0, geom1) {};
+
+void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit);
+
