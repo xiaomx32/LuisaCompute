@@ -179,8 +179,10 @@ private:
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
             case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
-            case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
-            case Type::Tag::ACCEL: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::BINDLESS_ARRAY: return llvm::PointerType::get(_llvm_context, 0);
+            case Type::Tag::ACCEL: {
+                return llvm::PointerType::get(_llvm_context, 0);
+            }
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
         }
         LUISA_ERROR_WITH_LOCATION("Invalid type: {}.", t->description());
@@ -1325,23 +1327,35 @@ private:
         LUISA_ASSERT(type->is_vector(), "only aggregate vectors at the moment");
         auto elem_type = type->element();
         auto dim = type->dimension();
+        LUISA_INFO("elem:{}, return:{}",elem_type->description(), type->description());
 
-        auto llvm_elem_type = _translate_type(elem_type, false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
 
         auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
 
-        auto stride = _get_type_size(elem_type);
-
+        llvm_elem_type->print(llvm::outs());
+        llvm_return_type->print(llvm::outs());
         auto vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_return_type));
         for (int i = 0;i<dim;i++) {
             auto operand = inst->operand(i);
+            LUISA_ASSERT(operand->type() == elem_type, "element type doesn't match");
             auto llvm_operand = _lookup_value(current, b, operand);
+
+            LUISA_ASSERT(llvm_operand->getType()==llvm_elem_type, "element type doesn't match");
+
             vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
         }
         return vector;
     }
 
 
+    [[nodiscard]] llvm::Value *_translate_accel_trace(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::IntrinsicInst *inst) noexcept {
+
+        return nullptr;
+    }
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -1819,7 +1833,7 @@ private:
             case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
             case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
             case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: break;
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_trace(current, b, inst);
             case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;

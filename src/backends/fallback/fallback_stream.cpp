@@ -83,13 +83,15 @@ void FallbackStream::visit(const ShaderDispatchCommand *command) noexcept
 }
 
 void FallbackStream::visit(const TextureUploadCommand *command) noexcept {
-    auto byte_size = command->size().x * command->size().y * command->size().z *
-                     pixel_storage_align(command->storage());
+
+    auto tex = reinterpret_cast<FallbackTexture *>(command->handle())->view(command->level());
+    auto byte_size = pixel_storage_size(tex.storage(), tex.size3d());
     auto temp_buffer = luisa::make_shared<luisa::vector<std::byte>>(byte_size);
     std::memcpy(temp_buffer->data(), command->data(), byte_size);
     _pool.async([cmd = *command, temp_buffer = std::move(temp_buffer)] {
         auto tex = reinterpret_cast<FallbackTexture *>(cmd.handle())->view(cmd.level());
-        tex.copy_from(temp_buffer->data());
+        auto byte_size = pixel_storage_size(tex.storage(), tex.size3d());
+        std::memcpy(const_cast<std::byte*>(tex.data()), temp_buffer->data(), byte_size);
     });
 }
 

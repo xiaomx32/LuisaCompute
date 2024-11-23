@@ -6,6 +6,8 @@
 #include <luisa/core/logging.h>
 #include "fallback_texture.h"
 
+#include "luisa/rust/api_types.hpp"
+
 namespace luisa::compute::fallback {
 
 namespace detail {
@@ -210,9 +212,13 @@ static constexpr const std::array ewa_filter_weight_lut{
 }// namespace detail
 
 FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uint levels) noexcept
-    : _storage{storage}, _mip_levels{levels}, _dimension{dim},
-      _pixel_stride_shift{std::bit_width(static_cast<uint>(pixel_storage_align(storage))) - 1u} {
+    : _storage{storage}, _mip_levels{levels}, _dimension{dim}
+    {
     if (_dimension == 2u) {
+        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_align(storage))) - 1u;
+        if (storage == PixelStorage::BC6 || storage == PixelStorage::BC7) {
+            _pixel_stride_shift = 0u;
+        }
         _size[0] = size.x;
         _size[1] = size.y;
         _size[2] = 1u;

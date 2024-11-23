@@ -267,23 +267,12 @@ public:
     const PixelStorage storage()const noexcept {return _storage;}
 private:
     [[nodiscard]] inline std::byte *_pixel2d(uint2 xy) const noexcept {
-        auto block = xy / block_size;
-        auto pixel = xy % block_size;
-        auto grid_width = (_width + block_size - 1u) / block_size;
-        auto block_index = grid_width * block.y + block.x;
-        auto pixel_index = block_index * block_size * block_size +
-                           pixel.y * block_size + pixel.x;
-        return _data + (static_cast<size_t>(pixel_index) << _pixel_stride_shift);
+        auto idx = xy.x + xy.y * _width;
+        return _data + (static_cast<size_t>(idx) << _pixel_stride_shift);
     }
     [[nodiscard]] inline std::byte *_pixel3d(uint3 xyz) const noexcept {
-        auto block = xyz / block_size;
-        auto pixel = xyz % block_size;
-        auto grid_width = (_width + block_size - 1u) / block_size;
-        auto grid_height = (_height + block_size - 1u) / block_size;
-        auto block_index = grid_width * grid_height * block.z + grid_width * block.y + block.x;
-        auto pixel_index = block_index * block_size * block_size * block_size +
-                           (pixel.z * block_size + pixel.y) * block_size + pixel.x;
-        return _data + (static_cast<size_t>(pixel_index) << _pixel_stride_shift);
+        auto idx = xyz.x + xyz.y * _width+xyz.z * _width*_height;
+        return _data + (static_cast<size_t>(idx) << _pixel_stride_shift);
     }
     [[nodiscard]] inline auto _out_of_bounds(uint2 xy) const noexcept {
         return !(xy[0] < _width & xy[1] < _height);
