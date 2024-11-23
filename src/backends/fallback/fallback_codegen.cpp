@@ -1255,8 +1255,8 @@ private:
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
 
         // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "coord_x");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "coord_y");
+        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
+        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
 
         // Define the function type: void(void*, uint, uint, void*)
         auto func_type = llvm::FunctionType::get(
@@ -1268,10 +1268,7 @@ private:
             false);
 
         // Get the function pointer from the symbol map
-        llvm::AttributeList al{};
-        al.addFnAttribute(_llvm_context, llvm::Attribute::ReadOnly);
-        al.addFnAttribute(_llvm_context, llvm::Attribute::NoCapture);
-        auto func = _llvm_module->getOrInsertFunction("texture.read.2d.float", func_type, al);
+        auto func = _llvm_module->getOrInsertFunction("texture.read.2d.float", func_type);
 
         // Bitcast the result allocation to `void*`
         auto result_ptr = b.CreateBitCast(result_alloca, b.getPtrTy(), "");
@@ -1280,8 +1277,70 @@ private:
         b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_ptr});
 
         // Return the loaded result
-        return b.CreateLoad(outType, result_alloca, "loaded_result");
+        return b.CreateLoad(outType, result_alloca, "");
     }
+    [[nodiscard]] llvm::Value *_translate_texture_write(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::Value *view_struct,
+        const xir::Value *coord,
+        const xir::Value *val) noexcept {
+        // Get LLVM values for the arguments
+        auto llvm_view_struct = _lookup_value(current, b, view_struct);
+        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_val = _lookup_value(current, b, val);
+
+        // Allocate space for the texture view struct
+        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
+        b.CreateStore(llvm_view_struct, texture_struct_alloca);
+
+        // Extract x and y from uint2 coordinate
+        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
+        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
+
+        auto val_alloca = b.CreateAlloca(llvm_val->getType(), nullptr, "");
+        b.CreateStore(llvm_val, val_alloca);
+        auto val_ptr = b.CreateBitCast(val_alloca, b.getPtrTy(), "");
+
+        // Define the function type: void(void*, uint, uint, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {b.getPtrTy(),  // void* texture_ptr
+             b.getInt32Ty(),// uint x
+             b.getInt32Ty(),// uint y
+             b.getPtrTy()}, // void* value
+            false);
+
+        // Add attributes to the function (write operations typically do not use `readonly`)
+        auto func = _llvm_module->getOrInsertFunction("texture.write.2d.float", func_type);
+
+
+        // Call the function
+        return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_ptr});
+    }
+    [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
+        IRBuilder &b, const xir::IntrinsicInst *inst)
+    {
+        auto type = inst->type();
+        LUISA_ASSERT(type->is_vector(), "only aggregate vectors at the moment");
+        auto elem_type = type->element();
+        auto dim = type->dimension();
+
+        auto llvm_elem_type = _translate_type(elem_type, false);
+
+        auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
+
+        auto stride = _get_type_size(elem_type);
+
+        auto vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_return_type));
+        for (int i = 0;i<dim;i++) {
+            auto operand = inst->operand(i);
+            auto llvm_operand = _lookup_value(current, b, operand);
+            vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
+        }
+        return vector;
+    }
+
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
@@ -1695,7 +1754,7 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: break;
             case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::TEXTURE2D_WRITE: break;
+            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst->operand(0u), inst->operand(1u), inst->operand(2u));
             case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
@@ -1743,7 +1802,7 @@ private:
             case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: break;
             case xir::IntrinsicOp::DEVICE_ADDRESS_READ: break;
             case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: break;
-            case xir::IntrinsicOp::AGGREGATE: break;
+            case xir::IntrinsicOp::AGGREGATE: return _translate_aggregate(current, b, inst);
             case xir::IntrinsicOp::SHUFFLE: break;
             case xir::IntrinsicOp::INSERT: return _translate_insert(current, b, inst);
             case xir::IntrinsicOp::EXTRACT: return _translate_extract(current, b, inst);
@@ -1812,8 +1871,8 @@ private:
         if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
             return llvm::Constant::getNullValue(llvm_ret_type);
         }
-        return nullptr;
         LUISA_NOT_IMPLEMENTED();
+        return nullptr;
     }
 
     [[nodiscard]] llvm::Value *_translate_cast_inst(CurrentFunction &current, IRBuilder &b,
