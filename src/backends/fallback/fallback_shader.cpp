@@ -70,7 +70,11 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     PB.registerFunctionAnalyses(FAM);
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+#if LLVM_VERSION_MAJOR >= 19
+    machine->registerPassBuilderCallbacks(PB);
+#else
     machine->registerPassBuilderCallbacks(PB, false);
+#endif
     Clock clk;
     clk.tic();
     auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
