@@ -1075,17 +1075,20 @@ public:
         // return the function if it has been translated
         if (!just_inserted) { return iter->second; }
         // create a new function
-        FunctionDefinition *def = nullptr;
-        switch (f.tag()) {
-            case ASTFunction::Tag::KERNEL:
-                def = _module->create_kernel();
-                break;
-            case ASTFunction::Tag::CALLABLE:
-                def = _module->create_callable(f.return_type());
-                break;
-            case ASTFunction::Tag::RASTER_STAGE:
-                LUISA_NOT_IMPLEMENTED();
-        }
+        auto def = [&]() noexcept -> FunctionDefinition * {
+            switch (f.tag()) {
+                case ASTFunction::Tag::KERNEL: {
+                    auto kernel = _module->create_kernel();
+                    kernel->set_block_size(f.block_size());
+                    return kernel;
+                }
+                case ASTFunction::Tag::CALLABLE: {
+                    return _module->create_callable(f.return_type());
+                }
+                case ASTFunction::Tag::RASTER_STAGE: LUISA_NOT_IMPLEMENTED();
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid function tag.");
+        }();
         iter->second = def;
         // translate the function
         auto old = std::exchange(_current, {.f = def, .ast = &f});
