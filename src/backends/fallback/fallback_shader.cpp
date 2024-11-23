@@ -35,7 +35,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    // LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+    //LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
@@ -70,7 +70,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(llvm::TargetMachine *ma
     PB.registerFunctionAnalyses(FAM);
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    machine->registerPassBuilderCallbacks(PB);
+    machine->registerPassBuilderCallbacks(PB, false);
     Clock clk;
     clk.tic();
     auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);

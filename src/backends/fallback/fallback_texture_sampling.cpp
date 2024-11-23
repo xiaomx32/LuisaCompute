@@ -13,13 +13,13 @@ namespace luisa::compute::fallback
 
 void texture_write_2d_float_wrapper(void *ptr, uint x, uint y, void *val)
 {
-
+    auto b = static_cast<float4 *>(val);
+    auto view = reinterpret_cast<const FallbackTextureView*>(ptr);
+    texture_write_2d_float(reinterpret_cast<const FallbackTextureView*>(ptr), x, y, *(float4*)val);
 }
 void texture_read_2d_float_wrapper(void *ptr, uint x, uint y, void *out)
 {
-    auto view = reinterpret_cast<const FallbackTextureView*>(ptr);
     *(float4*)out = texture_read_2d_float(reinterpret_cast<const FallbackTextureView*>(ptr), x, y);
-    float4 result = *(float4*)out;
 }
 
 void luisa_bc7_read(const FallbackTextureView* tex, uint x, uint y, float4& out) noexcept
