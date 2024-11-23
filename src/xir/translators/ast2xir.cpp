@@ -105,10 +105,11 @@ private:
         // vector to vector cast
         if (value->type()->is_vector() && type->is_vector()) {
             LUISA_ASSERT(value->type()->dimension() >= type->dimension(), "Vector cast dimension mismatch.");
+            auto value_elem_type = value->type()->element();
             luisa::fixed_vector<Value *, 4u> elements;
             for (auto i = 0u; i < type->dimension(); i++) {
                 auto idx = _translate_constant_access_index(i);
-                auto elem = b.call(type->element(), IntrinsicOp::EXTRACT, {value, idx});
+                auto elem = b.call(value_elem_type, IntrinsicOp::EXTRACT, {value, idx});
                 elements.emplace_back(b.static_cast_if_necessary(type->element(), elem));
             }
             return b.call(type, IntrinsicOp::AGGREGATE, elements);
@@ -434,9 +435,10 @@ private:
                     args.emplace_back(_type_cast_if_necessary(b, elem_type, arg));
                 } else {
                     LUISA_ASSERT(arg->type()->is_vector(), "Vector call argument type mismatch.");
+                    auto arg_elem_type = arg->type()->element();
                     for (auto i = 0u; i < arg->type()->dimension(); i++) {
                         auto idx = _translate_constant_access_index(i);
-                        auto elem = b.call(expr->type()->element(), IntrinsicOp::EXTRACT, {arg, idx});
+                        auto elem = b.call(arg_elem_type, IntrinsicOp::EXTRACT, {arg, idx});
                         args.emplace_back(_type_cast_if_necessary(b, elem_type, elem));
                     }
                 }

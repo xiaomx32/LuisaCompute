@@ -1340,7 +1340,6 @@ private:
             auto operand = inst->operand(i);
             LUISA_ASSERT(operand->type() == elem_type, "element type doesn't match");
             auto llvm_operand = _lookup_value(current, b, operand);
-
             LUISA_ASSERT(llvm_operand->getType()==llvm_elem_type, "element type doesn't match");
 
             vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
@@ -2069,8 +2068,10 @@ private:
             case xir::DerivedInstructionTag::STORE: {
                 auto store_inst = static_cast<const xir::StoreInst *>(inst);
                 auto alignment = _get_type_alignment(store_inst->variable()->type());
-                auto llvm_ptr = _lookup_value(current, b, store_inst->variable());
-                auto llvm_value = _lookup_value(current, b, store_inst->value());
+                auto ptr = store_inst->variable();
+                auto value = store_inst->value();
+                auto llvm_ptr = _lookup_value(current, b, ptr);
+                auto llvm_value = _lookup_value(current, b, value);
                 return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
             }
             case xir::DerivedInstructionTag::GEP: {
