@@ -10,6 +10,18 @@
 namespace luisa::compute::fallback
 {
 
+
+void texture_write_2d_float_wrapper(void *ptr, uint x, uint y, void *val)
+{
+    auto b = static_cast<float4 *>(val);
+    auto view = reinterpret_cast<const FallbackTextureView*>(ptr);
+    texture_write_2d_float(reinterpret_cast<const FallbackTextureView*>(ptr), x, y, *(float4*)val);
+}
+void texture_read_2d_float_wrapper(void *ptr, uint x, uint y, void *out)
+{
+    *(float4*)out = texture_read_2d_float(reinterpret_cast<const FallbackTextureView*>(ptr), x, y);
+}
+
 void luisa_bc7_read(const FallbackTextureView* tex, uint x, uint y, float4& out) noexcept
 {
     auto block_pos = make_uint2(x/4,y/4);
@@ -120,6 +132,24 @@ float4 fallback::texture_read_2d_float(const FallbackTextureView *tex, uint x, u
         }
         default:
             return tex->read2d<float>(make_uint2(x,y));
+    }
+}
+void fallback::texture_write_2d_float(const FallbackTextureView *tex, uint x, uint y, float4 value) noexcept
+{
+    switch(tex->storage())
+    {
+        case PixelStorage::BC7:
+        {
+            LUISA_ERROR("cannot write to BC texture");
+            break;
+        }
+        case PixelStorage::BC6:
+        {
+            LUISA_ERROR("cannot write to BC texture");
+            break;
+        }
+        default:
+            return tex->write2d<float>(make_uint2(x,y), value);
     }
 }
 float4 fallback::texture_read_3d_float(const FallbackTextureView *tex, uint x, uint y, uint z) noexcept
