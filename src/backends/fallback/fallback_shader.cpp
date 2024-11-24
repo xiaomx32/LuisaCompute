@@ -111,7 +111,6 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
         LUISA_ERROR_WITH_LOCATION("Failed to add generator.");
     }
 
-
     _block_size = kernel.block_size();
     build_bound_arguments(kernel);
     xir::Pool pool;
@@ -155,7 +154,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 #if LLVM_VERSION_MAJOR >= 19
-    machine->registerPassBuilderCallbacks(PB);
+    _target_machine->registerPassBuilderCallbacks(PB);
 #else
     _target_machine->registerPassBuilderCallbacks(PB, false);
 #endif
@@ -171,8 +170,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));
-    auto error = _jit->addIRModule(std::move(m));
-    if (error) {
+    if (auto error = _jit->addIRModule(std::move(m))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
             LUISA_WARNING_WITH_LOCATION("LLJIT::addIRModule(): {}", err.message());
         });

@@ -87,7 +87,7 @@ private:
             case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
             case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
             case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
-            case Type::Tag::ACCEL: return sizeof(void*);
+            case Type::Tag::ACCEL: return sizeof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -103,7 +103,7 @@ private:
             case Type::Tag::BUFFER: return alignof(FallbackBufferView);
             case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
             case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
-            case Type::Tag::ACCEL: return alignof(void*);
+            case Type::Tag::ACCEL: return alignof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -1272,15 +1272,13 @@ private:
         // Get the function pointer from the symbol map
         auto func = _llvm_module->getOrInsertFunction("texture.read.2d.float", func_type);
 
-        // Bitcast the result allocation to `void*`
-        auto result_ptr = b.CreateBitCast(result_alloca, b.getPtrTy(), "");
-
         // Call the function
-        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_ptr});
+        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_alloca});
 
         // Return the loaded result
         return b.CreateLoad(outType, result_alloca, "");
     }
+
     [[nodiscard]] llvm::Value *_translate_texture_write(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1302,7 +1300,6 @@ private:
 
         auto val_alloca = b.CreateAlloca(llvm_val->getType(), nullptr, "");
         b.CreateStore(llvm_val, val_alloca);
-        auto val_ptr = b.CreateBitCast(val_alloca, b.getPtrTy(), "");
 
         // Define the function type: void(void*, uint, uint, void*)
         auto func_type = llvm::FunctionType::get(
@@ -1316,13 +1313,12 @@ private:
         // Add attributes to the function (write operations typically do not use `readonly`)
         auto func = _llvm_module->getOrInsertFunction("texture.write.2d.float", func_type);
 
-
         // Call the function
-        return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_ptr});
+        return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_alloca});
     }
+
     [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
-        IRBuilder &b, const xir::IntrinsicInst *inst)
-    {
+                                                    IRBuilder &b, const xir::IntrinsicInst *inst) {
         auto type = inst->type();
         LUISA_ASSERT(type->is_vector(), "only aggregate vectors at the moment");
         auto elem_type = type->element();
@@ -1333,139 +1329,169 @@ private:
         auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
 
         auto vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_return_type));
-        for (int i = 0;i<dim;i++) {
+        for (int i = 0; i < dim; i++) {
             auto operand = inst->operand(i);
             LUISA_ASSERT(operand->type() == elem_type, "element type doesn't match");
             auto llvm_operand = _lookup_value(current, b, operand);
-            LUISA_ASSERT(llvm_operand->getType()==llvm_elem_type, "element type doesn't match");
+            LUISA_ASSERT(llvm_operand->getType() == llvm_elem_type, "element type doesn't match");
 
             vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
         }
         return vector;
     }
-[[nodiscard]] llvm::Value *_translate_shuffle(CurrentFunction &current,
-        IRBuilder &b, const xir::IntrinsicInst *inst) {
 
-        //swfly has to give up using llvm's intrinsic for shuffle because it's too difficult
-        auto type = inst->type();
-        LUISA_ASSERT(type->is_vector(), "shuffle target must be a vector");
+    [[nodiscard]] llvm::Value *_translate_shuffle(CurrentFunction &current,
+                                                  IRBuilder &b, const xir::IntrinsicInst *inst) {
 
-        auto elem_type = type->element();
-        auto dim = type->dimension();
+        // swfly has to give up using llvm's intrinsic for shuffle because it's too difficult
+        // don't give up
+        auto result_type = inst->type();
+        LUISA_ASSERT(result_type->is_vector(), "shuffle target must be a vector");
 
-        // First operand is the target vector
-        auto target = inst->operand(0);
-        auto llvm_target = _lookup_value(current, b, target);
+        auto result_elem_type = result_type->element();
+        auto result_dim = result_type->dimension();
+        LUISA_ASSERT(inst->operand_count() == result_dim + 1u, "shuffle operand count doesn't match");
 
-        // Validate the target type
-        auto llvm_elem_type = _translate_type(elem_type, true);
-        auto llvm_target_type = llvm_target->getType();
+        auto src = inst->operand(0);
+        LUISA_ASSERT(src != nullptr, "shuffle target is null");
 
-        // Initialize a poison vector as the result
-        auto result_vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_target_type));
+        auto src_type = src->type();
+        LUISA_ASSERT(src_type != nullptr && src_type->element() == result_elem_type,
+                     "shuffle element type doesn't match");
 
-        // Extract elements based on the indices and insert into the new vector
-        for (int i = 1; i <= dim; ++i) { // Starting from the second operand
-            auto index_operand = inst->operand(i);
-            // Lookup the index value
-            auto llvm_index = _lookup_value(current, b, index_operand);
-            // Extract the element from the target vector
-            auto extracted_elem = b.CreateExtractElement(llvm_target, llvm_index);
-            // Insert the extracted element into the result vector
-            result_vector = b.CreateInsertElement(result_vector, extracted_elem, llvm::ConstantInt::get(b.getInt32Ty(), i - 1));
-        }
+        auto llvm_src = _lookup_value(current, b, src);
 
-        return result_vector;
-    }
-
-[[nodiscard]] llvm::Value *_translate_accel_trace(
-    CurrentFunction &current,
-    IRBuilder &b,
-    const xir::IntrinsicInst *inst) noexcept {
-
-    // Extract LLVM values for the operands
-    const xir::Value *accel = inst->operand(0u);
-    const xir::Value *ray = inst->operand(1u);
-    const xir::Value *mask = inst->operand(2u);
-
-    // Get LLVM values for the arguments
-    auto llvm_accel = _lookup_value(current, b, accel);
-    auto llvm_ray = _lookup_value(current, b, ray);
-    auto llvm_mask = _lookup_value(current, b, mask);
-
-    // Allocate space for the SurfaceHit result locally
-    auto hit_type = llvm::StructType::create(
-        b.getContext(),
-        {b.getInt32Ty(), // uint inst
-         b.getInt32Ty(), // uint prim
-         llvm::VectorType::get(b.getFloatTy(), 2u, false), // float2 bary
-         b.getFloatTy()}, // float committed_ray_t
-        "SurfaceHit");
-
-    auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
-
-    // Extract ray components
-    auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "compressed_origin");
-    auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "compressed_t_min");
-    auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "compressed_direction");
-    auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "compressed_t_max");
-
-    LUISA_INFO("Type of compressed_origin:");
-    //printTypeLayout(compressed_origin->getType());
-    // Extract x, y, z for origin
-    auto origin_x = b.CreateExtractValue(compressed_origin, 0, "origin_x");
-    auto origin_y = b.CreateExtractValue(compressed_origin, 1, "origin_y");
-    auto origin_z = b.CreateExtractValue(compressed_origin, 2, "origin_z");
-
-    // Extract x, y, z for direction
-    auto direction_x = b.CreateExtractValue(compressed_direction, 0, "direction_x");
-    auto direction_y = b.CreateExtractValue(compressed_direction, 1, "direction_y");
-    auto direction_z = b.CreateExtractValue(compressed_direction, 2, "direction_z");
-
-    // Define the function type: void(void*, float, float, float, float, float, float, float, float, unsigned, void*)
-    auto func_type = llvm::FunctionType::get(
-        b.getVoidTy(),
-        {
-            b.getPtrTy(),      // void* accel
-            b.getFloatTy(),    // float ox
-            b.getFloatTy(),    // float oy
-            b.getFloatTy(),    // float oz
-            b.getFloatTy(),    // float dx
-            b.getFloatTy(),    // float dy
-            b.getFloatTy(),    // float dz
-            b.getFloatTy(),    // float tmin
-            b.getFloatTy(),    // float tmax
-            b.getInt32Ty(),    // unsigned mask
-            b.getPtrTy()       // void* hit
-        },
-        false);
-
-    // Get the function pointer from the symbol map
-    auto func = _llvm_module->getOrInsertFunction("intersect.closest", func_type);
-
-    // Bitcast the hit allocation to `void*`
-    auto hit_ptr = b.CreateBitCast(hit_alloca, b.getPtrTy(), "");
-
-    // Call the function
-    b.CreateCall(
-        func,
-        {
-            llvm_accel,     // accel pointer
-            origin_x,       // ray.origin.x
-            origin_y,       // ray.origin.y
-            origin_z,       // ray.origin.z
-            direction_x,    // ray.direction.x
-            direction_y,    // ray.direction.y
-            direction_z,    // ray.direction.z
-            compressed_t_min, // ray.t_min
-            compressed_t_max, // ray.t_max
-            llvm_mask,      // mask
-            hit_ptr         // hit pointer
+        auto indices = inst->operand_uses().subspan(1);
+        auto statically_shuffled = std::all_of(indices.cbegin(), indices.cend(), [](const xir::Use *v) {
+            LUISA_ASSERT(v->value() != nullptr, "shuffle index is null");
+            return v->value()->derived_value_tag() == xir::DerivedValueTag::CONSTANT;
         });
 
-    // Load the SurfaceHit result and return
-    return b.CreateLoad(hit_type, hit_alloca, "hit_result");
-}
+        // we may use llvm's shufflevector intrinsic if all indices are constant
+        if (statically_shuffled) {
+            llvm::SmallVector<int, 4u> static_indices;
+            for (auto i : indices) {
+                auto static_index = [src_dim = src_type->dimension(), index = static_cast<const xir::Constant *>(i->value())] {
+                    auto safe_index = [src_dim](auto x) noexcept {
+                        LUISA_ASSERT(x >= 0u && x < src_dim, "shuffle index out of range");
+                        return static_cast<int>(x);
+                    };
+                    switch (index->type()->tag()) {
+                        case Type::Tag::INT8: return safe_index(index->as<int8_t>());
+                        case Type::Tag::UINT8: return safe_index(index->as<uint8_t>());
+                        case Type::Tag::INT16: return safe_index(index->as<int16_t>());
+                        case Type::Tag::UINT16: return safe_index(index->as<uint16_t>());
+                        case Type::Tag::INT32: return safe_index(index->as<int32_t>());
+                        case Type::Tag::UINT32: return safe_index(index->as<uint32_t>());
+                        case Type::Tag::INT64: return safe_index(index->as<int64_t>());
+                        case Type::Tag::UINT64: return safe_index(index->as<uint64_t>());
+                        default: break;
+                    }
+                    LUISA_ERROR_WITH_LOCATION("invalid shuffle index type: {}.", index->type()->description());
+                }();
+                static_indices.push_back(static_index);
+            }
+            auto llvm_poison_value = llvm::PoisonValue::get(llvm_src->getType());
+            return b.CreateShuffleVector(llvm_src, llvm_poison_value, static_indices);
+        }
+
+        // otherwise, we extract elements and create the target vector
+        auto llvm_result_type = _translate_type(result_type, true);
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_result_type));
+        for (auto i = 0u; i < result_dim; i++) {
+            auto llvm_index = _lookup_value(current, b, indices[i]->value());
+            auto llvm_src_elem = b.CreateExtractElement(llvm_src, llvm_index);
+            llvm_result = b.CreateInsertElement(llvm_result, llvm_src_elem, i);
+        }
+        return llvm_result;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_accel_trace(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::IntrinsicInst *inst) noexcept {
+
+        // Extract LLVM values for the operands
+        const xir::Value *accel = inst->operand(0u);
+        const xir::Value *ray = inst->operand(1u);
+        const xir::Value *mask = inst->operand(2u);
+
+        // Get LLVM values for the arguments
+        auto llvm_accel = _lookup_value(current, b, accel);
+        auto llvm_ray = _lookup_value(current, b, ray);
+        auto llvm_mask = _lookup_value(current, b, mask);
+
+        // Allocate space for the SurfaceHit result locally
+        auto hit_type = llvm::StructType::create(
+            b.getContext(),
+            {b.getInt32Ty(),                                  // uint inst
+             b.getInt32Ty(),                                  // uint prim
+             llvm::VectorType::get(b.getFloatTy(), 2u, false),// float2 bary
+             b.getFloatTy()},                                 // float committed_ray_t
+            "SurfaceHit");
+
+        auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
+
+        // Extract ray components
+        auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "compressed_origin");
+        auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "compressed_t_min");
+        auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "compressed_direction");
+        auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "compressed_t_max");
+
+        LUISA_INFO("Type of compressed_origin:");
+        //printTypeLayout(compressed_origin->getType());
+        // Extract x, y, z for origin
+        auto origin_x = b.CreateExtractValue(compressed_origin, 0, "origin_x");
+        auto origin_y = b.CreateExtractValue(compressed_origin, 1, "origin_y");
+        auto origin_z = b.CreateExtractValue(compressed_origin, 2, "origin_z");
+
+        // Extract x, y, z for direction
+        auto direction_x = b.CreateExtractValue(compressed_direction, 0, "direction_x");
+        auto direction_y = b.CreateExtractValue(compressed_direction, 1, "direction_y");
+        auto direction_z = b.CreateExtractValue(compressed_direction, 2, "direction_z");
+
+        // Define the function type: void(void*, float, float, float, float, float, float, float, float, unsigned, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {
+                b.getPtrTy(),  // void* accel
+                b.getFloatTy(),// float ox
+                b.getFloatTy(),// float oy
+                b.getFloatTy(),// float oz
+                b.getFloatTy(),// float dx
+                b.getFloatTy(),// float dy
+                b.getFloatTy(),// float dz
+                b.getFloatTy(),// float tmin
+                b.getFloatTy(),// float tmax
+                b.getInt32Ty(),// unsigned mask
+                b.getPtrTy()   // void* hit
+            },
+            false);
+
+        // Get the function pointer from the symbol map
+        auto func = _llvm_module->getOrInsertFunction("intersect.closest", func_type);
+
+        // Call the function
+        b.CreateCall(
+            func,
+            {
+                llvm_accel,      // accel pointer
+                origin_x,        // ray.origin.x
+                origin_y,        // ray.origin.y
+                origin_z,        // ray.origin.z
+                direction_x,     // ray.direction.x
+                direction_y,     // ray.direction.y
+                direction_z,     // ray.direction.z
+                compressed_t_min,// ray.t_min
+                compressed_t_max,// ray.t_max
+                llvm_mask,       // mask
+                hit_alloca       // hit pointer
+            });
+
+        // Load the SurfaceHit result and return
+        return b.CreateLoad(hit_type, hit_alloca, "hit_result");
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
