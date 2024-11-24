@@ -1245,6 +1245,8 @@ private:
         const xir::Value *view_struct,
         const xir::Value *coord) noexcept {
 
+        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>(), "Invalid texture view type.");
+
         // Get LLVM values for the arguments
         auto llvm_view_struct = _lookup_value(current, b, view_struct);
         auto llvm_coord = _lookup_value(current, b, coord);
@@ -1285,6 +1287,9 @@ private:
         const xir::Value *view_struct,
         const xir::Value *coord,
         const xir::Value *val) noexcept {
+
+        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>(), "Invalid texture view type.");
+
         // Get LLVM values for the arguments
         auto llvm_view_struct = _lookup_value(current, b, view_struct);
         auto llvm_coord = _lookup_value(current, b, coord);
