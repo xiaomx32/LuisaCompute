@@ -30,7 +30,6 @@
 namespace luisa::compute::fallback {
 
 class FallbackCodegen {
-
 private:
     struct LLVMStruct {
         llvm::StructType *type = nullptr;
@@ -46,7 +45,7 @@ private:
 
         // builtin variables
 #define LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(NAME, INDEX) \
-    static constexpr size_t builtin_variable_index_##NAME = INDEX;
+    static constexpr size_t builtin_variable_index_## NAME = INDEX;
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(thread_id, 0)
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(block_id, 1)
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(dispatch_id, 2)
@@ -1200,9 +1199,10 @@ private:
         return _zext_i1_to_i8(b, llvm_cmp);
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
         //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
+        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
         auto value = inst->operand(2u);
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
@@ -1210,33 +1210,79 @@ private:
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
         auto llvm_value = _lookup_value(current, b, value);            // Get the value to write
         auto element_type = llvm_value->getType();                     // Type of the value being written
+        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
         auto target_address = b.CreateInBoundsGEP(
-            element_type,    // Element type
+            slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
-        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{_get_type_alignment(value->type())});
+        auto alignment = _get_type_alignment(value->type());
+        b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
+        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
         //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
+        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
         auto element_type = _translate_type(inst->type(), true);       // Type of the value being read
+        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
         auto target_address = b.CreateInBoundsGEP(
-            element_type,    // Element type
+            slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
-        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{_get_type_alignment(inst->type())});
+        auto alignment = _get_type_alignment(inst->type());
+        b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
+        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
-        auto llvm_buffer = _lookup_value(current, b, inst->operand(0u));
-        return b.CreateExtractValue(llvm_buffer, {1});
+    [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+        auto buffer = inst->operand(0u);
+        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
+        auto llvm_buffer = _lookup_value(current, b, buffer);
+        auto llvm_byte_size = b.CreateExtractValue(llvm_buffer, {1});
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        llvm_byte_size = b.CreateZExtOrTrunc(llvm_byte_size, llvm_result_type);
+        if (!byte_address) {
+            auto elem_size = buffer->type()->element()->size();
+            auto llvm_elem_size = llvm::ConstantInt::get(llvm_result_type, elem_size);
+            llvm_byte_size = b.CreateUDiv(llvm_byte_size, llvm_elem_size);
+        }
+        return llvm_byte_size;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_buffer_device_address(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto buffer = inst->operand(0u);
+        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
+        auto llvm_buffer = _lookup_value(current, b, buffer);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_buffer, {0});
+        auto llvm_int_type = _translate_type(inst->type(), false);
+        return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_device_address_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
+        auto alignment = _get_type_alignment(inst->type());
+        b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        return b.CreateAlignedLoad(llvm_result_type, llvm_ptr, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_device_address_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_value = _lookup_value(current, b, inst->operand(1u));
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
+        auto alignment = _get_type_alignment(inst->operand(1u)->type());
+        b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
+        return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
     [[nodiscard]] llvm::Value *_translate_texture_read(
@@ -1905,9 +1951,9 @@ private:
             case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
-            case xir::IntrinsicOp::BYTE_BUFFER_READ: break;
-            case xir::IntrinsicOp::BYTE_BUFFER_WRITE: break;
-            case xir::IntrinsicOp::BYTE_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BYTE_BUFFER_READ: return _translate_buffer_read(current, b, inst, true);
+            case xir::IntrinsicOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
+            case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst->operand(0u), inst->operand(1u), inst->operand(2u));
             case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
@@ -1953,10 +1999,10 @@ private:
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: break;
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: break;
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: break;
-            case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: break;
+            case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: return _translate_buffer_device_address(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: break;
-            case xir::IntrinsicOp::DEVICE_ADDRESS_READ: break;
-            case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: break;
+            case xir::IntrinsicOp::DEVICE_ADDRESS_READ: return _translate_device_address_read(current, b, inst);
+            case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: return _translate_device_address_write(current, b, inst);
             case xir::IntrinsicOp::AGGREGATE: return _translate_aggregate(current, b, inst);
             case xir::IntrinsicOp::SHUFFLE: return _translate_shuffle(current, b, inst);
             case xir::IntrinsicOp::INSERT: return _translate_insert(current, b, inst);
@@ -2022,7 +2068,7 @@ private:
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
             case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
         }
-        LUISA_INFO("unsupported intrinsic op type:{}", (int)inst->op());
+        LUISA_INFO("unsupported intrinsic op type:{}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
         // TODO: implement
         if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
