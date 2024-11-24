@@ -63,87 +63,6 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
         ::llvm::InitializeNativeTarget();
         ::llvm::InitializeNativeTargetAsmPrinter();
     });
-
-    // build JIT engine
-    ::llvm::orc::LLJITBuilder jit_builder;
-    if (auto host = ::llvm::orc::JITTargetMachineBuilder::detectHost()) {
-        ::llvm::TargetOptions options;
-        options.AllowFPOpFusion = ::llvm::FPOpFusion::Fast;
-        options.UnsafeFPMath = true;
-        options.NoInfsFPMath = true;
-        options.NoNaNsFPMath = true;
-        options.NoTrappingFPMath = true;
-        options.NoSignedZerosFPMath = true;
-        options.ApproxFuncFPMath = true;
-        options.EnableIPRA = true;
-        options.StackSymbolOrdering = true;
-        options.EnableMachineFunctionSplitter = true;
-        options.EnableMachineOutliner = true;
-        options.NoTrapAfterNoreturn = true;
-        host->setOptions(options);
-        host->setCodeGenOptLevel(::llvm::CodeGenOptLevel::Aggressive);
-#ifdef __aarch64__
-        host->addFeatures({"+neon"});
-#else
-        host->addFeatures({"+avx2"});
-#endif
-        LUISA_INFO("LLVM JIT target: triplet = {}, features = {}.",
-                   host->getTargetTriple().str(),
-                   host->getFeatures().getString());
-        if (auto machine = host->createTargetMachine()) {
-            _target_machine = std::move(machine.get());
-        } else {
-            ::llvm::handleAllErrors(machine.takeError(), [&](const ::llvm::ErrorInfoBase &e) {
-                LUISA_WARNING_WITH_LOCATION("JITTargetMachineBuilder::createTargetMachine(): {}.", e.message());
-            });
-            LUISA_ERROR_WITH_LOCATION("Failed to create target machine.");
-        }
-        jit_builder.setJITTargetMachineBuilder(std::move(*host));
-    } else {
-        ::llvm::handleAllErrors(host.takeError(), [&](const ::llvm::ErrorInfoBase &e) {
-            LUISA_WARNING_WITH_LOCATION("JITTargetMachineBuilder::detectHost(): {}.", e.message());
-        });
-        LUISA_ERROR_WITH_LOCATION("Failed to detect host.");
-    }
-
-    if (auto expected_jit = jit_builder.create()) {
-        _jit = std::move(expected_jit.get());
-    } else {
-        ::llvm::handleAllErrors(expected_jit.takeError(), [](const ::llvm::ErrorInfoBase &err) {
-            LUISA_WARNING_WITH_LOCATION("LLJITBuilder::create(): {}", err.message());
-        });
-        LUISA_ERROR_WITH_LOCATION("Failed to create LLJIT.");
-    }
-
-    // map symbols
-    llvm::orc::SymbolMap symbol_map{};
-    auto map_symbol = [jit = _jit.get(), &symbol_map]<typename T>(const char *name, T *f) noexcept {
-        static_assert(std::is_function_v<T>);
-        auto addr = llvm::orc::ExecutorAddr::fromPtr(f);
-        auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Exported};
-        symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
-    };
-    map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
-    map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
-
-    map_symbol("intersect.closest", &intersect_closest_wrapper);
-    if (auto error = _jit->getMainJITDylib().define(
-            ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
-        ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
-            LUISA_WARNING_WITH_LOCATION("LLJIT::define(): {}", err.message());
-        });
-        LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
-    }
-
-    if (auto generator = ::llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            _jit->getDataLayout().getGlobalPrefix())) {
-        _jit->getMainJITDylib().addGenerator(std::move(generator.get()));
-    } else {
-        ::llvm::handleAllErrors(generator.takeError(), [](const ::llvm::ErrorInfoBase &err) {
-            LUISA_WARNING_WITH_LOCATION("DynamicLibrarySearchGenerator::GetForCurrentProcess(): {}", err.message());
-        });
-        LUISA_ERROR_WITH_LOCATION("Failed to add generator.");
-    }
 }
 
 void *FallbackDevice::native_handle() const noexcept {
@@ -249,7 +168,7 @@ SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &op
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
     return ShaderCreationInfo{
         ResourceCreationInfo{
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(_target_machine.get(), _jit.get(), option, kernel))}};
+            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(option, kernel))}};
     return ShaderCreationInfo();
 }
 

@@ -45,13 +45,15 @@ private:
     luisa::vector<ShaderDispatchCommand::Argument> _bound_arguments;
 
     uint3 _block_size;
+    mutable std::unique_ptr<::llvm::orc::LLJIT> _jit;
+    std::unique_ptr<::llvm::TargetMachine> _target_machine;
 
 
     void build_bound_arguments(Function kernel);
 public:
 
     void dispatch(ThreadPool& pool, const ShaderDispatchCommand *command) const noexcept;
-    FallbackShader(llvm::TargetMachine *machine, llvm::orc::LLJIT *jit, const ShaderOption &option, Function kernel) noexcept;
+    FallbackShader(const ShaderOption &option, Function kernel) noexcept;
     ~FallbackShader() noexcept;
 
     [[nodiscard]] auto argument_buffer_size() const noexcept { return _argument_buffer_size; }

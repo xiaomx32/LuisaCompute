@@ -108,6 +108,7 @@ void FallbackStream::visit(const TextureCopyCommand *command) noexcept {
         auto dst_tex = reinterpret_cast<FallbackTexture *>(cmd.dst_handle())->view(cmd.dst_level());
         dst_tex.copy_from(src_tex);
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const TextureToBufferCopyCommand *command) noexcept {
@@ -121,6 +122,7 @@ void FallbackStream::visit(const TextureToBufferCopyCommand *command) noexcept {
 void FallbackStream::visit(const AccelBuildCommand *command) noexcept {
     auto accel = reinterpret_cast<FallbackAccel *>(command->handle());
     accel->build(_pool, command->instance_count(), command->modifications());
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const MeshBuildCommand *command) noexcept {
@@ -131,10 +133,11 @@ void FallbackStream::visit(const MeshBuildCommand *command) noexcept {
     auto t_b = command->triangle_buffer();
     auto t_b_o = command->triangle_buffer_offset();
     auto t_b_s = command->triangle_buffer_size();
-    _pool.async([&,mesh = reinterpret_cast<FallbackMesh *>(command->handle())]
+    _pool.async([=,mesh = reinterpret_cast<FallbackMesh *>(command->handle())]
     {
         mesh->commit(v_b, v_b_o, v_s, v_b_s, t_b, t_b_o, t_b_s);
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BindlessArrayUpdateCommand *command) noexcept {

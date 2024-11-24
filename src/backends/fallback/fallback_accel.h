@@ -39,6 +39,7 @@ public:
     };
 
 private:
+    const RTCDevice _device;
     RTCScene _handle;
     mutable luisa::vector<Instance> _instances;
 
