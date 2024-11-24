@@ -85,7 +85,7 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
             case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::BINDLESS_ARRAY: return sizeof(void *);
             case Type::Tag::ACCEL: return sizeof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
@@ -101,7 +101,7 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return alignof(FallbackBufferView);
             case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: LUISA_NOT_IMPLEMENTED();
+            case Type::Tag::BINDLESS_ARRAY: return alignof(void *);
             case Type::Tag::ACCEL: return alignof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
@@ -1217,7 +1217,7 @@ private:
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(value->type());
-        b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
+        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
         return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{alignment});
     }
 
@@ -1237,7 +1237,7 @@ private:
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(inst->type());
-        b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
+        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
         return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{alignment});
     }
 
@@ -1270,7 +1270,7 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->type());
-        b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
+        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         auto llvm_result_type = _translate_type(inst->type(), true);
         return b.CreateAlignedLoad(llvm_result_type, llvm_ptr, llvm::MaybeAlign{alignment});
     }
@@ -1281,7 +1281,7 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->operand(1u)->type());
-        b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
+        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
@@ -1462,7 +1462,42 @@ private:
         IRBuilder &b,
         const xir::IntrinsicInst *inst) noexcept
     {
-        auto result_type = inst->type();
+        auto bindless_ptr = inst->operand(0u);
+        auto slotIdx = inst->operand(1u);
+        auto elemIdx = inst->operand(2u);
+        auto type = inst->type();
+        auto alignment = _get_type_alignment(inst->type());
+        auto size = inst->type()->size();
+
+        // Get LLVM values for the arguments
+        auto llvm_bindless = _lookup_value(current, b, bindless_ptr);
+        auto llvm_slot = _lookup_value(current, b, slotIdx);
+        auto llvm_elem = _lookup_value(current, b, elemIdx);
+
+        auto llvm_data_stride = llvm::ConstantInt::get(b.getInt32Ty(), inst->type()->size());
+
+        auto llvm_value_type = _translate_type(inst->type(), true);
+        // Allocate space for the texture view struct
+        auto val_alloca = b.CreateAlloca(llvm_value_type, nullptr, "");
+
+
+        // Define the function type: void(void*, uint, uint, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {b.getPtrTy(),  // void* texture_ptr
+             b.getInt32Ty(),// slot
+             b.getInt32Ty(),// elem
+            b.getInt32Ty(), //stride
+             b.getPtrTy()}, // void* value
+            false);
+
+        // Add attributes to the function (write operations typically do not use `readonly`)
+        auto func = _llvm_module->getOrInsertFunction("bindless.buffer.read", func_type);
+
+        // Call the function
+        b.CreateCall(func, {llvm_bindless, llvm_slot, llvm_elem, llvm_data_stride, val_alloca});
+        // Return the loaded result
+        return b.CreateLoad(llvm_value_type, val_alloca, "");
     }
     [[nodiscard]] llvm::Value *_translate_accel_trace(
         CurrentFunction &current,

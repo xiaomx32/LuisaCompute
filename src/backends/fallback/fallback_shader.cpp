@@ -25,6 +25,7 @@
 #include "fallback_codegen.h"
 #include "fallback_texture.h"
 #include "fallback_accel.h"
+#include "fallback_bindless_array.h"
 #include "thread_pool.h"
 
 using namespace luisa;
@@ -53,9 +54,9 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
 #else
         host->addFeatures({"+avx2"});
 #endif
-        LUISA_INFO("LLVM JIT target: triplet = {}, features = {}.",
-                   host->getTargetTriple().str(),
-                   host->getFeatures().getString());
+        // LUISA_INFO("LLVM JIT target: triplet = {}, features = {}.",
+        //            host->getTargetTriple().str(),
+        //            host->getFeatures().getString());
         if (auto machine = host->createTargetMachine()) {
             _target_machine = std::move(machine.get());
         } else {
@@ -93,6 +94,8 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
 
     map_symbol("intersect.closest", &intersect_closest_wrapper);
+
+    map_symbol("bindless.buffer.read", &bindless_buffer_read);
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
@@ -118,7 +121,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+    //LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
@@ -126,7 +129,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
         LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
     }
     //llvm_module->print(llvm::errs(), nullptr, true, true);
-    llvm_module->print(llvm::outs(), nullptr, true, true);
+    //llvm_module->print(llvm::outs(), nullptr, true, true);
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
@@ -166,7 +169,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
     }
-    llvm_module->print(llvm::outs(), nullptr, true, true);
+    //llvm_module->print(llvm::outs(), nullptr, true, true);
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));
@@ -235,10 +238,10 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
                 break;
             }
             case Tag::BINDLESS_ARRAY: {
-                //                auto array = reinterpret_cast<const CUDABindlessArray *>(arg.bindless_array.handle);
-                //                auto binding = array->binding();
-                //                auto ptr = allocate_argument(sizeof(binding));
-                //                std::memcpy(ptr, &binding, sizeof(binding));
+                auto bindless = reinterpret_cast<FallbackBindlessArray *>(arg.buffer.handle);
+                //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
+                auto ptr = allocate_argument(sizeof(bindless));
+                std::memcpy(ptr, &bindless, sizeof(bindless));
                 break;
             }
             case Tag::ACCEL: {
