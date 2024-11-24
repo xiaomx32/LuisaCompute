@@ -1411,6 +1411,13 @@ private:
         return llvm_result;
     }
 
+    [[nodiscard]] llvm::Value *_translate_bindless_read(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::IntrinsicInst *inst) noexcept
+    {
+        auto result_type = inst->type();
+    }
     [[nodiscard]] llvm::Value *_translate_accel_trace(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1443,7 +1450,6 @@ private:
         auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "compressed_direction");
         auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "compressed_t_max");
 
-        LUISA_INFO("Type of compressed_origin:");
         //printTypeLayout(compressed_origin->getType());
         // Extract x, y, z for origin
         auto origin_x = b.CreateExtractValue(compressed_origin, 0, "origin_x");
@@ -1946,7 +1952,7 @@ private:
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_read(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: break;
             case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: break;
             case xir::IntrinsicOp::BINDLESS_BUFFER_TYPE: break;
