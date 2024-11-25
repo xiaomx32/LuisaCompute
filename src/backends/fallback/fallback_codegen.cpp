@@ -4,6 +4,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/MatrixBuilder.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
@@ -1522,6 +1523,7 @@ private:
         // Return the loaded result
         return b.CreateLoad(llvm_value_type, val_alloca, "");
     }
+
     [[nodiscard]] llvm::Value *_translate_accel_trace(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1605,6 +1607,70 @@ private:
 
         // Load the SurfaceHit result and return
         return b.CreateLoad(hit_type, hit_alloca, "hit_result");
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::IntrinsicInst *inst) noexcept
+    {
+        // The built-in matrix multiplication only works for 4x4 or wider matrices!
+        // For 3x3 we are totally on our own
+        // And for now we totally run all the multiplications
+        auto A = inst->operand(0u);
+        auto B = inst->operand(1u);
+        auto dimension = inst->type()->dimension();
+
+        // Lookup the LLVM values
+        auto llvm_A = _lookup_value(current, b, A);
+        auto llvm_B = _lookup_value(current, b, B);
+
+        // Type validation
+        LUISA_ASSERT(A->type()->is_matrix() && (B->type()->is_matrix() ||B->type()->is_vector()),
+                     "Matrix multiplication type mismatch");
+        // Initialize the resulting matrix
+        llvm::Type *float_type = llvm::Type::getFloatTy(b.getContext());
+        llvm::ArrayType *vec4_type = llvm::ArrayType::get(float_type, 4); // Simulate vec4
+
+        if (B->type()->is_matrix())
+        {
+            auto *result_type = llvm::ArrayType::get(vec4_type, dimension);
+            llvm::Value *result = llvm::UndefValue::get(result_type);
+            for (unsigned i = 0; i < dimension; ++i) {
+                for (unsigned j = 0; j < dimension; ++j) {
+                    // Dot product of row i of A and column j of B
+                    llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
+                    for (unsigned k = 0; k < dimension; ++k) {
+                        // Load A[i][k] and B[k][j]
+                        llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {i, k});
+                        llvm::Value *b_kj = b.CreateExtractValue(llvm_B, {k, j});
+                        llvm::Value *product = b.CreateFMul(a_ik, b_kj);
+                        sum = b.CreateFAdd(sum, product);
+                    }
+                    // Store the sum into the result
+                    result = b.CreateInsertValue(result, sum, {i, j});
+                }
+            }
+            return result;
+        }
+        else
+        {
+            llvm::Value *result = llvm::PoisonValue::get(_translate_type(inst->type(), true));
+            for (unsigned i = 0; i < dimension; ++i) {
+                // Dot product of row i of A and column j of B
+                llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
+                for (unsigned k = 0; k < dimension; ++k) {
+                    // Load A[i][k] and B[k][j]
+                    llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {i, k});
+                    llvm::Value *b_kj = b.CreateExtractElement(llvm_B, {k});
+                    llvm::Value *product = b.CreateFMul(a_ik, b_kj);
+                    sum = b.CreateFAdd(sum, product);
+                }
+                // Store the sum into the result
+                result = b.CreateInsertElement(result, sum, {i});
+            }
+            return result;
+        }
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -1999,7 +2065,7 @@ private:
             case xir::IntrinsicOp::MATRIX_COMP_SUB: break;
             case xir::IntrinsicOp::MATRIX_COMP_MUL: break;
             case xir::IntrinsicOp::MATRIX_COMP_DIV: break;
-            case xir::IntrinsicOp::MATRIX_LINALG_MUL: break;
+            case xir::IntrinsicOp::MATRIX_LINALG_MUL: return _translate_matrix_linalg_multiply(current, b, inst);
             case xir::IntrinsicOp::MATRIX_DETERMINANT: break;
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: break;
             case xir::IntrinsicOp::MATRIX_INVERSE: break;

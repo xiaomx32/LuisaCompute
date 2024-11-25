@@ -9,7 +9,6 @@
 #include <luisa/runtime/rhi/command.h>
 #include "../common/resource_tracker.h"
 #include "fallback_texture.h"
-#include "dirty_range.h"
 
 namespace luisa
 {
@@ -38,7 +37,7 @@ private:
 
 public:
     explicit FallbackBindlessArray(size_t capacity) noexcept;
-    auto& slot(unsigned int idx) const noexcept { return _slots[idx]; }
+    [[nodiscard]] auto& slot(unsigned int idx) const noexcept { return _slots[idx]; }
     void update(ThreadPool &pool, luisa::span<const BindlessArrayUpdateCommand::Modification> modifications) noexcept;
     [[nodiscard]] bool uses_resource(uint64_t handle) const noexcept;
 };

@@ -123,7 +123,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    //LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
@@ -131,7 +131,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
         LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
     }
     //llvm_module->print(llvm::errs(), nullptr, true, true);
-    //llvm_module->print(llvm::outs(), nullptr, true, true);
+    llvm_module->print(llvm::outs(), nullptr, true, true);
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
@@ -171,7 +171,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
     }
-    //llvm_module->print(llvm::outs(), nullptr, true, true);
+    llvm_module->print(llvm::outs(), nullptr, true, true);
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));
