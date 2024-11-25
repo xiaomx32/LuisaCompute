@@ -516,10 +516,14 @@ uint64_t Type::hash() const noexcept {
 }
 
 size_t Type::size() const noexcept {
+    LUISA_ASSERT(!is_resource() && !is_custom(),
+                 "Trying to take size of backend-specific type.");
     return static_cast<const detail::TypeImpl *>(this)->size;
 }
 
 size_t Type::alignment() const noexcept {
+    LUISA_ASSERT(!is_resource() && !is_custom(),
+                 "Trying to take alignment of backend-specific type.");
     return static_cast<const detail::TypeImpl *>(this)->alignment;
 }
 

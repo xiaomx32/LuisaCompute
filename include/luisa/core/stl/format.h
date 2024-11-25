@@ -7,6 +7,7 @@
 #pragma warning(disable : 4996)
 #endif
 
+#include <algorithm>// for std::copy
 #include <spdlog/fmt/bundled/xchar.h>
 
 #include <luisa/core/basic_types.h>

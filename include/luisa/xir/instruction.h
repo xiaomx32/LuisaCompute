@@ -35,7 +35,9 @@ enum struct DerivedInstructionTag {
     INTRINSIC,// intrinsic function calls
     CAST,     // type casts
     PRINT,    // kernel print
-    ASSERT,   // assertion
+
+    ASSERT,// assertion
+    ASSUME,// assumption
 
     OUTLINE,  // mark that the body might be outlined (e.g., for faster compilation)
     AUTO_DIFF,// automatic differentiation

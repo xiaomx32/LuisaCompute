@@ -11,9 +11,9 @@ int main() {
     auto module = xir::Module{};
     module.add_comment("My very simple test module.");
     module.set_name("TestModule");
-    auto u32_zero = module.create_constant(0u);
-    auto f32_one = module.create_constant(1.f);
-    auto bool_false = module.create_constant(false);
+    auto u32_zero = module.create_constant_zero(Type::of<uint>());
+    auto f32_one = module.create_constant_one(Type::of<float>());
+    auto bool_false = module.create_constant_zero(Type::of<bool>());
     bool_false->add_comment("bool constant false");
 
     auto b = xir::Builder{};
@@ -61,7 +61,7 @@ int main() {
     b.return_(mul);
 
     auto k = module.create_kernel();
-    auto buffer = k->create_value_argument(Type::of<Buffer<float>>());
+    auto buffer = k->create_resource_argument(Type::of<Buffer<float>>());
     b.set_insertion_point(k->create_body_block());
     auto va = b.alloca_local(Type::of<float>());
     auto vb = b.alloca_local(Type::of<float>());

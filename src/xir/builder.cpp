@@ -62,6 +62,10 @@ AssertInst *Builder::assert_(Value *condition, luisa::string_view message) noexc
     return _create_and_append_instruction<AssertInst>(condition, luisa::string{message});
 }
 
+AssumeInst *Builder::assume_(Value *condition, luisa::string_view message) noexcept {
+    return _create_and_append_instruction<AssumeInst>(condition, luisa::string{message});
+}
+
 ReturnInst *Builder::return_(Value *value) noexcept {
     return _create_and_append_instruction<ReturnInst>(value);
 }
@@ -150,6 +154,7 @@ LoadInst *Builder::load(const Type *type, Value *variable) noexcept {
 
 StoreInst *Builder::store(Value *variable, Value *value) noexcept {
     LUISA_ASSERT(variable->is_lvalue(), "Store destination must be an lvalue.");
+    LUISA_ASSERT(!value->is_lvalue(), "Store source cannot be an lvalue.");
     return _create_and_append_instruction<StoreInst>(variable, value);
 }
 

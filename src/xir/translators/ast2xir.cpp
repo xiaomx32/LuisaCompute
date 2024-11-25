@@ -66,11 +66,23 @@ private:
     luisa::unordered_map<uint64_t, Function *> _generated_functions;
     luisa::unordered_map<ConstantData, Constant *> _generated_constants;
     luisa::unordered_map<TypedLiteral, Constant *> _generated_literals;
+    luisa::unordered_map<const Type *, Constant *> _generated_zero_constants;
+    luisa::unordered_map<const Type *, Constant *> _generated_one_constants;
     Current _current;
 
 private:
     [[nodiscard]] Value *_translate_unary_expr(Builder &b, const UnaryExpr *expr) noexcept {
         auto operand = _translate_expression(b, expr->operand(), true);
+        // matrices need special handling
+        if (operand->type()->is_matrix()) {
+            switch (expr->op()) {
+                case UnaryOp::PLUS: return operand;
+                case UnaryOp::MINUS: return b.call(expr->type(), IntrinsicOp::MATRIX_COMP_NEG, {operand});
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid unary operation.");
+        }
+        // normal cases
         auto op = [unary_op = expr->op()] {
             switch (unary_op) {
                 case UnaryOp::PLUS: return IntrinsicOp::UNARY_PLUS;
@@ -93,10 +105,11 @@ private:
         // vector to vector cast
         if (value->type()->is_vector() && type->is_vector()) {
             LUISA_ASSERT(value->type()->dimension() >= type->dimension(), "Vector cast dimension mismatch.");
+            auto value_elem_type = value->type()->element();
             luisa::fixed_vector<Value *, 4u> elements;
             for (auto i = 0u; i < type->dimension(); i++) {
                 auto idx = _translate_constant_access_index(i);
-                auto elem = b.call(type->element(), IntrinsicOp::EXTRACT, {value, idx});
+                auto elem = b.call(value_elem_type, IntrinsicOp::EXTRACT, {value, idx});
                 elements.emplace_back(b.static_cast_if_necessary(type->element(), elem));
             }
             return b.call(type, IntrinsicOp::AGGREGATE, elements);
@@ -112,12 +125,19 @@ private:
     }
 
     [[nodiscard]] Value *_translate_binary_expr(Builder &b, const BinaryExpr *expr) noexcept {
-        auto op = [binary_op = expr->op()] {
+        auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
+        auto op = [binary_op = expr->op(), lhs = expr->lhs(), rhs = expr->rhs()] {
+            auto has_matrix = lhs->type()->is_matrix() || rhs->type()->is_matrix();
             switch (binary_op) {
-                case BinaryOp::ADD: return IntrinsicOp::BINARY_ADD;
-                case BinaryOp::SUB: return IntrinsicOp::BINARY_SUB;
-                case BinaryOp::MUL: return IntrinsicOp::BINARY_MUL;
-                case BinaryOp::DIV: return IntrinsicOp::BINARY_DIV;
+                case BinaryOp::ADD: return has_matrix ? IntrinsicOp::MATRIX_COMP_ADD : IntrinsicOp::BINARY_ADD;
+                case BinaryOp::SUB: return has_matrix ? IntrinsicOp::MATRIX_COMP_SUB : IntrinsicOp::BINARY_SUB;
+                case BinaryOp::MUL: {
+                    if (lhs->type()->is_matrix() && (rhs->type()->is_matrix() || rhs->type()->is_vector())) {
+                        return IntrinsicOp::MATRIX_LINALG_MUL;
+                    }
+                    return has_matrix ? IntrinsicOp::MATRIX_COMP_MUL : IntrinsicOp::BINARY_MUL;
+                }
+                case BinaryOp::DIV: return has_matrix ? IntrinsicOp::MATRIX_COMP_DIV : IntrinsicOp::BINARY_DIV;
                 case BinaryOp::MOD: return IntrinsicOp::BINARY_MOD;
                 case BinaryOp::BIT_AND: return IntrinsicOp::BINARY_BIT_AND;
                 case BinaryOp::BIT_OR: return IntrinsicOp::BINARY_BIT_OR;
@@ -135,7 +155,6 @@ private:
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected binary operation.");
         }();
-        auto type_promotion = promote_types(expr->op(), expr->lhs()->type(), expr->rhs()->type());
         auto lhs = _translate_expression(b, expr->lhs(), true);
         auto rhs = _translate_expression(b, expr->rhs(), true);
         lhs = _type_cast_if_necessary(b, type_promotion.lhs, lhs);
@@ -211,7 +230,7 @@ private:
             iter->second = luisa::visit(
                 [this, t = key.type]<typename T>(T v) noexcept {
                     LUISA_ASSERT(t == Type::of<T>(), "Literal type mismatch.");
-                    return _module->create_constant(v);
+                    return _module->create_constant(t, &v);
                 },
                 key.value);
         }
@@ -223,7 +242,7 @@ private:
         return _translate_typed_literal(key);
     }
 
-    [[nodiscard]] Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
+    [[nodiscard]] static Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
         LUISA_ASSERT(ast_var.is_builtin(), "Unresolved variable reference.");
         auto op = [tag = ast_var.tag(), t = ast_var.type()] {
             switch (tag) {
@@ -275,6 +294,78 @@ private:
             iter->second = _module->create_constant(c.type(), c.raw());
         }
         return iter->second;
+    }
+
+    [[nodiscard]] Value *_translate_zero_or_one(const Type *type, int value) noexcept {
+
+        // zero or one scalar
+#define LUISA_AST2XIR_ZERO_ONE_SCALAR(T)    \
+    if (type == Type::of<T>()) {            \
+        return _translate_typed_literal(    \
+            {type, static_cast<T>(value)}); \
+    }
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(bool)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(byte)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ubyte)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(short)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ushort)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(int)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(uint)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(slong)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(ulong)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(half)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(float)
+        LUISA_AST2XIR_ZERO_ONE_SCALAR(double)
+#undef LUISA_AST2XIR_ZERO_ONE_SCALAR
+
+        // zero or one vector
+#define LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, N)                   \
+    if (type == Type::of<T##N>()) {                             \
+        return _translate_typed_literal(                        \
+            {type, luisa::make_##T##N(static_cast<T>(value))}); \
+    }
+#define LUISA_AST2XIR_ZERO_ONE_VECTOR(T)  \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 2) \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 3) \
+    LUISA_AST2XIR_ZERO_ONE_VECTOR_N(T, 4)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(bool)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(byte)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ubyte)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(short)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ushort)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(int)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(uint)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(slong)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(ulong)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(half)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(float)
+        LUISA_AST2XIR_ZERO_ONE_VECTOR(double)
+#undef LUISA_AST2XIR_ZERO_ONE_VECTOR
+#undef LUISA_AST2XIR_ZERO_ONE_VECTOR_N
+
+        // zero or one matrix
+#define LUISA_AST2XIR_ZERO_ONE_MATRIX(N)                                    \
+    if (type == Type::of<luisa::float##N##x##N>()) {                        \
+        return _translate_typed_literal(                                    \
+            {type, luisa::make_float##N##x##N(static_cast<float>(value))}); \
+    }
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(2)
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(3)
+        LUISA_AST2XIR_ZERO_ONE_MATRIX(4)
+#undef LUISA_AST2XIR_ZERO_ONE_MATRIX
+
+        // fall back to generic zero constant
+        if (value == 0) {
+            auto iter = _generated_zero_constants.try_emplace(type, nullptr).first;
+            if (iter->second == nullptr) { iter->second = _module->create_constant_zero(type); }
+            return iter->second;
+        }
+        if (value == 1) {
+            auto iter = _generated_one_constants.try_emplace(type, nullptr).first;
+            if (iter->second == nullptr) { iter->second = _module->create_constant_one(type); }
+            return iter->second;
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected zero or one constant.");
     }
 
     [[nodiscard]] Value *_translate_call_expr(Builder &b, const CallExpr *expr) noexcept {
@@ -344,9 +435,10 @@ private:
                     args.emplace_back(_type_cast_if_necessary(b, elem_type, arg));
                 } else {
                     LUISA_ASSERT(arg->type()->is_vector(), "Vector call argument type mismatch.");
+                    auto arg_elem_type = arg->type()->element();
                     for (auto i = 0u; i < arg->type()->dimension(); i++) {
                         auto idx = _translate_constant_access_index(i);
-                        auto elem = b.call(expr->type()->element(), IntrinsicOp::EXTRACT, {arg, idx});
+                        auto elem = b.call(arg_elem_type, IntrinsicOp::EXTRACT, {arg, idx});
                         args.emplace_back(_type_cast_if_necessary(b, elem_type, elem));
                     }
                 }
@@ -431,9 +523,9 @@ private:
             case CallOp::REDUCE_MAX: return pure_call(IntrinsicOp::REDUCE_MAX);
             case CallOp::OUTER_PRODUCT: return pure_call(IntrinsicOp::OUTER_PRODUCT);
             case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: return pure_call(IntrinsicOp::MATRIX_COMP_MUL);
-            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::DETERMINANT);
-            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::TRANSPOSE);
-            case CallOp::INVERSE: return pure_call(IntrinsicOp::INVERSE);
+            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::MATRIX_DETERMINANT);
+            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::MATRIX_TRANSPOSE);
+            case CallOp::INVERSE: return pure_call(IntrinsicOp::MATRIX_INVERSE);
             case CallOp::SYNCHRONIZE_BLOCK: return pure_call(IntrinsicOp::SYNCHRONIZE_BLOCK);
             case CallOp::ATOMIC_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_EXCHANGE);
             case CallOp::ATOMIC_COMPARE_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_COMPARE_EXCHANGE);
@@ -539,7 +631,14 @@ private:
             case CallOp::ASSUME: {
                 LUISA_ASSERT(!expr->arguments().empty(), "Assume requires at least one argument.");
                 auto cond = _translate_expression(b, expr->arguments()[0], true);
-                return b.call(nullptr, IntrinsicOp::ASSUME, {cond});
+                luisa::string_view message;
+                if (expr->arguments().size() >= 2u) {
+                    auto ast_msg_id = expr->arguments()[1];
+                    LUISA_ASSERT(ast_msg_id->tag() == Expression::Tag::STRING_ID, "Assume message must be a string.");
+                    auto msg_id = static_cast<const StringIDExpr *>(ast_msg_id);
+                    message = msg_id->data();
+                }
+                return b.assume_(cond, message);
             }
             case CallOp::UNREACHABLE: {
                 luisa::string_view message;
@@ -551,8 +650,8 @@ private:
                 }
                 return b.unreachable_(message);
             }
-            case CallOp::ZERO: return pure_call(IntrinsicOp::ZERO);
-            case CallOp::ONE: return pure_call(IntrinsicOp::ONE);
+            case CallOp::ZERO: return _translate_zero_or_one(expr->type(), 0);
+            case CallOp::ONE: return _translate_zero_or_one(expr->type(), 1);
             case CallOp::PACK: LUISA_NOT_IMPLEMENTED();
             case CallOp::UNPACK: LUISA_NOT_IMPLEMENTED();
             case CallOp::REQUIRES_GRADIENT: LUISA_NOT_IMPLEMENTED();
@@ -845,92 +944,84 @@ private:
     }
 
     void _translate_statements(Builder &b, luisa::span<const Statement *const> stmts) noexcept {
-        if (stmts.empty()) { return; }
-        auto car = stmts.front();
-        auto cdr = stmts.subspan(1);
-        switch (car->tag()) {
-            case Statement::Tag::BREAK: {
-                auto break_target = _current.break_continue_target.break_target;
-                LUISA_ASSERT(break_target != nullptr, "Invalid break statement.");
-                _commented(b.break_(break_target));
-                break;
-            }
-            case Statement::Tag::CONTINUE: {
-                auto continue_target = _current.break_continue_target.continue_target;
-                LUISA_ASSERT(continue_target != nullptr, "Invalid continue statement.");
-                _commented(b.continue_(continue_target));
-                break;
-            }
-            case Statement::Tag::RETURN: {
-                if (auto ast_expr = static_cast<const ReturnStmt *>(car)->expression()) {
-                    auto value = _translate_expression(b, ast_expr, true);
-                    _commented(b.return_(value));
-                } else {
-                    _commented(b.return_void());
+        while (!stmts.empty()) {
+            auto car = stmts.front();
+            auto cdr = stmts.subspan(1);
+            switch (car->tag()) {
+                case Statement::Tag::BREAK: {
+                    auto break_target = _current.break_continue_target.break_target;
+                    LUISA_ASSERT(break_target != nullptr, "Invalid break statement.");
+                    return static_cast<void>(_commented(b.break_(break_target)));
                 }
-                break;
-            }
-            case Statement::Tag::SCOPE: LUISA_ERROR_WITH_LOCATION("Unexpected scope statement.");
-            case Statement::Tag::IF: {
-                auto ast_if = static_cast<const IfStmt *>(car);
-                _translate_if_stmt(b, ast_if, cdr);
-                break;
-            }
-            case Statement::Tag::LOOP: {
-                auto ast_loop = static_cast<const LoopStmt *>(car);
-                _translate_loop_stmt(b, ast_loop, cdr);
-                break;
-            }
-            case Statement::Tag::EXPR: {
-                auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
-                auto last = _commented(_translate_expression(b, ast_expr, false));
-                if (last->derived_value_tag() != DerivedValueTag::INSTRUCTION ||
-                    !static_cast<Instruction *>(last)->is_terminator()) {
-                    _translate_statements(b, cdr);
+                case Statement::Tag::CONTINUE: {
+                    auto continue_target = _current.break_continue_target.continue_target;
+                    LUISA_ASSERT(continue_target != nullptr, "Invalid continue statement.");
+                    return static_cast<void>(_commented(b.continue_(continue_target)));
                 }
-                break;
-            }
-            case Statement::Tag::SWITCH: {
-                auto ast_switch = static_cast<const SwitchStmt *>(car);
-                _translate_switch_stmt(b, ast_switch, cdr);
-                break;
-            }
-            case Statement::Tag::SWITCH_CASE: LUISA_ERROR_WITH_LOCATION("Unexpected switch case statement.");
-            case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
-            case Statement::Tag::ASSIGN: {
-                auto assign = static_cast<const AssignStmt *>(car);
-                auto variable = _translate_expression(b, assign->lhs(), false);
-                auto value = _translate_expression(b, assign->rhs(), true);
-                _commented(b.store(variable, value));
-                _translate_statements(b, cdr);
-                break;
-            }
-            case Statement::Tag::FOR: {
-                auto ast_for = static_cast<const ForStmt *>(car);
-                _translate_for_stmt(b, ast_for, cdr);
-                break;
-            }
-            case Statement::Tag::COMMENT: {
-                _collect_comment(car);
-                _translate_statements(b, cdr);
-                break;
-            }
-            case Statement::Tag::RAY_QUERY: {
-                auto ast_ray_query = static_cast<const RayQueryStmt *>(car);
-                _translate_ray_query_stmt(b, ast_ray_query, cdr);
-                break;
-            }
-            case Statement::Tag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
-            case Statement::Tag::PRINT: {
-                auto ast_print = static_cast<const PrintStmt *>(car);
-                luisa::fixed_vector<Value *, 16u> args;
-                for (auto ast_arg : ast_print->arguments()) {
-                    args.emplace_back(_translate_expression(b, ast_arg, true));
+                case Statement::Tag::RETURN: {
+                    if (auto ast_expr = static_cast<const ReturnStmt *>(car)->expression()) {
+                        auto value = _translate_expression(b, ast_expr, true);
+                        return static_cast<void>(_commented(b.return_(value)));
+                    }
+                    return static_cast<void>(_commented(b.return_void()));
                 }
-                _commented(b.print(luisa::string{ast_print->format()}, args));
-                _translate_statements(b, cdr);
-                break;
+                case Statement::Tag::SCOPE: LUISA_ERROR_WITH_LOCATION("Unexpected scope statement.");
+                case Statement::Tag::IF: {
+                    auto ast_if = static_cast<const IfStmt *>(car);
+                    return _translate_if_stmt(b, ast_if, cdr);
+                }
+                case Statement::Tag::LOOP: {
+                    auto ast_loop = static_cast<const LoopStmt *>(car);
+                    return _translate_loop_stmt(b, ast_loop, cdr);
+                }
+                case Statement::Tag::EXPR: {
+                    auto ast_expr = static_cast<const ExprStmt *>(car)->expression();
+                    _commented(_translate_expression(b, ast_expr, false));
+                    // in case the expression is a terminator, e.g., unreachable, we should stop here
+                    if (b.insertion_point()->is_terminator()) { return; }
+                    // otherwise, continue to the next statement
+                    break;
+                }
+                case Statement::Tag::SWITCH: {
+                    auto ast_switch = static_cast<const SwitchStmt *>(car);
+                    return _translate_switch_stmt(b, ast_switch, cdr);
+                }
+                case Statement::Tag::SWITCH_CASE: LUISA_ERROR_WITH_LOCATION("Unexpected switch case statement.");
+                case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
+                case Statement::Tag::ASSIGN: {
+                    auto assign = static_cast<const AssignStmt *>(car);
+                    if (assign->lhs() != assign->rhs()) {
+                        auto variable = _translate_expression(b, assign->lhs(), false);
+                        auto value = _translate_expression(b, assign->rhs(), true);
+                        _commented(b.store(variable, value));
+                    }
+                    break;
+                }
+                case Statement::Tag::FOR: {
+                    auto ast_for = static_cast<const ForStmt *>(car);
+                    return _translate_for_stmt(b, ast_for, cdr);
+                }
+                case Statement::Tag::COMMENT: {
+                    _collect_comment(car);
+                    break;
+                }
+                case Statement::Tag::RAY_QUERY: {
+                    auto ast_ray_query = static_cast<const RayQueryStmt *>(car);
+                    return _translate_ray_query_stmt(b, ast_ray_query, cdr);
+                }
+                case Statement::Tag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
+                case Statement::Tag::PRINT: {
+                    auto ast_print = static_cast<const PrintStmt *>(car);
+                    luisa::fixed_vector<Value *, 16u> args;
+                    for (auto ast_arg : ast_print->arguments()) {
+                        args.emplace_back(_translate_expression(b, ast_arg, true));
+                    }
+                    _commented(b.print(luisa::string{ast_print->format()}, args));
+                    break;
+                }
             }
+            // update the statement list
+            stmts = cdr;
         }
     }
 
@@ -942,7 +1033,7 @@ private:
         for (auto ast_arg : _current.ast->arguments()) {
             auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
             if (auto ast_usage = _current.ast->variable_usage(ast_arg.uid());
-                arg->is_value() && ast_usage == Usage::WRITE || ast_usage == Usage::READ_WRITE) {
+                arg->is_value() && (ast_usage == Usage::WRITE || ast_usage == Usage::READ_WRITE)) {
                 // AST allows update of the argument, so we need to copy it to a local variable
                 auto local = b.alloca_local(arg->type());
                 local->add_comment("Local copy of argument");
@@ -986,17 +1077,20 @@ public:
         // return the function if it has been translated
         if (!just_inserted) { return iter->second; }
         // create a new function
-        FunctionDefinition *def = nullptr;
-        switch (f.tag()) {
-            case ASTFunction::Tag::KERNEL:
-                def = _module->create_kernel();
-                break;
-            case ASTFunction::Tag::CALLABLE:
-                def = _module->create_callable(f.return_type());
-                break;
-            case ASTFunction::Tag::RASTER_STAGE:
-                LUISA_NOT_IMPLEMENTED();
-        }
+        auto def = [&]() noexcept -> FunctionDefinition * {
+            switch (f.tag()) {
+                case ASTFunction::Tag::KERNEL: {
+                    auto kernel = _module->create_kernel();
+                    kernel->set_block_size(f.block_size());
+                    return kernel;
+                }
+                case ASTFunction::Tag::CALLABLE: {
+                    return _module->create_callable(f.return_type());
+                }
+                case ASTFunction::Tag::RASTER_STAGE: LUISA_NOT_IMPLEMENTED();
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid function tag.");
+        }();
         iter->second = def;
         // translate the function
         auto old = std::exchange(_current, {.f = def, .ast = &f});
