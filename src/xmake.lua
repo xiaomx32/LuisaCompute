@@ -33,7 +33,13 @@ end
 if get_config("enable_clangcxx") then
     includes("clangcxx")
 end
+if get_config("enable_xir") then
+    includes("xir")
+end
 
 add_requires("zlib >=1.2.8-skr", {
+    system = false
+})
+add_requires("yyjson v0.9.0", {
     system = false
 })

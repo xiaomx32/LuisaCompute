@@ -80,6 +80,12 @@ set_values(true, false)
 set_default(true)
 set_showmenu(true)
 option_end()
+-- enable xir
+option("enable_xir")
+set_values(true, false)
+set_default(false)
+set_showmenu(true)
+option_end()
 -- python include path
 option("py_include")
 set_default(false)

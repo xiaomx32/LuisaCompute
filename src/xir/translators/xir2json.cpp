@@ -1,4 +1,8 @@
+#ifdef YYJSON_PACKAGES
+#include <yyjson/yyjson.h>
+#else
 #include <yyjson.h>
+#endif
 #include <luisa/xir/translators/xir2json.h>
 
 namespace luisa::compute::xir {
