@@ -15,6 +15,7 @@ if (LLVM_FOUND AND embree_FOUND)
             #llvm_event.cpp
             #llvm_shader.cpp
             thread_pool.cpp
+            #dirty_range.cpp
             fallback_bindless_array.cpp
             fallback_stream.cpp
             fallback_texture.cpp

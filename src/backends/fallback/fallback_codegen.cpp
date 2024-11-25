@@ -1288,10 +1288,21 @@ private:
     [[nodiscard]] llvm::Value *_translate_texture_read(
         CurrentFunction &current,
         IRBuilder &b,
-        const xir::Value *view_struct,
-        const xir::Value *coord) noexcept {
+        const xir::Instruction *inst) noexcept {
 
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>(), "Invalid texture view type.");
+        auto view_struct = inst->operand(0u);
+        auto coord = inst->operand(1u);
+        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>()||
+            view_struct->type() == Type::of<Image<uint>>(), "Invalid texture view type.");
+
+        static const char* function_names[] =
+        {
+            "texture.read.2d.float",
+            "texture.read.2d.uint"
+        };
+        unsigned int functionIdx = 0u;
+        if (view_struct->type() == Type::of<Image<uint>>())
+            functionIdx = 1u;
 
         // Get LLVM values for the arguments
         auto llvm_view_struct = _lookup_value(current, b, view_struct);
@@ -1300,7 +1311,8 @@ private:
         auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
         b.CreateStore(llvm_view_struct, texture_struct_alloca);
 
-        auto outType = llvm::VectorType::get(b.getFloatTy(), 4u, false);
+        auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
+            4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
 
@@ -1318,7 +1330,7 @@ private:
             false);
 
         // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("texture.read.2d.float", func_type);
+        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
 
         // Call the function
         b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_alloca});
@@ -1334,7 +1346,18 @@ private:
         const xir::Value *coord,
         const xir::Value *val) noexcept {
 
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>(), "Invalid texture view type.");
+        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>()||
+            view_struct->type() == Type::of<Image<uint>>(), "Invalid texture view type.");
+
+        static const char* function_names[] =
+        {
+            "texture.write.2d.float",
+            "texture.write.2d.uint"
+        };
+
+        unsigned int functionIdx = 0u;
+        if (view_struct->type() == Type::of<Image<uint>>())
+            functionIdx = 1u;
 
         // Get LLVM values for the arguments
         auto llvm_view_struct = _lookup_value(current, b, view_struct);
@@ -1362,7 +1385,7 @@ private:
             false);
 
         // Add attributes to the function (write operations typically do not use `readonly`)
-        auto func = _llvm_module->getOrInsertFunction("texture.write.2d.float", func_type);
+        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
 
         // Call the function
         return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_alloca});
@@ -1995,7 +2018,7 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_READ: return _translate_buffer_read(current, b, inst, true);
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
-            case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst->operand(0u), inst->operand(1u));
+            case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
             case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst->operand(0u), inst->operand(1u), inst->operand(2u));
             case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;

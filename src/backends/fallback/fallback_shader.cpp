@@ -92,6 +92,8 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     };
     map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
     map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
+    map_symbol("texture.write.2d.uint", &texture_write_2d_uint_wrapper);
+    map_symbol("texture.read.2d.uint", &texture_read_2d_uint_wrapper);
 
     map_symbol("intersect.closest", &intersect_closest_wrapper);
 
@@ -276,23 +278,23 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
 
     auto data = argument_buffer.data();
 
-    for (int i = 0; i < dispatch_counts.x; ++i) {
-        for (int j = 0; j < dispatch_counts.y; ++j) {
-            for (int k = 0; k < dispatch_counts.z; ++k) {
-                auto c = config;
-                c.block_id = make_uint3(i, j, k);
-                (*_kernel_entry)(data, &c);
-            }
-        }
-    }
+    // for (int i = 0; i < dispatch_counts.x; ++i) {
+    //     for (int j = 0; j < dispatch_counts.y; ++j) {
+    //         for (int k = 0; k < dispatch_counts.z; ++k) {
+    //             auto c = config;
+    //             c.block_id = make_uint3(i, j, k);
+    //             (*_kernel_entry)(data, &c);
+    //         }
+    //     }
+    // }
 
-    // pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
-    //    [this, config, data](auto bx, auto by, auto bz) noexcept {
-    //         auto c = config;
-    //        c.block_id = make_uint3(bx, by, bz);
-    //        (*_kernel_entry)(data, &c);
-    // });
-    pool.synchronize();
+    pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
+       [this, config, data](auto bx, auto by, auto bz) noexcept {
+            auto c = config;
+           c.block_id = make_uint3(bx, by, bz);
+           (*_kernel_entry)(data, &c);
+    });
+    pool.barrier();
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {
     _bound_arguments.reserve(kernel.bound_arguments().size());

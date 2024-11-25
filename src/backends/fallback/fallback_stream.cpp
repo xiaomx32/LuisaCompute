@@ -48,6 +48,7 @@ void FallbackStream::visit(const BufferUploadCommand *command) noexcept {
         auto dst = reinterpret_cast<void *>(buffer + offset);
         std::memcpy(dst, src->data(), src->size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferDownloadCommand *command) noexcept {
@@ -55,6 +56,7 @@ void FallbackStream::visit(const BufferDownloadCommand *command) noexcept {
         auto src = reinterpret_cast<const void *>(cmd.handle() + cmd.offset());
         std::memcpy(cmd.data(), src, cmd.size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferCopyCommand *command) noexcept {
@@ -63,6 +65,7 @@ void FallbackStream::visit(const BufferCopyCommand *command) noexcept {
         auto dst = reinterpret_cast<void *>(cmd.dst_handle() + cmd.dst_offset());
         std::memcpy(dst, src, cmd.size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferToTextureCopyCommand *command) noexcept {
