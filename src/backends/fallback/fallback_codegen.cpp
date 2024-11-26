@@ -1489,24 +1489,53 @@ private:
     [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
                                                     IRBuilder &b, const xir::IntrinsicInst *inst) {
         auto type = inst->type();
-        LUISA_ASSERT(type->is_vector(), "only aggregate vectors at the moment");
         auto elem_type = type->element();
         auto dim = type->dimension();
+        if (type->is_vector())
+        {
+            auto llvm_elem_type = _translate_type(elem_type, true);
 
-        auto llvm_elem_type = _translate_type(elem_type, true);
+            auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
 
-        auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
+            auto vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_return_type));
+            for (int i = 0; i < dim; i++) {
+                auto operand = inst->operand(i);
+                LUISA_ASSERT(operand->type() == elem_type, "element type doesn't match");
+                auto llvm_operand = _lookup_value(current, b, operand);
+                LUISA_ASSERT(llvm_operand->getType() == llvm_elem_type, "element type doesn't match");
 
-        auto vector = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_return_type));
-        for (int i = 0; i < dim; i++) {
-            auto operand = inst->operand(i);
-            LUISA_ASSERT(operand->type() == elem_type, "element type doesn't match");
-            auto llvm_operand = _lookup_value(current, b, operand);
-            LUISA_ASSERT(llvm_operand->getType() == llvm_elem_type, "element type doesn't match");
-
-            vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
+                vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
+            }
+            return vector;
         }
-        return vector;
+        else
+        {
+            //matrix: aggregate multiple vectors
+            auto llvm_elem_type = _translate_type(elem_type, true);
+            auto type = inst->operand(0)->type()->description();
+            auto llvm_vector_type = llvm::VectorType::get(llvm_elem_type, 4, false);
+            auto llvm_return_type = llvm::ArrayType::get(llvm_vector_type, dim); // Array of vectors, with 'dim' vectors
+
+            // Initialize the result as an undefined array of vectors
+            llvm::Value *vector_array = llvm::UndefValue::get(llvm_return_type);
+
+            // Loop through the input vectors and insert them one by one into the array
+            for (int i = 0; i < dim; i++) {
+                auto operand = inst->operand(i);  // Get the i-th operand (which should be an array of floats)
+                auto llvm_operand = _lookup_value(current, b, operand);  // Translate operand to LLVM value
+                // Create a new vector from the i-th operand (which is an array of floats)
+                llvm::Value *vector = llvm::UndefValue::get(llvm_vector_type); // Initialize an empty vector
+                for (int j = 0; j < dim; ++j) { // Assuming each vector has 4 components
+                    // Extract the j-th float from the operand and insert it into the vector
+                    llvm::Value *element = b.CreateExtractElement(llvm_operand, j); // Get the j-th element from the array of floats
+                    vector = b.CreateInsertElement(vector, element, j);  // Insert the element into the vector
+                }
+                // Insert the vector into the matrix (array of vectors) at the i-th index
+                vector_array = b.CreateInsertValue(vector_array, vector, i);
+            }
+            return vector_array;
+        }
+
     }
 
     [[nodiscard]] llvm::Value *_translate_shuffle(CurrentFunction &current,
