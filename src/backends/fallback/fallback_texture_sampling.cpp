@@ -33,6 +33,21 @@ namespace luisa::compute::fallback
         *(uint4 *) out = texture_read_2d_uint(reinterpret_cast<const FallbackTextureView *>(ptr), x, y);
     }
 
+    void texture_read_3d_float_wrapper(void* ptr, uint x, uint y, uint z, void* out)
+    {
+        *(float4 *) out = texture_read_3d_float(reinterpret_cast<const FallbackTextureView *>(ptr), x, y, z);
+    }
+    void texture_read_3d_uint_wrapper(void* ptr, uint x, uint y, uint z, void* out)
+    {
+        *(uint4 *) out = texture_read_3d_uint(reinterpret_cast<const FallbackTextureView *>(ptr), x, y, z);
+    }
+
+
+
+
+
+
+
     void luisa_bc7_read(const FallbackTextureView* tex, uint x, uint y, float4& out) noexcept
     {
         auto block_pos = make_uint2(x / 4, y / 4);

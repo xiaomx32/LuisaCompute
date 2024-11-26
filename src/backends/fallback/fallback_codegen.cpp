@@ -1379,6 +1379,61 @@ private:
         return b.CreateLoad(outType, result_alloca, "");
     }
 
+    [[nodiscard]] llvm::Value *_translate_volume_read(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::Instruction *inst) noexcept {
+
+        auto view_struct = inst->operand(0u);
+        auto coord = inst->operand(1u);
+        LUISA_ASSERT(view_struct->type() == Type::of<Volume<float>>()||
+            view_struct->type() == Type::of<Volume<uint>>(), "Invalid volume view type.");
+
+        static const char* function_names[] =
+        {
+            "texture.read.3d.float",
+            "texture.read.3d.uint"
+        };
+        unsigned int functionIdx = 0u;
+        if (view_struct->type() == Type::of<Image<uint>>())
+            functionIdx = 1u;
+
+        // Get LLVM values for the arguments
+        auto llvm_view_struct = _lookup_value(current, b, view_struct);
+        auto llvm_coord = _lookup_value(current, b, coord);
+
+        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
+        b.CreateStore(llvm_view_struct, texture_struct_alloca);
+
+        auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
+            4u, false);
+        // Allocate space for the result locally
+        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+
+        // Extract x and y from uint2 coordinate
+        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
+        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
+        auto coord_z = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
+
+        // Define the function type: void(void*, uint, uint, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {b.getPtrTy(),  // void* texture_ptr
+             b.getInt32Ty(),// uint x
+             b.getInt32Ty(),// uint y
+             b.getInt32Ty(),// uint z
+             b.getPtrTy()}, // void* result
+            false);
+
+        // Get the function pointer from the symbol map
+        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
+
+        // Call the function
+        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, coord_z, result_alloca});
+
+        // Return the loaded result
+        return b.CreateLoad(outType, result_alloca, "");
+    }
     [[nodiscard]] llvm::Value *_translate_texture_write(
         CurrentFunction &current,
         IRBuilder &b,
@@ -2130,7 +2185,7 @@ private:
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE3D_READ: break;
+            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_volume_read(current, b, inst);
             case xir::IntrinsicOp::TEXTURE3D_WRITE: break;
             case xir::IntrinsicOp::TEXTURE3D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;

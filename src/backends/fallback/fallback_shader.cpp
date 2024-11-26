@@ -95,6 +95,9 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     map_symbol("texture.write.2d.uint", &texture_write_2d_uint_wrapper);
     map_symbol("texture.read.2d.uint", &texture_read_2d_uint_wrapper);
 
+    map_symbol("texture.read.3d.float", &texture_read_3d_float_wrapper);
+    map_symbol("texture.read.3d.uint", &texture_read_3d_uint_wrapper);
+
     map_symbol("intersect.closest", &intersect_closest_wrapper);
 
     map_symbol("bindless.buffer.read", &bindless_buffer_read);
