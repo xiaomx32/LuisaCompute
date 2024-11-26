@@ -1645,21 +1645,21 @@ private:
         auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
 
         // Extract ray components
-        auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "compressed_origin");
-        auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "compressed_t_min");
-        auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "compressed_direction");
-        auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "compressed_t_max");
+        auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
+        auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "");
+        auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "");
+        auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "");
 
         //printTypeLayout(compressed_origin->getType());
         // Extract x, y, z for origin
-        auto origin_x = b.CreateExtractValue(compressed_origin, 0, "origin_x");
-        auto origin_y = b.CreateExtractValue(compressed_origin, 1, "origin_y");
-        auto origin_z = b.CreateExtractValue(compressed_origin, 2, "origin_z");
+        auto origin_x = b.CreateExtractValue(compressed_origin, 0, "");
+        auto origin_y = b.CreateExtractValue(compressed_origin, 1, "");
+        auto origin_z = b.CreateExtractValue(compressed_origin, 2, "");
 
         // Extract x, y, z for direction
-        auto direction_x = b.CreateExtractValue(compressed_direction, 0, "direction_x");
-        auto direction_y = b.CreateExtractValue(compressed_direction, 1, "direction_y");
-        auto direction_z = b.CreateExtractValue(compressed_direction, 2, "direction_z");
+        auto direction_x = b.CreateExtractValue(compressed_direction, 0, "");
+        auto direction_y = b.CreateExtractValue(compressed_direction, 1, "");
+        auto direction_z = b.CreateExtractValue(compressed_direction, 2, "");
 
         // Define the function type: void(void*, float, float, float, float, float, float, float, float, unsigned, void*)
         auto func_type = llvm::FunctionType::get(
@@ -1680,7 +1680,7 @@ private:
             false);
 
         // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("intersect.closest", func_type);
+        auto func = _llvm_module->getOrInsertFunction("accel.intersect.closest", func_type);
 
         // Call the function
         b.CreateCall(
@@ -1700,7 +1700,52 @@ private:
             });
 
         // Load the SurfaceHit result and return
-        return b.CreateLoad(hit_type, hit_alloca, "hit_result");
+        return b.CreateLoad(hit_type, hit_alloca, "");
+    }
+
+    [[nodiscard]] llvm::Value *_translate_accel_transform(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::IntrinsicInst *inst) noexcept {
+
+        //Calling "accel.instance.transform"
+        // Extract LLVM values for the operands
+        const xir::Value *accel = inst->operand(0u);
+        const xir::Value *id = inst->operand(1u);
+
+        // Get LLVM values for the arguments
+        auto llvm_accel = _lookup_value(current, b, accel);
+        auto llvm_id = _lookup_value(current, b, id);
+
+        // Allocate space for the SurfaceHit result locally
+        auto transform_type = llvm::VectorType::get(b.getFloatTy(), 16, false);
+
+        auto transform_alloca = b.CreateAlloca(transform_type, nullptr, "");
+
+        // Define the function type: void(void*, unsigned, void*)
+        auto func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {
+                b.getPtrTy(),  // void* accel
+                b.getInt32Ty(),// unsigned id
+                b.getPtrTy()   // void* hit
+            },
+            false);
+
+        // Get the function pointer from the symbol map
+        auto func = _llvm_module->getOrInsertFunction("accel.instance.transform", func_type);
+
+        // Call the function
+        b.CreateCall(
+            func,
+            {
+                llvm_accel,      // accel pointer
+                llvm_id,       // mask
+                transform_alloca       // hit pointer
+            });
+
+        // Load the SurfaceHit result and return
+        return b.CreateLoad(transform_type, transform_alloca, "");
     }
 
     [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(
@@ -2237,7 +2282,7 @@ private:
             case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
             case xir::IntrinsicOp::AUTODIFF_DETACH: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_transform(current, b, inst);
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: break;
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
             case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;

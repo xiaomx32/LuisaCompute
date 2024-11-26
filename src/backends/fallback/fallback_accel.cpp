@@ -71,7 +71,8 @@ namespace luisa::compute::fallback
                 if (m.flags & Mod::flag_visibility)
                 {
                     _instances[m.index].visible = true;
-                } else
+                }
+                else
                 {
                     _instances[m.index].visible = false;
                 }
@@ -90,7 +91,8 @@ namespace luisa::compute::fallback
             }
             rtcCommitScene(_handle);
             auto error = rtcGetDeviceError(_device);
-            if (error != RTC_ERROR_NONE) {
+            if (error != RTC_ERROR_NONE)
+            {
                 printf("Embree Error: %d\n", error);
             }
         });
@@ -152,6 +154,16 @@ namespace luisa::compute::fallback
             hit->bary = make_float2(rh.hit.u, rh.hit.v);
             hit->committed_ray_t = rh.ray.tfar;
         }
+        void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer)
+        {
+            // TODO: handle embree 4
+
+            // Retrieve the RTCInstance (you may need to store instances in your application)
+            auto instance = rtcGetGeometry(accel->scene(), id);
+
+            // Get the transform of the instance (a 4x4 matrix)
+            rtcGetGeometryTransform(instance, 0.f, RTCFormat::RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, buffer);
+        }
 
         bool accel_trace_any(const FallbackAccel* accel, float ox, float oy, float oz, float dx, float dy, float dz,
                              float tmin, float tmax, uint mask) noexcept
@@ -192,4 +204,12 @@ void intersect_closest_wrapper(void* accel, float ox, float oy, float oz, float 
     luisa::compute::fallback::detail::accel_trace_closest(
         reinterpret_cast<luisa::compute::fallback::FallbackAccel *>(accel),
         ox, oy, oz, dx, dy, dz, tmin, tmax, mask, reinterpret_cast<luisa::compute::SurfaceHit *>(hit));
+}
+
+void accel_transform_wrapper(void* accel, unsigned id, void* buffer)
+{
+    luisa::compute::fallback::detail::fill_transform(
+        reinterpret_cast<luisa::compute::fallback::FallbackAccel *>(accel),
+        id, reinterpret_cast<luisa::float4x4 *>(buffer));
+    auto g = reinterpret_cast<luisa::float4x4 *>(buffer);
 }

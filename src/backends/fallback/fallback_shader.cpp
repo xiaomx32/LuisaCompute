@@ -98,7 +98,8 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     map_symbol("texture.read.3d.float", &texture_read_3d_float_wrapper);
     map_symbol("texture.read.3d.uint", &texture_read_3d_uint_wrapper);
 
-    map_symbol("intersect.closest", &intersect_closest_wrapper);
+    map_symbol("accel.intersect.closest", &intersect_closest_wrapper);
+    map_symbol("accel.instance.transform", &accel_transform_wrapper);
 
     map_symbol("bindless.buffer.read", &bindless_buffer_read);
     if (auto error = _jit->getMainJITDylib().define(
