@@ -1085,6 +1085,41 @@ private:
         LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
                                   intrinsic_id, operand_type->description());
     }
+    [[nodiscard]] llvm::Value *_translate_unary_fp_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, const char* func) noexcept {
+        // Lookup LLVM value for operand
+        auto llvm_operand = _lookup_value(current, b, operand);
+        auto operand_type = operand->type();
+
+        // Type and null checks
+        LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
+        LUISA_ASSERT(operand_type->is_scalar() || operand_type->is_vector(), "Invalid operand type.");
+
+        // Check if the operand is a valid floating-point type
+        auto elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+
+        auto func_type = llvm::FunctionType::get(
+            llvm_operand->getType(),
+            {
+                llvm_operand->getType()
+            },
+            false
+        );
+
+        auto f =
+            _llvm_module->getOrInsertFunction(func, func_type);
+
+        switch (elem_type->tag()) {
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64:
+                // Use LLVM's intrinsic function based on the provided intrinsic ID
+                    return b.CreateCall(f, {llvm_operand});
+            default:
+                break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
+                                  func, operand_type->description());
+    }
 
 
 
@@ -2069,8 +2104,8 @@ private:
             case xir::IntrinsicOp::ACOSH: break;
             case xir::IntrinsicOp::ASIN: break;
             case xir::IntrinsicOp::ASINH: break;
-            case xir::IntrinsicOp::ATAN: break;
-            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1),"atan2");
+            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "tan");
+            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1),"atan2f");
             case xir::IntrinsicOp::ATANH: break;
             case xir::IntrinsicOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
             case xir::IntrinsicOp::COSH: break;
