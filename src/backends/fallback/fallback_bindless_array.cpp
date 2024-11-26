@@ -33,9 +33,9 @@ namespace luisa::compute::fallback
         return _tracker.contains(handle);
     }
 } // namespace luisa::compute::Fallback
-void bindless_buffer_read(void* bindless, unsigned slot, unsigned elem, unsigned stride, void* buffer)
+void bindless_buffer_read(void* bindless, size_t slot, size_t elem, unsigned stride, void* buffer)
 {
     auto a = reinterpret_cast<luisa::compute::fallback::FallbackBindlessArray *>(bindless);
     auto ptr = reinterpret_cast<const std::byte*>(a->slot(slot).buffer);
-    memcpy(buffer, ptr + elem*stride, stride);
+    std::memcpy(buffer, ptr + elem*stride, stride);
 }

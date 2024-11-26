@@ -44,4 +44,4 @@ public:
 
 }// namespace luisa::compute::Fallback
 
-void bindless_buffer_read(void* bindless, unsigned slot, unsigned elem, unsigned stride, void* buffer);
+void bindless_buffer_read(void* bindless, size_t slot, size_t elem, unsigned stride, void* buffer);

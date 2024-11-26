@@ -1655,7 +1655,12 @@ private:
         auto llvm_bindless = _lookup_value(current, b, bindless_ptr);
         auto llvm_slot = _lookup_value(current, b, slotIdx);
         auto llvm_elem = _lookup_value(current, b, elemIdx);
-
+        if (llvm_slot->getType() == b.getInt32Ty()) {
+            llvm_slot = b.CreateZExt(llvm_slot, b.getInt64Ty());  // Zero-extend to i64
+        }
+        if (llvm_elem->getType() == b.getInt32Ty()) {
+            llvm_elem = b.CreateZExt(llvm_elem, b.getInt64Ty());  // Zero-extend to i64
+        }
         auto llvm_data_stride = llvm::ConstantInt::get(b.getInt32Ty(), inst->type()->size());
 
         auto llvm_value_type = _translate_type(inst->type(), true);
@@ -1667,8 +1672,8 @@ private:
         auto func_type = llvm::FunctionType::get(
             b.getVoidTy(),
             {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// slot
-             b.getInt32Ty(),// elem
+             b.getInt64Ty(),// slot
+             b.getInt64Ty(),// elem
             b.getInt32Ty(), //stride
              b.getPtrTy()}, // void* value
             false);
