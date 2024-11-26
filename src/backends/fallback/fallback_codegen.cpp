@@ -1086,6 +1086,8 @@ private:
                                   intrinsic_id, operand_type->description());
     }
 
+
+
     [[nodiscard]] llvm::Value *_translate_binary_fp_math_operation(CurrentFunction &current, IRBuilder &b,
                                                                    const xir::Value *op0, const xir::Value *op1,
                                                                    llvm::Intrinsic::ID intrinsic_id) noexcept {
@@ -1106,6 +1108,43 @@ private:
         }
         LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
                                   intrinsic_id, op0_type->description());
+    }
+
+
+    [[nodiscard]] llvm::Value *_translate_binary_fp_math_operation(CurrentFunction &current, IRBuilder &b,
+                                                                   const xir::Value *op0, const xir::Value *op1,
+                                                                   const char* func) noexcept {
+        auto llvm_op0 = _lookup_value(current, b, op0);
+        auto llvm_op1 = _lookup_value(current, b, op1);
+        auto op0_type = op0->type();
+        auto op1_type = op1->type();
+        LUISA_ASSERT(op0_type == op1_type, "Type mismatch.");
+        LUISA_ASSERT(op0_type != nullptr && (op0_type->is_scalar() || op0_type->is_vector()), "Invalid operand type.");
+        auto elem_type = op0_type->is_vector() ? op0_type->element() : op0_type;
+        // Define the function type: void(void*, uint, uint, void*)
+        auto func_type = llvm::FunctionType::get(
+            llvm_op0->getType(),
+            {
+                llvm_op0->getType(),
+                llvm_op0->getType()
+            },
+            false
+        );
+
+        auto f =
+            _llvm_module->getOrInsertFunction(func, func_type);
+
+
+        switch (elem_type->tag()) {
+            case Type::Tag::FLOAT16: [[fallthrough]];
+            case Type::Tag::FLOAT32: [[fallthrough]];
+            case Type::Tag::FLOAT64:
+                return b.CreateCall(f, {llvm_op0, llvm_op1});
+            default:
+                break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
+                                  func, op0_type->description());
     }
 
     [[nodiscard]] llvm::Value *_translate_vector_reduce(CurrentFunction &current, IRBuilder &b,
@@ -1902,7 +1941,7 @@ private:
             case xir::IntrinsicOp::ASIN: break;
             case xir::IntrinsicOp::ASINH: break;
             case xir::IntrinsicOp::ATAN: break;
-            case xir::IntrinsicOp::ATAN2: break;
+            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1),"atan2");
             case xir::IntrinsicOp::ATANH: break;
             case xir::IntrinsicOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
             case xir::IntrinsicOp::COSH: break;

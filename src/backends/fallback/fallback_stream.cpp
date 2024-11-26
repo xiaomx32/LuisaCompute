@@ -123,6 +123,7 @@ void FallbackStream::visit(const TextureToBufferCopyCommand *command) noexcept {
         auto dst = reinterpret_cast<void *>(cmd.buffer() + cmd.buffer_offset());
         tex.copy_to(dst);
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const AccelBuildCommand *command) noexcept {
@@ -151,6 +152,7 @@ void FallbackStream::visit(const MeshBuildCommand *command) noexcept {
 void FallbackStream::visit(const BindlessArrayUpdateCommand *command) noexcept {
 
     reinterpret_cast<FallbackBindlessArray *>(command->handle())->update(_pool, command->modifications());
+    _pool.barrier();
 }
 
 void FallbackStream::dispatch(luisa::move_only_function<void()> &&f) noexcept {

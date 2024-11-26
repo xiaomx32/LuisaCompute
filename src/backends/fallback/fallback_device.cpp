@@ -126,7 +126,15 @@ BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t ele
 
     BufferCreationInfo info{};
 
+    if (element == Type::of<void>())
+    {
+        //Byte buffer...
+    info.element_stride = 1u;
+    }
+    else
+    {
     info.element_stride = element->size();
+    }
     info.total_size_bytes = info.element_stride * elem_count;
     info.handle = reinterpret_cast<uint64_t>(
         luisa::allocate_with_allocator<std::byte>(info.total_size_bytes));
