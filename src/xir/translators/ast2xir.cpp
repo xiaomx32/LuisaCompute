@@ -988,15 +988,16 @@ private:
                 }
                 case Statement::Tag::SWITCH_CASE: LUISA_ERROR_WITH_LOCATION("Unexpected switch case statement.");
                 case Statement::Tag::SWITCH_DEFAULT: LUISA_ERROR_WITH_LOCATION("Unexpected switch default statement.");
-                case Statement::Tag::ASSIGN: {
-                    auto assign = static_cast<const AssignStmt *>(car);
-                    if (assign->lhs() != assign->rhs()) {
-                        auto variable = _translate_expression(b, assign->lhs(), false);
-                        auto value = _translate_expression(b, assign->rhs(), true);
-                        _commented(b.store(variable, value));
-                    }
-                    break;
-                }
+				case Statement::Tag::ASSIGN: {
+					auto assign = static_cast<const AssignStmt *>(car);
+					if (assign->lhs() != assign->rhs()) {
+						auto variable = _translate_expression(b, assign->lhs(), false);
+						auto value = _translate_expression(b, assign->rhs(), true);
+						value = _type_cast_if_necessary(b, variable->type(), value);
+						_commented(b.store(variable, value));
+					}
+					break;
+				}
                 case Statement::Tag::FOR: {
                     auto ast_for = static_cast<const ForStmt *>(car);
                     return _translate_for_stmt(b, ast_for, cdr);
