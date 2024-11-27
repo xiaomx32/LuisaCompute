@@ -18,6 +18,7 @@
 
 #include <luisa/core/stl/unordered_map.h>
 #include <luisa/core/logging.h>
+#include <luisa/runtime/rtx/hit.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
 #include <luisa/xir/metadata/name.h>
@@ -1448,7 +1449,7 @@ private:
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
         auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
-        auto coord_z = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
+        auto coord_z = b.CreateExtractElement(llvm_coord, b.getInt32(2), "");
 
         // Define the function type: void(void*, uint, uint, void*)
         auto func_type = llvm::FunctionType::get(
@@ -1703,13 +1704,7 @@ private:
         auto llvm_mask = _lookup_value(current, b, mask);
 
         // Allocate space for the SurfaceHit result locally
-        auto hit_type = llvm::StructType::create(
-            b.getContext(),
-            {b.getInt32Ty(),                                  // uint inst
-             b.getInt32Ty(),                                  // uint prim
-             llvm::VectorType::get(b.getFloatTy(), 2u, false),// float2 bary
-             b.getFloatTy()},                                 // float committed_ray_t
-            "SurfaceHit");
+        auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
 
         auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
 
@@ -1719,7 +1714,6 @@ private:
         auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "");
         auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "");
 
-        //printTypeLayout(compressed_origin->getType());
         // Extract x, y, z for origin
         auto origin_x = b.CreateExtractValue(compressed_origin, 0, "");
         auto origin_y = b.CreateExtractValue(compressed_origin, 1, "");
