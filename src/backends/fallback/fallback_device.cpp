@@ -17,6 +17,7 @@
 #include "fallback_accel.h"
 #include "fallback_bindless_array.h"
 #include "fallback_shader.h"
+#include "fallback_buffer.h"
 
 //#include "llvm_event.h"
 //#include "llvm_shader.h"
@@ -70,7 +71,7 @@ void *FallbackDevice::native_handle() const noexcept {
 }
 
 void FallbackDevice::destroy_buffer(uint64_t handle) noexcept {
-    luisa::deallocate_with_allocator(reinterpret_cast<std::byte *>(handle));
+    luisa::deallocate_with_allocator(reinterpret_cast<FallbackBuffer *>(handle));
 }
 
 void FallbackDevice::destroy_texture(uint64_t handle) noexcept {
@@ -136,8 +137,8 @@ BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t ele
     info.element_stride = element->size();
     }
     info.total_size_bytes = info.element_stride * elem_count;
-    info.handle = reinterpret_cast<uint64_t>(
-        luisa::allocate_with_allocator<std::byte>(info.total_size_bytes));
+	auto buffer = luisa::new_with_allocator<FallbackBuffer>(elem_count, info.element_stride);
+    info.handle = reinterpret_cast<uint64_t>(buffer);
     info.native_handle = reinterpret_cast<void *>(info.handle);
     return info;
 }

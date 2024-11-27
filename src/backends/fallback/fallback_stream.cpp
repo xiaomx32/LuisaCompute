@@ -9,6 +9,7 @@
 #include "fallback_mesh.h"
 #include "fallback_texture.h"
 #include "fallback_shader.h"
+#include "fallback_buffer.h"
 
 namespace luisa::compute::fallback {
 
@@ -45,15 +46,15 @@ void FallbackStream::visit(const BufferUploadCommand *command) noexcept {
     std::memcpy(temp_buffer->data(), command->data(), command->size());
     _pool.async([src = std::move(temp_buffer),
                  buffer = command->handle(), offset = command->offset()] {
-        auto dst = reinterpret_cast<void *>(buffer + offset);
+        auto dst = reinterpret_cast<FallbackBuffer*>(buffer)->view(offset).ptr;
         std::memcpy(dst, src->data(), src->size());
     });
     _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferDownloadCommand *command) noexcept {
-    _pool.async([cmd = *command] {
-        auto src = reinterpret_cast<const void *>(cmd.handle() + cmd.offset());
+    _pool.async([cmd = *command, buffer = command->handle(), offset = command->offset()] {
+		auto src = reinterpret_cast<FallbackBuffer*>(buffer)->view(offset).ptr;
         std::memcpy(cmd.data(), src, cmd.size());
     });
     _pool.barrier();
@@ -61,8 +62,8 @@ void FallbackStream::visit(const BufferDownloadCommand *command) noexcept {
 
 void FallbackStream::visit(const BufferCopyCommand *command) noexcept {
     _pool.async([cmd = *command] {
-        auto src = reinterpret_cast<const void *>(cmd.src_handle() + cmd.src_offset());
-        auto dst = reinterpret_cast<void *>(cmd.dst_handle() + cmd.dst_offset());
+        auto src = reinterpret_cast<FallbackBuffer*>(cmd.src_handle())->view(cmd.src_offset()).ptr;
+		auto dst = reinterpret_cast<FallbackBuffer*>(cmd.dst_handle())->view(cmd.dst_offset()).ptr;
         std::memcpy(dst, src, cmd.size());
     });
     _pool.barrier();

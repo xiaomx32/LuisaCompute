@@ -211,21 +211,11 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
         using Tag = ShaderDispatchCommand::Argument::Tag;
         switch (arg.tag) {
             case Tag::BUFFER: {
-                //What is indirect?
-                //                if (reinterpret_cast<const CUDABufferBase *>(arg.buffer.handle)->is_indirect())
-                //                {
-                //                    auto buffer = reinterpret_cast<const CUDAIndirectDispatchBuffer *>(arg.buffer.handle);
-                //                    auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
-                //                    auto ptr = allocate_argument(sizeof(binding));
-                //                    std::memcpy(ptr, &binding, sizeof(binding));
-                //                }
-                //                else
                 {
                     auto buffer = reinterpret_cast<FallbackBuffer *>(arg.buffer.handle);
                     auto buffer_view = buffer->view(arg.buffer.offset);
-                    //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
                     auto ptr = allocate_argument(sizeof(buffer_view));
-                    std::memcpy(ptr, &buffer, sizeof(buffer_view));
+                    std::memcpy(ptr, &buffer_view, sizeof(buffer_view));
                 }
                 break;
             }
@@ -282,23 +272,23 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
 
     auto data = argument_buffer.data();
 
-    // for (int i = 0; i < dispatch_counts.x; ++i) {
-    //     for (int j = 0; j < dispatch_counts.y; ++j) {
-    //         for (int k = 0; k < dispatch_counts.z; ++k) {
-    //             auto c = config;
-    //             c.block_id = make_uint3(i, j, k);
-    //             (*_kernel_entry)(data, &c);
-    //         }
-    //     }
-    // }
+     for (int i = 0; i < dispatch_counts.x; ++i) {
+         for (int j = 0; j < dispatch_counts.y; ++j) {
+             for (int k = 0; k < dispatch_counts.z; ++k) {
+                 auto c = config;
+                 c.block_id = make_uint3(i, j, k);
+                 (*_kernel_entry)(data, &c);
+             }
+         }
+     }
 
-    pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
-       [this, config, data](auto bx, auto by, auto bz) noexcept {
-            auto c = config;
-           c.block_id = make_uint3(bx, by, bz);
-           (*_kernel_entry)(data, &c);
-    });
-    pool.barrier();
+//    pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
+//       [this, config, data](auto bx, auto by, auto bz) noexcept {
+//            auto c = config;
+//           c.block_id = make_uint3(bx, by, bz);
+//           (*_kernel_entry)(data, &c);
+//    });
+//    pool.barrier();
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {
     _bound_arguments.reserve(kernel.bound_arguments().size());

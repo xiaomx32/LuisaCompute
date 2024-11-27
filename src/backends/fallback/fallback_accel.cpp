@@ -211,5 +211,4 @@ void accel_transform_wrapper(void* accel, unsigned id, void* buffer)
     luisa::compute::fallback::detail::fill_transform(
         reinterpret_cast<luisa::compute::fallback::FallbackAccel *>(accel),
         id, reinterpret_cast<luisa::float4x4 *>(buffer));
-    auto g = reinterpret_cast<luisa::float4x4 *>(buffer);
 }
