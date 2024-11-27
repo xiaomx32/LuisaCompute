@@ -31,3 +31,7 @@ if get_config("toy_c_backend") then
     set_pcxxheader("c_codegen/pch.h")
     target_end()
 end
+
+if get_config("enable_xir") then
+    includes("spirv_codegen")
+end
