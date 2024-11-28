@@ -1391,6 +1391,7 @@ private:
             4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
@@ -1445,6 +1446,7 @@ private:
             4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
@@ -1667,6 +1669,7 @@ private:
         auto llvm_value_type = _translate_type(inst->type(), true);
         // Allocate space for the texture view struct
         auto val_alloca = b.CreateAlloca(llvm_value_type, nullptr, "");
+		val_alloca->setAlignment(llvm::Align(alignment));
 
 
         // Define the function type: void(void*, uint, uint, void*)
@@ -1685,7 +1688,7 @@ private:
         // Call the function
         b.CreateCall(func, {llvm_bindless, llvm_slot, llvm_elem, llvm_data_stride, val_alloca});
         // Return the loaded result
-        return b.CreateLoad(llvm_value_type, val_alloca, "");
+        return b.CreateAlignedLoad(llvm_value_type, val_alloca, llvm::MaybeAlign(alignment), "");
     }
 
     [[nodiscard]] llvm::Value *_translate_accel_trace(
@@ -1707,7 +1710,7 @@ private:
         auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
 
         auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
-		hit_alloca->setAlignment(llvm::Align(8u));
+		hit_alloca->setAlignment(llvm::Align(Type::of<luisa::compute::SurfaceHit>()->alignment()));
 
         // Extract ray components
         auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
