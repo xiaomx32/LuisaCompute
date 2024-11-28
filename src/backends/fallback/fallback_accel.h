@@ -48,6 +48,7 @@ private:
     [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
 
 public:
+	[[nodiscard]]auto device()const noexcept{return _device;}
     [[nodiscard]] RTCScene scene()const noexcept {return _handle;}
     FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
     ~FallbackAccel() noexcept;

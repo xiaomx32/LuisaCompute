@@ -127,7 +127,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+    //LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
@@ -135,7 +135,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
         LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
     }
     //llvm_module->print(llvm::errs(), nullptr, true, true);
-    llvm_module->print(llvm::outs(), nullptr, true, true);
+    //llvm_module->print(llvm::outs(), nullptr, true, true);
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
@@ -175,7 +175,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
     }
-    llvm_module->print(llvm::outs(), nullptr, true, true);
+    //llvm_module->print(llvm::outs(), nullptr, true, true);
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));
@@ -272,22 +272,23 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
 
     auto data = argument_buffer.data();
 
-     for (int i = 0; i < dispatch_counts.x; ++i) {
-         for (int j = 0; j < dispatch_counts.y; ++j) {
-             for (int k = 0; k < dispatch_counts.z; ++k) {
-                 auto c = config;
-                 c.block_id = make_uint3(i, j, k);
-                 (*_kernel_entry)(data, &c);
-             }
-         }
-     }
+//     for (int i = 0; i < dispatch_counts.x; ++i) {
+//         for (int j = 0; j < dispatch_counts.y; ++j) {
+//             for (int k = 0; k < dispatch_counts.z; ++k) {
+//                 auto c = config;
+//                 c.block_id = make_uint3(i, j, k);
+//                 (*_kernel_entry)(data, &c);
+//             }
+//         }
+//     }
 
-//    pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
-//       [this, config, data](auto bx, auto by, auto bz) noexcept {
-//            auto c = config;
-//           c.block_id = make_uint3(bx, by, bz);
-//           (*_kernel_entry)(data, &c);
-//    });
+    pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
+       [this, config, data](auto bx, auto by, auto bz) noexcept {
+            auto c = config;
+           c.block_id = make_uint3(bx, by, bz);
+           (*_kernel_entry)(data, &c);
+    });
+	pool.synchronize();
 //    pool.barrier();
 }
 void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {

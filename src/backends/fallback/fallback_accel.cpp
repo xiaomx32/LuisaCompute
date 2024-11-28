@@ -3,6 +3,7 @@
 //
 
 #include <luisa/core/stl.h>
+#include <luisa/core/logging.h>
 
 #include "fallback_mesh.h"
 #include "fallback_accel.h"
@@ -93,7 +94,7 @@ namespace luisa::compute::fallback
             auto error = rtcGetDeviceError(_device);
             if (error != RTC_ERROR_NONE)
             {
-                printf("Embree Error: %d\n", error);
+				LUISA_INFO("RTC ERROR: {}", (uint)error);
             }
         });
     }
@@ -116,99 +117,96 @@ namespace luisa::compute::fallback
             m[3], m[7], m[11], 1.f);
     }
 
-    namespace detail
-    {
-        void accel_trace_closest(const FallbackAccel* accel, float ox, float oy, float oz, float dx, float dy, float dz,
-                                 float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept
-        {
+	void accel_trace_closest(const FallbackAccel* accel, float ox, float oy, float oz, float dx, float dy, float dz,
+			float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept
+	{
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-            RTCIntersectContext ctx{};
-            rtcInitIntersectContext(&ctx);
+		RTCIntersectContext ctx{};
+		rtcInitIntersectContext(&ctx);
 #else
-    RTCRayQueryContext ctx{};
+		RTCRayQueryContext ctx{};
     rtcInitRayQueryContext(&ctx);
     RTCIntersectArguments args{.context = &ctx};
 #endif
-            RTCRayHit rh{};
-            rh.ray.org_x = ox;
-            rh.ray.org_y = oy;
-            rh.ray.org_z = oz;
-            rh.ray.dir_x = dx;
-            rh.ray.dir_y = dy;
-            rh.ray.dir_z = dz;
-            rh.ray.tnear = tmin;
-            rh.ray.tfar = tmax;
+		RTCRayHit rh{};
+		rh.ray.org_x = ox;
+		rh.ray.org_y = oy;
+		rh.ray.org_z = oz;
+		rh.ray.dir_x = dx;
+		rh.ray.dir_y = dy;
+		rh.ray.dir_z = dz;
+		rh.ray.tnear = tmin;
+		rh.ray.tfar = tmax;
 
-            rh.ray.mask = mask;
-            rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-            rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
-            rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
-            rh.ray.flags = 0;
+		rh.ray.mask = mask;
+		rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+		rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
+		rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+		rh.ray.flags = 0;
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-            rtcIntersect1(accel->scene(), &ctx, &rh);
+		rtcIntersect1(accel->scene(), &ctx, &rh);
 #else
-    rtcIntersect1(accel->scene(), &rh, &args);
+		rtcIntersect1(accel->scene(), &rh, &args);
 #endif
-            hit->inst = rh.hit.instID[0];
-            hit->prim = rh.hit.primID;
-            hit->bary = make_float2(rh.hit.u, rh.hit.v);
-            hit->committed_ray_t = rh.ray.tfar;
-        }
-        void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer)
-        {
-            // TODO: handle embree 4
+		hit->inst = rh.hit.instID[0];
+		hit->prim = rh.hit.primID;
+		hit->bary = make_float2(rh.hit.u, rh.hit.v);
+		hit->committed_ray_t = rh.ray.tfar;
+	}
+	void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer)
+	{
+		// TODO: handle embree 4
 
-            // Retrieve the RTCInstance (you may need to store instances in your application)
-            auto instance = rtcGetGeometry(accel->scene(), id);
+		// Retrieve the RTCInstance (you may need to store instances in your application)
+		auto instance = rtcGetGeometry(accel->scene(), id);
 
-            // Get the transform of the instance (a 4x4 matrix)
-            rtcGetGeometryTransform(instance, 0.f, RTCFormat::RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, buffer);
-        }
+		// Get the transform of the instance (a 4x4 matrix)
+		rtcGetGeometryTransform(instance, 0.f, RTCFormat::RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR, buffer);
+	}
 
-        bool accel_trace_any(const FallbackAccel* accel, float ox, float oy, float oz, float dx, float dy, float dz,
-                             float tmin, float tmax, uint mask) noexcept
-        {
+	bool accel_trace_any(const FallbackAccel* accel, float ox, float oy, float oz, float dx, float dy, float dz,
+			float tmin, float tmax, uint mask) noexcept
+	{
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-            RTCIntersectContext ctx{};
-            rtcInitIntersectContext(&ctx);
+		RTCIntersectContext ctx{};
+		rtcInitIntersectContext(&ctx);
 #else
-    RTCRayQueryContext ctx{};
+		RTCRayQueryContext ctx{};
     rtcInitRayQueryContext(&ctx);
     RTCOccludedArguments args{.context = &ctx};
 #endif
-            RTCRay ray{};
-            ray.org_x = ox;
-            ray.org_y = oy;
-            ray.org_z = oz;
-            ray.dir_x = dx;
-            ray.dir_y = dy;
-            ray.dir_z = dz;
-            ray.tnear = tmin;
-            ray.tfar = tmax;
+		RTCRay ray{};
+		ray.org_x = ox;
+		ray.org_y = oy;
+		ray.org_z = oz;
+		ray.dir_x = dx;
+		ray.dir_y = dy;
+		ray.dir_z = dz;
+		ray.tnear = tmin;
+		ray.tfar = tmax;
 
-            ray.mask = mask;
-            ray.flags = 0;
+		ray.mask = mask;
+		ray.flags = 0;
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-            rtcOccluded1(accel->scene(), &ctx, &ray);
+		rtcOccluded1(accel->scene(), &ctx, &ray);
 #else
-    rtcOccluded1(accel->scene(), &ray, &args);
+		rtcOccluded1(accel->scene(), &ray, &args);
 #endif
-            return ray.tfar < 0.f;
-        }
-    } // namespace detail
+		return ray.tfar < 0.f;
+	}
 } // namespace luisa::compute::fallback
 
 void intersect_closest_wrapper(void* accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin,
                                float tmax, unsigned mask, void* hit)
 {
-    luisa::compute::fallback::detail::accel_trace_closest(
+    luisa::compute::fallback::accel_trace_closest(
         reinterpret_cast<luisa::compute::fallback::FallbackAccel *>(accel),
         ox, oy, oz, dx, dy, dz, tmin, tmax, mask, reinterpret_cast<luisa::compute::SurfaceHit *>(hit));
 }
 
 void accel_transform_wrapper(void* accel, unsigned id, void* buffer)
 {
-    luisa::compute::fallback::detail::fill_transform(
+    luisa::compute::fallback::fill_transform(
         reinterpret_cast<luisa::compute::fallback::FallbackAccel *>(accel),
         id, reinterpret_cast<luisa::float4x4 *>(buffer));
 }

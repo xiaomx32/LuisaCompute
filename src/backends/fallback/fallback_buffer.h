@@ -15,7 +15,7 @@ struct alignas(16) FallbackBufferView {
 class FallbackBuffer {
 public:
 	explicit FallbackBuffer(size_t size, unsigned elementStride);
-    void *addr() { return data; }
+	std::byte *addr()const noexcept { return data; }
     [[nodiscard]] FallbackBufferView view(size_t offset) noexcept;
 	~FallbackBuffer();
 private:

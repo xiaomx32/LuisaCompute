@@ -134,18 +134,18 @@ void FallbackStream::visit(const AccelBuildCommand *command) noexcept {
 }
 
 void FallbackStream::visit(const MeshBuildCommand *command) noexcept {
-    auto v_b = command->vertex_buffer();
+    auto v_b = reinterpret_cast<FallbackBuffer*>(command->vertex_buffer())->view(0).ptr;
     auto v_b_o = command->vertex_buffer_offset();
     auto v_s = command->vertex_stride();
     auto v_b_s = command->vertex_buffer_size();
     auto v_b_c = v_b_s/v_s;
-    auto t_b = command->triangle_buffer();
+    auto t_b = reinterpret_cast<FallbackBuffer*>(command->triangle_buffer())->view(0).ptr;
     auto t_b_o = command->triangle_buffer_offset();
     auto t_b_s = command->triangle_buffer_size();
     auto t_b_c = t_b_s/12u;
     _pool.async([=,mesh = reinterpret_cast<FallbackMesh *>(command->handle())]
     {
-        mesh->commit(v_b, v_b_o, v_s, v_b_c, t_b, t_b_o, t_b_c);
+        mesh->commit(reinterpret_cast<uint64_t>(v_b), v_b_o, v_s, v_b_c, reinterpret_cast<uint64_t>(t_b), t_b_o, t_b_c);
     });
     _pool.barrier();
 }

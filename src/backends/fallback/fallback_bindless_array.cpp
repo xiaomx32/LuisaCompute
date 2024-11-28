@@ -3,9 +3,8 @@
 //
 
 #include "fallback_bindless_array.h"
+#include "fallback_buffer.h"
 #include "thread_pool.h"
-#include "luisa/runtime/rtx/triangle.h"
-#include "luisa/rust/api_types.hpp"
 
 namespace luisa::compute::fallback
 {
@@ -36,6 +35,6 @@ namespace luisa::compute::fallback
 void bindless_buffer_read(void* bindless, size_t slot, size_t elem, unsigned stride, void* buffer)
 {
     auto a = reinterpret_cast<luisa::compute::fallback::FallbackBindlessArray *>(bindless);
-    auto ptr = reinterpret_cast<const std::byte*>(a->slot(slot).buffer);
+    auto ptr = reinterpret_cast<const luisa::compute::fallback::FallbackBuffer*>(a->slot(slot).buffer)->addr();
     std::memcpy(buffer, ptr + elem*stride, stride);
 }

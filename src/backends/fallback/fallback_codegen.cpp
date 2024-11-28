@@ -1707,6 +1707,7 @@ private:
         auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
 
         auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
+		hit_alloca->setAlignment(llvm::Align(8u));
 
         // Extract ray components
         auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
