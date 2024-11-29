@@ -1840,16 +1840,24 @@ private:
 		llvm::ArrayType *result_type = llvm::ArrayType::get(vec4_type, dimension);
 		llvm::Value *result = llvm::UndefValue::get(result_type);
 
+		std::vector<llvm::Value *> values(dimension*dimension);
 		// Transpose the matrix by swapping rows and columns
 		for (unsigned i = 0; i < dimension; ++i) {
 			for (unsigned j = 0; j < dimension; ++j) {
 				// Extract value at position (i, j) in the original matrix
-				llvm::Value *value = b.CreateExtractValue(llvm_matrix, {i, j});
-
-				// Insert the value at position (j, i) in the transposed matrix
-				result = b.CreateInsertValue(result, value, {j, i});
+				auto idx = i + j*dimension;
+				auto v = b.CreateExtractValue(llvm_matrix, {i, j});
+				values[idx] = v;
 			}
 		}
+		for (unsigned i = 0; i < dimension; ++i) {
+			for (unsigned j = 0; j < dimension; ++j) {
+				auto idx = i + j * dimension;
+				result = b.CreateInsertValue(result, values[idx], {j, i});
+			}
+		}
+
+		// Insert the value at position (j, i) in the transposed matrix
 
 		return result;
 	}
@@ -1908,7 +1916,7 @@ private:
                 llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
                 for (unsigned k = 0; k < dimension; ++k) {
                     // Load A[i][k] and B[k][j]
-                    llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {i, k});
+                    llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {k, i});
                     llvm::Value *b_kj = b.CreateExtractElement(llvm_B, {k});
                     llvm::Value *product = b.CreateFMul(a_ik, b_kj);
                     sum = b.CreateFAdd(sum, product);
