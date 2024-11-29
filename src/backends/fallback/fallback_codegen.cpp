@@ -2608,7 +2608,7 @@ private:
             case xir::DerivedInstructionTag::CALL: {
                 auto call_inst = static_cast<const xir::CallInst *>(inst);
                 auto llvm_func = llvm::cast<llvm::Function>(_lookup_value(current, b, call_inst->callee()));
-                llvm::SmallVector<llvm::Value *, 16u> llvm_args;
+                llvm::SmallVector<llvm::Value *, 64u> llvm_args;
                 llvm_args.reserve(call_inst->argument_count());
                 for (auto i = 0u; i < call_inst->argument_count(); i++) {
                     auto llvm_arg = _lookup_value(current, b, call_inst->argument(i));
