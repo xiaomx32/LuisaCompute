@@ -11,8 +11,6 @@ namespace luisa::compute::fallback
 {
     void texture_write_2d_float_wrapper(void* ptr, uint x, uint y, void* val)
     {
-        auto b = static_cast<float4 *>(val);
-        auto view = reinterpret_cast<const FallbackTextureView *>(ptr);
         texture_write_2d_float(reinterpret_cast<const FallbackTextureView *>(ptr), x, y, *(float4 *) val);
     }
 
@@ -23,8 +21,6 @@ namespace luisa::compute::fallback
 
     void texture_write_2d_uint_wrapper(void* ptr, uint x, uint y, void* val)
     {
-        auto b = static_cast<float4 *>(val);
-        auto view = reinterpret_cast<const FallbackTextureView *>(ptr);
         texture_write_2d_uint(reinterpret_cast<const FallbackTextureView *>(ptr), x, y, *(uint4 *) val);
     }
 
