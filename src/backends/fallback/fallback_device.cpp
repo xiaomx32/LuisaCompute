@@ -18,6 +18,7 @@
 #include "fallback_bindless_array.h"
 #include "fallback_shader.h"
 #include "fallback_buffer.h"
+#include "fallback_swapchain.h"
 
 //#include "llvm_event.h"
 //#include "llvm_shader.h"
@@ -27,6 +28,8 @@
 #include <llvm/Support/SourceMgr.h>
 
 //#include "fallback_texture_sampling_wrapper.ll";
+
+
 
 namespace luisa::compute::fallback {
 
@@ -107,12 +110,15 @@ void FallbackDevice::destroy_accel(uint64_t handle) noexcept {
 }
 
 void FallbackDevice::destroy_swap_chain(uint64_t handle) noexcept {
-    LUISA_ERROR_WITH_LOCATION("Not implemented.");
+	auto b = reinterpret_cast<FallbackSwapchain*>(handle);
+	luisa::deallocate_with_allocator(b);
 }
 
 void FallbackDevice::present_display_in_stream(
     uint64_t stream_handle, uint64_t swap_chain_handle, uint64_t image_handle) noexcept {
-    LUISA_ERROR_WITH_LOCATION("Not implemented.");
+
+	auto b = reinterpret_cast<FallbackSwapchain*>(swap_chain_handle);
+	b->Present(reinterpret_cast<void*>(image_handle));
 }
 
 FallbackDevice::~FallbackDevice() noexcept {
@@ -171,7 +177,13 @@ void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const Devic
 }
 
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
-    return SwapchainCreationInfo();
+
+	auto sc = luisa::new_with_allocator<FallbackSwapchain>(option);
+	return SwapchainCreationInfo{
+		ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
+							 .native_handle = nullptr},
+		(option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)
+	};
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {

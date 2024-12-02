@@ -178,7 +178,7 @@ FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uin
     : _storage{storage}, _mip_levels{levels}, _dimension{dim}
     {
     if (_dimension == 2u) {
-        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_align(storage))) - 1u;
+        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         if (storage == PixelStorage::BC6 || storage == PixelStorage::BC7) {
             _pixel_stride_shift = 0u;
         }
