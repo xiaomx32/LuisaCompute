@@ -1416,6 +1416,110 @@ private:
         return b.CreateLoad(outType, result_alloca, "");
     }
 
+	[[nodiscard]] llvm::Value *_translate_bindless_tex2d(
+			CurrentFunction &current,
+			IRBuilder &b,
+			const xir::Instruction *inst, bool level) noexcept {
+
+		auto coord = inst->operand(1u);
+
+		const char* function_name = level?"bindless.tex2d.level":"bindless.tex2d";
+
+		// Get LLVM values for the arguments
+		auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+		auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
+		auto llvm_uv = _lookup_value(current, b, inst->operand(2u));
+
+
+		auto outType = _translate_type(inst->type(), false);
+		// Allocate space for the result locally
+		auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+
+		// Extract x and y from uint2 coordinate
+		auto coord_x = b.CreateExtractElement(llvm_uv, b.getInt32(0), "");
+		auto coord_y = b.CreateExtractElement(llvm_uv, b.getInt32(1), "");
+
+		// Define the function type: void(void*, uint, uint, void*)
+		llvm::FunctionType* func_type;
+		if(level)
+		{
+			//void* bindless, uint slot, float level, float x, float y, void* out
+			func_type = llvm::FunctionType::get(
+					b.getVoidTy(),
+					{b.getPtrTy(),  // void* bindless
+					 b.getInt32Ty(),// uint slot
+					 b.getFloatTy(),// float level
+					 b.getFloatTy(),// float x
+					 b.getFloatTy(),// float y
+					 b.getPtrTy()}, // void* result
+					false);
+		}
+		else
+		{
+			//void* bindless, uint slot, float x, float y, void* out
+			func_type = llvm::FunctionType::get(
+				b.getVoidTy(),
+				{b.getPtrTy(),  // void* bindless
+				 b.getInt32Ty(),// uint slot
+				 b.getFloatTy(),// float x
+				 b.getFloatTy(),// float y
+				 b.getPtrTy()}, // void* result
+				false);
+		}
+
+		// Get the function pointer from the symbol map
+		auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
+
+		// Call the function
+		if(level)
+		{
+			b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, _lookup_value(current, b, inst->operand(3u)), result_alloca});
+		}
+		else
+		{
+			b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, result_alloca});
+		}
+
+		// Return the loaded result
+		return b.CreateLoad(outType, result_alloca, "");
+	}
+	[[nodiscard]] llvm::Value *_translate_bindless_texture_size(
+			CurrentFunction &current,
+			IRBuilder &b,
+			const xir::Instruction *inst, bool dimension2) noexcept {
+
+		const char* function_name = dimension2?"bindless.tex2d.size":"bindless.tex3d.size";
+
+		// Get LLVM values for the arguments
+		auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+		auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
+
+
+		auto outType = _translate_type(inst->type(), false);
+		// Allocate space for the result locally
+		auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+
+		// Define the function type: void(void*, uint, uint, void*)
+		llvm::FunctionType* func_type;
+		//void* bindless, uint slot, float level, float x, float y, void* out
+		func_type = llvm::FunctionType::get(
+				b.getVoidTy(),
+				{b.getPtrTy(),  // void* bindless
+				 b.getInt32Ty(),
+				 b.getPtrTy()}, // void* result
+				false);
+
+		// Get the function pointer from the symbol map
+		auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
+
+		b.CreateCall(func, {llvm_bindless, llvm_slot, result_alloca});
+
+		// Return the loaded result
+		return b.CreateLoad(outType, result_alloca, "");
+	}
+
     [[nodiscard]] llvm::Value *_translate_volume_read(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1472,6 +1576,7 @@ private:
         // Return the loaded result
         return b.CreateLoad(outType, result_alloca, "");
     }
+
     [[nodiscard]] llvm::Value *_translate_texture_write(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1627,6 +1732,10 @@ private:
                 }();
                 static_indices.push_back(static_index);
             }
+			if(static_indices.size() == 3)
+			{
+				static_indices.push_back(0);
+			}
             auto llvm_poison_value = llvm::PoisonValue::get(llvm_src->getType());
             return b.CreateShuffleVector(llvm_src, llvm_poison_value, static_indices);
         }
@@ -2152,11 +2261,11 @@ private:
             }
             case xir::IntrinsicOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::IntrinsicOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
-            case xir::IntrinsicOp::ACOS: break;
+            case xir::IntrinsicOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acosf");
             case xir::IntrinsicOp::ACOSH: break;
             case xir::IntrinsicOp::ASIN: break;
             case xir::IntrinsicOp::ASINH: break;
-            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "tan");
+            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "tanf");
             case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1),"atan2f");
             case xir::IntrinsicOp::ATANH: break;
             case xir::IntrinsicOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
@@ -2353,8 +2462,8 @@ private:
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_tex2d(current, b, inst, false);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_tex2d(current, b, inst, true);
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: break;
@@ -2373,8 +2482,8 @@ private:
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_size(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_size(current, b, inst, false);
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_read(current, b, inst);

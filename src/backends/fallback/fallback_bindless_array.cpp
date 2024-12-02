@@ -21,7 +21,9 @@ namespace luisa::compute::fallback
         {
             for (auto m: mods)
             {
-                _slots[m.slot].buffer = reinterpret_cast<void*>(m.buffer.handle);
+				_slots[m.slot].buffer = reinterpret_cast<void*>(m.buffer.handle);
+				_slots[m.slot].sampler2d = m.tex2d.sampler;
+				_slots[m.slot].tex2d = reinterpret_cast<FallbackTexture*>(m.tex2d.handle);
             }
         });
         _tracker.commit();

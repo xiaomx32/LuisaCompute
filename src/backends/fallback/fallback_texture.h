@@ -433,6 +433,9 @@ namespace luisa::compute::fallback
     void texture_read_3d_float_wrapper(void* ptr, uint x, uint y, uint z, void* out);
     void texture_read_3d_uint_wrapper(void* ptr, uint x, uint y, uint z, void* out);
 
+	void bindless_tex2d_level_wrapper(void* bindless, uint slot, float x, float y, float level, void* out);
+	void bindless_tex2d_size_wrapper(void* bindless, uint slot, void* out);
+	void bindless_tex2d_wrapper(void* bindless, uint slot, float x, float y, void* out);
     // [[nodiscard]] float32x4_t texture_read_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
     // [[nodiscard]] float32x4_t texture_read_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
     // [[nodiscard]] float32x4_t texture_read_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;

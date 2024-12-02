@@ -2,6 +2,7 @@
 // Created by swfly on 2024/11/16.
 //
 
+#include "fallback_bindless_array.h"
 #include "fallback_texture.h"
 #include "fallback_texture_bc.h"
 #include "llvm_abi.h"
@@ -412,4 +413,29 @@ namespace luisa::compute::fallback
     {
         return bindless_texture_3d_sample(tex, sampler, u, v, w);
     }
+
+	void bindless_tex2d_level_wrapper(void* bindless, uint slot, float x, float y, float level, void* out)
+	{
+		auto bd = reinterpret_cast<FallbackBindlessArray*>(bindless);
+		auto slt = bd->slot(slot);
+		auto tex2d = slt.tex2d;
+		auto result_f4 = reinterpret_cast<float4*>(out);
+		*result_f4 = bindless_texture_2d_sample_level(tex2d, slt.sampler2d.code(), x, y, level);
+
+	}
+	void bindless_tex2d_wrapper(void* bindless, uint slot, float x, float y, void* out)
+	{
+		auto bd = reinterpret_cast<FallbackBindlessArray*>(bindless);
+		auto slt = bd->slot(slot);
+		auto tex2d = slt.tex2d;
+		*((float4*)out) = bindless_texture_2d_sample(tex2d, slt.sampler2d.code(), x, y);
+	}
+
+	void bindless_tex2d_size_wrapper(void* bindless, uint slot, void* out)
+	{
+		auto bd = reinterpret_cast<FallbackBindlessArray*>(bindless);
+		auto slt = bd->slot(slot);
+		auto tex2d = slt.tex2d;
+		*((uint2*)out) = tex2d->view(0).size2d();
+	}
 } // namespace luisa::compute::fallback

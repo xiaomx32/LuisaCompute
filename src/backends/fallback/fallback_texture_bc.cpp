@@ -667,170 +667,192 @@ void BC7Block::Decode(int x, int y, float *out) const noexcept {
     const uint8_t uMode = uint8_t(uFirst - 1);
 
     if (uMode < 8) {
-        const uint8_t uPartitions = ms_aInfo[uMode].uPartitions;
-        assert(uPartitions < BC7_MAX_REGIONS);
-        LUISA_ASSUME(uPartitions < BC7_MAX_REGIONS);
+		const uint8_t uPartitions = ms_aInfo[uMode].uPartitions;
+		assert(uPartitions < BC7_MAX_REGIONS);
+		LUISA_ASSUME(uPartitions < BC7_MAX_REGIONS);
 
-        auto const uNumEndPts = static_cast<const uint8_t>((unsigned(uPartitions) + 1u) << 1);
-        const uint8_t uIndexPrec = ms_aInfo[uMode].uIndexPrec;
-        const uint8_t uIndexPrec2 = ms_aInfo[uMode].uIndexPrec2;
-        size_t uStartBit = size_t(uMode) + 1;
-        uint8_t P[6];
-        const uint8_t uShape = GetBits(uStartBit, ms_aInfo[uMode].uPartitionBits);
-        assert(uShape < BC7_MAX_SHAPES);
-        LUISA_ASSUME(uShape < BC7_MAX_SHAPES);
+		auto const uNumEndPts = static_cast<const uint8_t>((unsigned(uPartitions) + 1u) << 1);
+		const uint8_t uIndexPrec = ms_aInfo[uMode].uIndexPrec;
+		const uint8_t uIndexPrec2 = ms_aInfo[uMode].uIndexPrec2;
+		size_t uStartBit = size_t(uMode) + 1;
+		uint8_t P[6];
+		const uint8_t uShape = GetBits(uStartBit, ms_aInfo[uMode].uPartitionBits);
+		assert(uShape < BC7_MAX_SHAPES);
+		LUISA_ASSUME(uShape < BC7_MAX_SHAPES);
 
-        const uint8_t uRotation = GetBits(uStartBit, ms_aInfo[uMode].uRotationBits);
-        assert(uRotation < 4);
+		const uint8_t uRotation = GetBits(uStartBit, ms_aInfo[uMode].uRotationBits);
+		assert(uRotation < 4);
 
-        const uint8_t uIndexMode = GetBits(uStartBit, ms_aInfo[uMode].uIndexModeBits);
-        assert(uIndexMode < 2);
+		const uint8_t uIndexMode = GetBits(uStartBit, ms_aInfo[uMode].uIndexModeBits);
+		assert(uIndexMode < 2);
 
-        LDRColorA c[BC7_MAX_REGIONS << 1];
-        const LDRColorA RGBAPrec = ms_aInfo[uMode].RGBAPrec;
-        const LDRColorA RGBAPrecWithP = ms_aInfo[uMode].RGBAPrecWithP;
+		LDRColorA c[BC7_MAX_REGIONS << 1];
+		const LDRColorA RGBAPrec = ms_aInfo[uMode].RGBAPrec;
+		const LDRColorA RGBAPrecWithP = ms_aInfo[uMode].RGBAPrecWithP;
 
-        assert(uNumEndPts <= (BC7_MAX_REGIONS << 1));
+		assert(uNumEndPts <= (BC7_MAX_REGIONS << 1));
 
-        // Red channel
-        for (unsigned i = 0; i < uNumEndPts; i++) {
-            if (uStartBit + RGBAPrec.r > 128) {
+		// Red channel
+		for (unsigned i = 0; i < uNumEndPts; i++) {
+			if (uStartBit + RGBAPrec.r > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
+				ZeroOutPixel(out);
+				return;
+			}
 
-            c[i].r = GetBits(uStartBit, RGBAPrec.r);
-        }
+			c[i].r = GetBits(uStartBit, RGBAPrec.r);
+		}
 
-        // Green channel
-        for (unsigned i = 0; i < uNumEndPts; i++) {
-            if (uStartBit + RGBAPrec.g > 128) {
+		// Green channel
+		for (unsigned i = 0; i < uNumEndPts; i++) {
+			if (uStartBit + RGBAPrec.g > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
+				ZeroOutPixel(out);
+				return;
+			}
 
-            c[i].g = GetBits(uStartBit, RGBAPrec.g);
-        }
+			c[i].g = GetBits(uStartBit, RGBAPrec.g);
+		}
 
-        // Blue channel
-        for (unsigned i = 0; i < uNumEndPts; i++) {
-            if (uStartBit + RGBAPrec.b > 128) {
+		// Blue channel
+		for (unsigned i = 0; i < uNumEndPts; i++) {
+			if (uStartBit + RGBAPrec.b > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
+				ZeroOutPixel(out);
+				return;
+			}
 
-            c[i].b = GetBits(uStartBit, RGBAPrec.b);
-        }
+			c[i].b = GetBits(uStartBit, RGBAPrec.b);
+		}
 
-        // Alpha channel
-        for (unsigned i = 0; i < uNumEndPts; i++) {
-            if (uStartBit + RGBAPrec.a > 128) {
+		// Alpha channel
+		for (unsigned i = 0; i < uNumEndPts; i++) {
+			if (uStartBit + RGBAPrec.a > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
+				ZeroOutPixel(out);
+				return;
+			}
 
-            c[i].a = RGBAPrec.a ? GetBits(uStartBit, RGBAPrec.a) : 255u;
-        }
+			c[i].a = RGBAPrec.a ? GetBits(uStartBit, RGBAPrec.a) : 255u;
+		}
 
-        // P-bits
-        assert(ms_aInfo[uMode].uPBits <= 6);
-        LUISA_ASSUME(ms_aInfo[uMode].uPBits <= 6);
-        for (unsigned i = 0; i < ms_aInfo[uMode].uPBits; i++) {
-            if (uStartBit > 127) {
+		// P-bits
+		assert(ms_aInfo[uMode].uPBits <= 6);
+		LUISA_ASSUME(ms_aInfo[uMode].uPBits <= 6);
+		for (unsigned i = 0; i < ms_aInfo[uMode].uPBits; i++) {
+			if (uStartBit > 127) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
+				ZeroOutPixel(out);
+				return;
+			}
 
-            P[i] = GetBit(uStartBit);
-        }
+			P[i] = GetBit(uStartBit);
+		}
 
-        if (ms_aInfo[uMode].uPBits) {
-            for (unsigned i = 0; i < uNumEndPts; i++) {
-                size_t pi = i * ms_aInfo[uMode].uPBits / uNumEndPts;
-                for (uint8_t ch = 0; ch < BC7_NUM_CHANNELS; ch++) {
-                    if (RGBAPrec[ch] != RGBAPrecWithP[ch]) {
-                        c[i][ch] = static_cast<uint8_t>((unsigned(c[i][ch]) << 1) | P[pi]);
-                    }
-                }
-            }
-        }
+		if (ms_aInfo[uMode].uPBits) {
+			for (unsigned i = 0; i < uNumEndPts; i++) {
+				size_t pi = i * ms_aInfo[uMode].uPBits / uNumEndPts;
+				for (uint8_t ch = 0; ch < BC7_NUM_CHANNELS; ch++) {
+					if (RGBAPrec[ch] != RGBAPrecWithP[ch]) {
+						c[i][ch] = static_cast<uint8_t>((unsigned(c[i][ch]) << 1) | P[pi]);
+					}
+				}
+			}
+		}
 
-        for (unsigned i = 0; i < uNumEndPts; i++) {
+		for (unsigned i = 0; i < uNumEndPts; i++) {
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
-            c[i] = Unquantize(c[i], RGBAPrecWithP);
+			c[i] = Unquantize(c[i], RGBAPrecWithP);
 #ifdef __GNUC_
 #pragma GCC diagnostic pop
 #endif
-        }
+		}
 
-        uint8_t w1, w2;
+		uint8_t w1[NUM_PIXELS_PER_BLOCK], w2[NUM_PIXELS_PER_BLOCK];
 
-        // read color indices
-        const size_t uNumBits = IsFixUpOffset(ms_aInfo[uMode].uPartitions, uShape, pos) ? uIndexPrec - 1u : uIndexPrec;
-        if (uStartBit + uNumBits > 128) {
+		// read color indices
+		for (int i = 0; i < NUM_PIXELS_PER_BLOCK; i++) {
+			const size_t uNumBits = IsFixUpOffset(ms_aInfo[uMode].uPartitions, uShape, i) ? uIndexPrec - 1u
+																						  : uIndexPrec;
+			if (uStartBit + uNumBits > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-            OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+				OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-            ZeroOutPixel(out);
-            return;
-        }
-        w1 = GetBits(uStartBit, uNumBits);
+				ZeroOutPixel(out);
+				return;
+			}
+			w1[i] = GetBits(uStartBit, uNumBits);
+		}
 
-        // read alpha indices
-        if (uIndexPrec2) {
-            const size_t uNumBits = pos ? uIndexPrec2 : uIndexPrec2 - 1u;
-            if (uStartBit + uNumBits > 128) {
+		// read alpha indices
+		if (uIndexPrec2) {
+			for (int i = 0; i < NUM_PIXELS_PER_BLOCK; i++) {
+				const size_t uNumBits = i ? uIndexPrec2 : uIndexPrec2 - 1u;
+				if (uStartBit + uNumBits > 128) {
 #if defined(_WIN32) && defined(_DEBUG)
-                OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
+					OutputDebugStringA("BC7: Invalid block encountered during decoding\n");
 #endif
-                ZeroOutPixel(out);
-                return;
-            }
-            w2 = GetBits(uStartBit, uNumBits);
-        }
+					ZeroOutPixel(out);
+					return;
+				}
+				w2[i] = GetBits(uStartBit, uNumBits);
+			}
+		}
 
-        const uint8_t uRegion = g_aPartitionTable[uPartitions][uShape][pos];
-        LDRColorA outPixel;
-        if (uIndexPrec2 == 0) {
-            LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w1, w1, uIndexPrec, uIndexPrec, outPixel);
-        } else {
-            if (uIndexMode == 0) {
-                LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w1, w2, uIndexPrec, uIndexPrec2, outPixel);
-            } else {
-                LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w2, w1, uIndexPrec2, uIndexPrec, outPixel);
-            }
-        }
+		for (int i = 0; i < NUM_PIXELS_PER_BLOCK; ++i) {
+			if (i != pos)
+				continue;
+			const uint8_t uRegion = g_aPartitionTable[uPartitions][uShape][i];
+			LDRColorA outPixel;
+			if (uIndexPrec2 == 0) {
+				LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w1[i], w1[i], uIndexPrec, uIndexPrec,
+						outPixel);
+			} else {
+				if (uIndexMode == 0) {
+					LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w1[i], w2[i], uIndexPrec,
+							uIndexPrec2, outPixel);
+				} else {
+					LDRColorA::Interpolate(c[uRegion << 1], c[(uRegion << 1) + 1], w2[i], w1[i], uIndexPrec2,
+							uIndexPrec, outPixel);
+				}
+			}
 
-        switch (uRotation) {
-            case 1: std::swap(outPixel.r, outPixel.a); break;
-            case 2: std::swap(outPixel.g, outPixel.a); break;
-            case 3: std::swap(outPixel.b, outPixel.a); break;
-            default: break;
-        }
+			switch (uRotation) {
+				case 1:
+					std::swap(outPixel.r, outPixel.a);
+					break;
+				case 2:
+					std::swap(outPixel.g, outPixel.a);
+					break;
+				case 3:
+					std::swap(outPixel.b, outPixel.a);
+					break;
+				default:
+					break;
+			}
 
-        out[0] = outPixel.r * (1.0f / 255.0f);
-        out[1] = outPixel.g * (1.0f / 255.0f);
-        out[2] = outPixel.b * (1.0f / 255.0f);
-        out[3] = outPixel.a * (1.0f / 255.0f);
-    } else {
+			out[0] = outPixel.r * (1.0f / 255.0f);
+			out[1] = outPixel.g * (1.0f / 255.0f);
+			out[2] = outPixel.b * (1.0f / 255.0f);
+			out[3] = outPixel.a * (1.0f / 255.0f);
+			break;
+		}
+	}
+	else [[unlikely]]
+	{
 #if defined(_WIN32) && defined(_DEBUG)
         OutputDebugStringA("BC7: Reserved mode 8 encountered during decoding\n");
 #endif

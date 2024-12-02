@@ -101,7 +101,10 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     map_symbol("accel.intersect.closest", &intersect_closest_wrapper);
     map_symbol("accel.instance.transform", &accel_transform_wrapper);
 
-    map_symbol("bindless.buffer.read", &bindless_buffer_read);
+	map_symbol("bindless.buffer.read", &bindless_buffer_read);
+	map_symbol("bindless.tex2d", &bindless_tex2d_wrapper);
+	map_symbol("bindless.tex2d.level", &bindless_tex2d_level_wrapper);
+	map_symbol("bindless.tex2d.size", &bindless_tex2d_size_wrapper);
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
@@ -139,12 +142,12 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
-//	{
-//		std::error_code EC;
-//		llvm::raw_fd_ostream file_stream("abc.ll", EC, llvm::sys::fs::OF_None);
-//		llvm_module->print(file_stream, nullptr, true, true);
-//		file_stream.close();
-//	}
+	{
+		std::error_code EC;
+		llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
+		llvm_module->print(file_stream, nullptr, true, true);
+		file_stream.close();
+	}
 
     // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
