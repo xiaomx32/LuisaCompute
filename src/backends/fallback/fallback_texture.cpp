@@ -196,6 +196,7 @@ FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uin
         auto size_pixels = _mip_offsets[levels - 1u] + s.x * s.y;
         _data = luisa::allocate_with_allocator<std::byte>(static_cast<size_t>(size_pixels) << _pixel_stride_shift);
     } else {
+		_pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         _size[0] = size.x;
         _size[1] = size.y;
         _size[2] = size.z;
