@@ -2907,7 +2907,7 @@ private:
         // create the params struct type
         auto llvm_i8_type = llvm::Type::getInt8Ty(_llvm_context);
         llvm::SmallVector<size_t, 32u> padded_param_indices;
-        llvm::SmallVector<llvm::Type *, 32u> llvm_param_types;
+        llvm::SmallVector<llvm::Type *, 64u> llvm_param_types;
         constexpr auto param_alignment = 16u;
         auto param_size_accum = static_cast<size_t>(0);
         for (auto i = 0u; i < arg_count; i++) {
@@ -3051,7 +3051,7 @@ private:
                                                                  llvm::Function::LinkageTypes linkage,
                                                                  llvm::StringRef default_name) noexcept {
         auto llvm_ret_type = _translate_type(f->type(), true);
-        llvm::SmallVector<llvm::Type *, 16u> llvm_arg_types;
+        llvm::SmallVector<llvm::Type *, 64u> llvm_arg_types;
         for (auto arg : f->arguments()) {
             if (arg->is_reference()) {
                 // reference arguments are passed by pointer
