@@ -5,9 +5,11 @@
 #include <algorithm>
 #include "fallback_stream.h"
 #include "fallback_accel.h"
+#include "fallback_bindless_array.h"
 #include "fallback_mesh.h"
 #include "fallback_texture.h"
 #include "fallback_shader.h"
+#include "fallback_buffer.h"
 
 namespace luisa::compute::fallback {
 
@@ -44,24 +46,27 @@ void FallbackStream::visit(const BufferUploadCommand *command) noexcept {
     std::memcpy(temp_buffer->data(), command->data(), command->size());
     _pool.async([src = std::move(temp_buffer),
                  buffer = command->handle(), offset = command->offset()] {
-        auto dst = reinterpret_cast<void *>(buffer + offset);
+        auto dst = reinterpret_cast<FallbackBuffer*>(buffer)->view(offset).ptr;
         std::memcpy(dst, src->data(), src->size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferDownloadCommand *command) noexcept {
-    _pool.async([cmd = *command] {
-        auto src = reinterpret_cast<const void *>(cmd.handle() + cmd.offset());
+    _pool.async([cmd = *command, buffer = command->handle(), offset = command->offset()] {
+		auto src = reinterpret_cast<FallbackBuffer*>(buffer)->view(offset).ptr;
         std::memcpy(cmd.data(), src, cmd.size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferCopyCommand *command) noexcept {
     _pool.async([cmd = *command] {
-        auto src = reinterpret_cast<const void *>(cmd.src_handle() + cmd.src_offset());
-        auto dst = reinterpret_cast<void *>(cmd.dst_handle() + cmd.dst_offset());
+        auto src = reinterpret_cast<FallbackBuffer*>(cmd.src_handle())->view(cmd.src_offset()).ptr;
+		auto dst = reinterpret_cast<FallbackBuffer*>(cmd.dst_handle())->view(cmd.dst_offset()).ptr;
         std::memcpy(dst, src, cmd.size());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const BufferToTextureCopyCommand *command) noexcept {
@@ -93,6 +98,7 @@ void FallbackStream::visit(const TextureUploadCommand *command) noexcept {
         auto byte_size = pixel_storage_size(tex.storage(), tex.size3d());
         std::memcpy(const_cast<std::byte*>(tex.data()), temp_buffer->data(), byte_size);
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const TextureDownloadCommand *command) noexcept {
@@ -100,6 +106,7 @@ void FallbackStream::visit(const TextureDownloadCommand *command) noexcept {
         auto tex = reinterpret_cast<FallbackTexture *>(cmd.handle())->view(cmd.level());
         tex.copy_to(cmd.data());
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const TextureCopyCommand *command) noexcept {
@@ -117,6 +124,7 @@ void FallbackStream::visit(const TextureToBufferCopyCommand *command) noexcept {
         auto dst = reinterpret_cast<void *>(cmd.buffer() + cmd.buffer_offset());
         tex.copy_to(dst);
     });
+    _pool.barrier();
 }
 
 void FallbackStream::visit(const AccelBuildCommand *command) noexcept {
@@ -126,22 +134,26 @@ void FallbackStream::visit(const AccelBuildCommand *command) noexcept {
 }
 
 void FallbackStream::visit(const MeshBuildCommand *command) noexcept {
-    auto v_b = command->vertex_buffer();
+    auto v_b = reinterpret_cast<FallbackBuffer*>(command->vertex_buffer())->view(0).ptr;
     auto v_b_o = command->vertex_buffer_offset();
     auto v_s = command->vertex_stride();
     auto v_b_s = command->vertex_buffer_size();
-    auto t_b = command->triangle_buffer();
+    auto v_b_c = v_b_s/v_s;
+    auto t_b = reinterpret_cast<FallbackBuffer*>(command->triangle_buffer())->view(0).ptr;
     auto t_b_o = command->triangle_buffer_offset();
     auto t_b_s = command->triangle_buffer_size();
+    auto t_b_c = t_b_s/12u;
     _pool.async([=,mesh = reinterpret_cast<FallbackMesh *>(command->handle())]
     {
-        mesh->commit(v_b, v_b_o, v_s, v_b_s, t_b, t_b_o, t_b_s);
+        mesh->commit(reinterpret_cast<uint64_t>(v_b), v_b_o, v_s, v_b_c, reinterpret_cast<uint64_t>(t_b), t_b_o, t_b_c);
     });
     _pool.barrier();
 }
 
 void FallbackStream::visit(const BindlessArrayUpdateCommand *command) noexcept {
-    //reinterpret_cast<LLVMBindlessArray *>(command->handle())->update(_pool);
+
+    reinterpret_cast<FallbackBindlessArray *>(command->handle())->update(_pool, command->modifications());
+    _pool.barrier();
 }
 
 void FallbackStream::dispatch(luisa::move_only_function<void()> &&f) noexcept {

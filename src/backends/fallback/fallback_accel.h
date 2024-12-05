@@ -48,6 +48,7 @@ private:
     [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
 
 public:
+	[[nodiscard]]auto device()const noexcept{return _device;}
     [[nodiscard]] RTCScene scene()const noexcept {return _handle;}
     FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
     ~FallbackAccel() noexcept;
@@ -56,22 +57,11 @@ public:
     [[nodiscard]] auto handle() const noexcept { return Handle{this, _instances.data()}; }
 };
 
-[[nodiscard]] void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept;
+void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept;
 [[nodiscard]] bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept;
-
-struct alignas(16) FallbackAccelInstance {
-    float affine[12];
-    bool visible;
-    bool dirty;
-    uint pad;
-    uint geom0;
-    uint geom1;
-};
-
+void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer);
 }// namespace luisa::compute::fallback
 
-LUISA_STRUCT(luisa::compute::fallback::FallbackAccelInstance,
-             affine, visible, dirty, pad, geom0, geom1) {};
 
 void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit);
-
+void accel_transform_wrapper(void *accel, unsigned id, void* buffer);

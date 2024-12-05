@@ -14,13 +14,15 @@ struct alignas(16) FallbackBufferView {
 
 class FallbackBuffer {
 public:
-    // FIXME: size
-    void *addr() { return data.data(); }
+	explicit FallbackBuffer(size_t size, unsigned elementStride);
+	std::byte *addr()const noexcept { return data; }
     [[nodiscard]] FallbackBufferView view(size_t offset) noexcept;
-
+	~FallbackBuffer();
 private:
 
-    std::vector<std::byte> data{};
+	unsigned elementStride;
+	unsigned size;
+    std::byte* data{};
 };
 
 }// namespace luisa::compute::fallback

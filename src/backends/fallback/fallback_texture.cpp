@@ -57,44 +57,7 @@ void FallbackTextureView::copy_from(const void *data) const noexcept {
 }
 
 void FallbackTextureView::copy_to(void *data) const noexcept {
-    auto LC_TEXTURE_COPY = [data, this]<uint dim, uint stride>() mutable noexcept {
-        auto p = static_cast<detail::Pixel<stride> *>(data);
-        for (auto z = 0u; z < (dim == 2u ? 1u : _depth); z++) {
-            for (auto y = 0u; y < _height; y++) {
-                for (auto x = 0u; x < _width; x++) {
-                    auto pp = p + ((z * _height + y) * _width + x);
-                    if constexpr (dim == 2) {
-                        auto pixel = reinterpret_cast<const detail::Pixel<stride> *>(
-                            _pixel2d(make_uint2(x, y)));
-                        *pp = *pixel;
-                    } else {
-                        auto pixel = reinterpret_cast<const detail::Pixel<stride> *>(
-                            _pixel3d(make_uint3(x, y, z)));
-                        *pp = *pixel;
-                    }
-                }
-            }
-        }
-    };
-    if (_dimension == 2u) {
-        switch (_pixel_stride_shift) {
-            case 0u: LC_TEXTURE_COPY.operator()<2u, 1u>(); break;
-            case 1u: LC_TEXTURE_COPY.operator()<2u, 2u>(); break;
-            case 2u: LC_TEXTURE_COPY.operator()<2u, 4u>(); break;
-            case 3u: LC_TEXTURE_COPY.operator()<2u, 8u>(); break;
-            case 4u: LC_TEXTURE_COPY.operator()<2u, 16u>(); break;
-            default: break;
-        }
-    } else {
-        switch (_pixel_stride_shift) {
-            case 0u: LC_TEXTURE_COPY.operator()<3u, 1u>(); break;
-            case 1u: LC_TEXTURE_COPY.operator()<3u, 2u>(); break;
-            case 2u: LC_TEXTURE_COPY.operator()<3u, 4u>(); break;
-            case 3u: LC_TEXTURE_COPY.operator()<3u, 8u>(); break;
-            case 4u: LC_TEXTURE_COPY.operator()<3u, 16u>(); break;
-            default: break;
-        }
-    }
+    memcpy(data, this->_data, this->size_bytes());
 }
 
 void FallbackTextureView::copy_from(FallbackTextureView dst) const noexcept {
@@ -215,7 +178,7 @@ FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uin
     : _storage{storage}, _mip_levels{levels}, _dimension{dim}
     {
     if (_dimension == 2u) {
-        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_align(storage))) - 1u;
+        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         if (storage == PixelStorage::BC6 || storage == PixelStorage::BC7) {
             _pixel_stride_shift = 0u;
         }
@@ -233,6 +196,7 @@ FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uin
         auto size_pixels = _mip_offsets[levels - 1u] + s.x * s.y;
         _data = luisa::allocate_with_allocator<std::byte>(static_cast<size_t>(size_pixels) << _pixel_stride_shift);
     } else {
+		_pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         _size[0] = size.x;
         _size[1] = size.y;
         _size[2] = size.z;

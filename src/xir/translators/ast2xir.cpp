@@ -1033,8 +1033,7 @@ private:
         // convert the arguments
         for (auto ast_arg : _current.ast->arguments()) {
             auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
-            if (auto ast_usage = _current.ast->variable_usage(ast_arg.uid());
-                arg->is_value() && (ast_usage == Usage::WRITE || ast_usage == Usage::READ_WRITE)) {
+            if (arg->is_value()) {
                 // AST allows update of the argument, so we need to copy it to a local variable
                 auto local = b.alloca_local(arg->type());
                 local->add_comment("Local copy of argument");

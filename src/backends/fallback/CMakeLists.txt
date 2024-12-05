@@ -15,6 +15,7 @@ if (LLVM_FOUND AND embree_FOUND)
             #llvm_event.cpp
             #llvm_shader.cpp
             thread_pool.cpp
+            #dirty_range.cpp
             fallback_bindless_array.cpp
             fallback_stream.cpp
             fallback_texture.cpp
@@ -25,12 +26,21 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_codegen.cpp
             fallback_shader.cpp
             fallback_buffer.cpp
+            fallback_swapchain.cpp
     )
+
+    #exclude codegen from unity build since it's too big
+    set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
+
     luisa_compute_add_backend(fallback SOURCES ${LC_BACKEND_FALLBACK_SRC})
+    #set_target_properties(luisa-compute-backend-fallback PROPERTIES UNITY_BUILD ON)
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")
     llvm_map_components_to_libnames(LLVM_LIBS core executionengine support orcjit nativecodegen irreader passes analysis coroutines)
     target_include_directories(luisa-compute-backend-fallback PRIVATE ${LLVM_INCLUDE_DIRS})
-    target_link_libraries(luisa-compute-backend-fallback PRIVATE embree ${LLVM_LIBS} luisa-compute-xir)
+    target_link_libraries(luisa-compute-backend-fallback PRIVATE
+            embree ${LLVM_LIBS}
+            luisa-compute-xir
+            luisa-compute-vulkan-swapchain)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(luisa-compute-backend-fallback PRIVATE
                 /wd4624 /wd4996 # do not complain about LLVM
