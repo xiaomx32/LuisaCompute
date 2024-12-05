@@ -993,6 +993,7 @@ private:
                     if (assign->lhs() != assign->rhs()) {
                         auto variable = _translate_expression(b, assign->lhs(), false);
                         auto value = _translate_expression(b, assign->rhs(), true);
+                        value = _type_cast_if_necessary(b, variable->type(), value);
                         _commented(b.store(variable, value));
                     }
                     break;
