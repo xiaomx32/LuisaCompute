@@ -34,7 +34,7 @@ void DynamicModule::dispose() noexcept {
 }
 
 [[nodiscard]] static auto &dynamic_module_search_paths() noexcept {
-    static luisa::vector<std::pair<std::filesystem::path, size_t>> paths;
+    static luisa::vector<std::pair<luisa::filesystem::path, std::size_t>> paths;
     return paths;
 }
 
@@ -65,7 +65,7 @@ void DynamicModule::add_search_path(const luisa::filesystem::path &path) noexcep
         auto &&cookies = dynamic_module_search_path_cookies();
         cookies.emplace_back(AddDllDirectory(canonical_path.c_str()));
 #endif
-        paths.emplace_back(std::move(canonical_path), 0u);
+        paths.emplace_back(std::move(canonical_path), 0);
     }
 }
 
