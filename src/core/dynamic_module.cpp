@@ -45,14 +45,20 @@ void DynamicModule::dispose() noexcept {
 }
 #endif
 
-void DynamicModule::add_search_path(const std::filesystem::path &path) noexcept {
-    std::lock_guard lock{dynamic_module_search_path_mutex()};
-    auto canonical_path = std::filesystem::canonical(path);
+void DynamicModule::add_search_path(const luisa::filesystem::path &path) noexcept {
+    std::lock_guard lock { dynamic_module_search_path_mutex() };
+    auto canonical_path = luisa::filesystem::canonical(path);
     auto &&paths = dynamic_module_search_paths();
-    if (auto iter = std::find_if(paths.begin(), paths.end(), [&canonical_path](auto &&p) noexcept {
-            return p.first == canonical_path;
-        });
-        iter != paths.end()) {
+    if (
+        auto iter = std::find_if(
+            paths.begin(),
+            paths.end(),
+            [&canonical_path](auto &&p) noexcept {
+                return p.first == canonical_path;
+            }
+        );
+        iter != paths.end()
+    ) {
         iter->second++;
     } else {
 #ifdef LUISA_PLATFORM_WINDOWS
@@ -106,17 +112,21 @@ DynamicModule DynamicModule::load(std::string_view name) noexcept {
     return DynamicModule{nullptr};
 }
 
-DynamicModule DynamicModule::load(const std::filesystem::path &folder, std::string_view name) noexcept {
+DynamicModule DynamicModule::load(
+    const luisa::filesystem::path &folder,
+    luisa::string_view name
+) noexcept {
     Clock clock;
     auto p = folder / dynamic_module_name(name);
     if (auto handle = dynamic_module_load(p)) {
         LUISA_INFO(
             "Loaded dynamic module '{}' in {} ms.",
-            to_string(p), clock.toc());
-        return DynamicModule{handle};
+            to_string(p), clock.toc()
+        );
+        return DynamicModule { handle };
     }
-    return DynamicModule{nullptr};
+
+    return DynamicModule { nullptr };
 }
 
-}// namespace luisa
-
+} // namespace luisa end
