@@ -2,10 +2,6 @@
 // Created by swfly on 2024/11/21.
 //
 
-#include "fallback_shader.h"
-
-#include "fallback_buffer.h"
-
 #include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/core/stl.h>
@@ -16,6 +12,7 @@
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IRReader/IRReader.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -26,10 +23,29 @@
 #include "fallback_texture.h"
 #include "fallback_accel.h"
 #include "fallback_bindless_array.h"
+#include "fallback_shader.h"
+#include "fallback_buffer.h"
 #include "thread_pool.h"
 
-using namespace luisa;
-luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::ShaderOption &option, luisa::compute::Function kernel) noexcept {
+namespace luisa::compute::fallback {
+
+[[nodiscard]] static luisa::half luisa_asin_f16(luisa::half x) noexcept { return ::half_float::asin(x); }
+[[nodiscard]] static float luisa_asin_f32(float x) noexcept { return std::asin(x); }
+[[nodiscard]] static double luisa_asin_f64(double x) noexcept { return std::asin(x); }
+
+[[nodiscard]] static luisa::half luisa_acos_f16(luisa::half x) noexcept { return ::half_float::acos(x); }
+[[nodiscard]] static float luisa_acos_f32(float x) noexcept { return std::acos(x); }
+[[nodiscard]] static double luisa_acos_f64(double x) noexcept { return std::acos(x); }
+
+[[nodiscard]] static luisa::half luisa_atan_f16(luisa::half x) noexcept { return ::half_float::atan(x); }
+[[nodiscard]] static float luisa_atan_f32(float x) noexcept { return std::atan(x); }
+[[nodiscard]] static double luisa_atan_f64(double x) noexcept { return std::atan(x); }
+
+[[nodiscard]] static luisa::half luisa_atan2_f16(luisa::half a, luisa::half b) noexcept { return ::half_float::atan2(a, b); }
+[[nodiscard]] static float luisa_atan2_f32(float a, float b) noexcept { return std::atan2(a, b); }
+[[nodiscard]] static double luisa_atan2_f64(double a, double b) noexcept { return std::atan2(a, b); }
+
+FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noexcept {
 
     // build JIT engine
     ::llvm::orc::LLJITBuilder jit_builder;
@@ -106,6 +122,21 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     map_symbol("bindless.tex2d", &bindless_tex2d_wrapper);
     map_symbol("bindless.tex2d.level", &bindless_tex2d_level_wrapper);
     map_symbol("bindless.tex2d.size", &bindless_tex2d_size_wrapper);
+
+    // asin, acos, atan, atan2
+    map_symbol("luisa.asin.f16", &luisa_asin_f16);
+    map_symbol("luisa.asin.f32", &luisa_asin_f32);
+    map_symbol("luisa.asin.f64", &luisa_asin_f64);
+    map_symbol("luisa.acos.f16", &luisa_acos_f16);
+    map_symbol("luisa.acos.f32", &luisa_acos_f32);
+    map_symbol("luisa.acos.f64", &luisa_acos_f64);
+    map_symbol("luisa.atan.f16", &luisa_atan_f16);
+    map_symbol("luisa.atan.f32", &luisa_atan_f32);
+    map_symbol("luisa.atan.f64", &luisa_atan_f64);
+    map_symbol("luisa.atan2.f16", &luisa_atan2_f16);
+    map_symbol("luisa.atan2.f32", &luisa_atan2_f32);
+    map_symbol("luisa.atan2.f64", &luisa_atan2_f64);
+
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
@@ -211,7 +242,7 @@ luisa::compute::fallback::FallbackShader::FallbackShader(const luisa::compute::S
     _kernel_entry = addr->toPtr<kernel_entry_t>();
 }
 
-void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCommand *command) const noexcept {
+void FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCommand *command) const noexcept {
     thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
 
     auto argument_buffer_offset = static_cast<size_t>(0u);
@@ -308,7 +339,8 @@ void compute::fallback::FallbackShader::dispatch(ThreadPool &pool, const compute
     pool.synchronize();
     //    pool.barrier();
 }
-void compute::fallback::FallbackShader::build_bound_arguments(compute::Function kernel) {
+
+void FallbackShader::build_bound_arguments(compute::Function kernel) {
     _bound_arguments.reserve(kernel.bound_arguments().size());
     for (auto &&arg : kernel.bound_arguments()) {
         luisa::visit(
@@ -337,3 +369,5 @@ void compute::fallback::FallbackShader::build_bound_arguments(compute::Function 
             arg);
     }
 }
+
+}// namespace luisa::compute::fallback

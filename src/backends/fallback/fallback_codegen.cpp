@@ -834,7 +834,7 @@ private:
                 "Invalid operand type for rotate left operation: {}.",
                 elem_type->description());
         }
-        auto llvm_elem_type = _translate_type(elem_type, false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
         auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
         if (value_type->is_vector()) {
             llvm_bit_width = llvm::ConstantVector::getSplat(
@@ -873,7 +873,7 @@ private:
                 "Invalid operand type for rotate right operation: {}.",
                 elem_type->description());
         }
-        auto llvm_elem_type = _translate_type(elem_type, false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
         auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
         if (value_type->is_vector()) {
             llvm_bit_width = llvm::ConstantVector::getSplat(
@@ -1086,6 +1086,7 @@ private:
         LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
                                   intrinsic_id, operand_type->description());
     }
+
     [[nodiscard]] llvm::Value *_translate_unary_fp_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, const char *func) noexcept {
         // Lookup LLVM value for operand
         auto llvm_operand = _lookup_value(current, b, operand);
@@ -1097,26 +1098,48 @@ private:
 
         // Check if the operand is a valid floating-point type
         auto elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+        auto func_name = [elem_type, func] {
+            switch (elem_type->tag()) {
+                case Type::Tag::FLOAT16: return luisa::format("luisa.{}.f16", func);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.{}.f32", func);
+                case Type::Tag::FLOAT64: return luisa::format("luisa.{}.f64", func);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
+                                      func, elem_type->description());
+        }();
 
-        auto func_type = llvm::FunctionType::get(
-            llvm_operand->getType(),
-            {llvm_operand->getType()},
-            false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
+        auto func_type = llvm::FunctionType::get(llvm_elem_type, {llvm_elem_type}, false);
 
-        auto f =
-            _llvm_module->getOrInsertFunction(func, func_type);
-
-        switch (elem_type->tag()) {
-            case Type::Tag::FLOAT16: [[fallthrough]];
-            case Type::Tag::FLOAT32: [[fallthrough]];
-            case Type::Tag::FLOAT64:
-                // Use LLVM's intrinsic function based on the provided intrinsic ID
-                return b.CreateCall(f, {llvm_operand});
-            default:
-                break;
+        // declare the function and mark it as pure
+        auto f = _llvm_module->getOrInsertFunction(llvm::StringRef{func_name}, func_type);
+        if (auto decl = llvm::dyn_cast<llvm::Function>(f.getCallee())) {
+            // mark that the function is pure: mustprogress nocallback nofree nosync nounwind speculatable willreturn memory(none)
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->setMustProgress();
+            decl->setDoesNotFreeMemory();
+            decl->setNoSync();
+            decl->setDoesNotThrow();
+            decl->setSpeculatable();
+            decl->setWillReturn();
+            decl->setDoesNotAccessMemory();
+        } else {
+            LUISA_ERROR_WITH_LOCATION("Invalid function declaration for unary math operation: {}.", func_name);
         }
-        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
-                                  func, operand_type->description());
+        // call the function
+        if (operand_type->is_scalar()) {
+            return b.CreateCall(f, {llvm_operand});
+        }
+        // vector type
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_operand->getType()));
+        for (auto i = 0u; i < operand_type->dimension(); i++) {
+            auto elem = b.CreateExtractElement(llvm_operand, i);
+            auto result_elem = b.CreateCall(f, {elem});
+            llvm_result = b.CreateInsertElement(llvm_result, result_elem, i);
+        }
+        return llvm_result;
     }
 
     [[nodiscard]] llvm::Value *_translate_binary_fp_math_operation(CurrentFunction &current, IRBuilder &b,
@@ -1150,27 +1173,51 @@ private:
         auto op1_type = op1->type();
         LUISA_ASSERT(op0_type == op1_type, "Type mismatch.");
         LUISA_ASSERT(op0_type != nullptr && (op0_type->is_scalar() || op0_type->is_vector()), "Invalid operand type.");
+
         auto elem_type = op0_type->is_vector() ? op0_type->element() : op0_type;
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            llvm_op0->getType(),
-            {llvm_op0->getType(),
-             llvm_op0->getType()},
-            false);
+        auto func_name = [elem_type, func] {
+            switch (elem_type->tag()) {
+                case Type::Tag::FLOAT16: return luisa::format("luisa.{}.f16", func);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.{}.f32", func);
+                case Type::Tag::FLOAT64: return luisa::format("luisa.{}.f64", func);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
+                                      func, elem_type->description());
+        }();
 
-        auto f =
-            _llvm_module->getOrInsertFunction(func, func_type);
+        auto llvm_elem_type = _translate_type(elem_type, true);
+        auto func_type = llvm::FunctionType::get(llvm_elem_type, {llvm_elem_type, llvm_elem_type}, false);
 
-        switch (elem_type->tag()) {
-            case Type::Tag::FLOAT16: [[fallthrough]];
-            case Type::Tag::FLOAT32: [[fallthrough]];
-            case Type::Tag::FLOAT64:
-                return b.CreateCall(f, {llvm_op0, llvm_op1});
-            default:
-                break;
+        // declare the function and mark it as pure
+        auto f = _llvm_module->getOrInsertFunction(llvm::StringRef{func_name}, func_type);
+        if (auto decl = llvm::dyn_cast<llvm::Function>(f.getCallee())) {
+            // mark that the function is pure: mustprogress nocallback nofree nosync nounwind speculatable willreturn memory(none)
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->setMustProgress();
+            decl->setDoesNotFreeMemory();
+            decl->setNoSync();
+            decl->setDoesNotThrow();
+            decl->setSpeculatable();
+            decl->setWillReturn();
+            decl->setDoesNotAccessMemory();
+        } else {
+            LUISA_ERROR_WITH_LOCATION("Invalid function declaration for binary math operation: {}.", func_name);
         }
-        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
-                                  func, op0_type->description());
+        // call the function
+        if (op0_type->is_scalar()) {
+            return b.CreateCall(f, {llvm_op0, llvm_op1});
+        }
+        // vector type
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_op0->getType()));
+        for (auto i = 0u; i < op0_type->dimension(); i++) {
+            auto elem0 = b.CreateExtractElement(llvm_op0, i);
+            auto elem1 = b.CreateExtractElement(llvm_op1, i);
+            auto result_elem = b.CreateCall(f, {elem0, elem1});
+            llvm_result = b.CreateInsertElement(llvm_result, result_elem, i);
+        }
+        return llvm_result;
     }
 
     [[nodiscard]] llvm::Value *_translate_vector_reduce(CurrentFunction &current, IRBuilder &b,
@@ -1420,7 +1467,7 @@ private:
         auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
         auto llvm_uv = _lookup_value(current, b, inst->operand(2u));
 
-        auto outType = _translate_type(inst->type(), false);
+        auto outType = _translate_type(inst->type(), true);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
         result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
@@ -1478,7 +1525,7 @@ private:
         auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
         auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
 
-        auto outType = _translate_type(inst->type(), false);
+        auto outType = _translate_type(inst->type(), true);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
         result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
@@ -1631,39 +1678,32 @@ private:
                 vector = b.CreateInsertElement(vector, llvm_operand, static_cast<uint64_t>(i));
             }
             return vector;
-        } else {
-            //matrix: aggregate multiple vectors
-            auto llvm_elem_type = _translate_type(elem_type, true);
-            auto type = inst->operand(0)->type()->description();
-            auto llvm_vector_type = llvm::VectorType::get(llvm_elem_type, 4, false);
-            auto llvm_return_type = llvm::ArrayType::get(llvm_vector_type, dim);// Array of vectors, with 'dim' vectors
-
-            // Initialize the result as an undefined array of vectors
-            llvm::Value *vector_array = llvm::UndefValue::get(llvm_return_type);
-
-            // Loop through the input vectors and insert them one by one into the array
-            for (int i = 0; i < dim; i++) {
-                auto operand = inst->operand(i);                       // Get the i-th operand (which should be an array of floats)
-                auto llvm_operand = _lookup_value(current, b, operand);// Translate operand to LLVM value
-                // Create a new vector from the i-th operand (which is an array of floats)
-                llvm::Value *vector = llvm::UndefValue::get(llvm_vector_type);// Initialize an empty vector
-                for (int j = 0; j < dim; ++j) {                               // Assuming each vector has 4 components
-                    // Extract the j-th float from the operand and insert it into the vector
-                    llvm::Value *element = b.CreateExtractElement(llvm_operand, j);// Get the j-th element from the array of floats
-                    vector = b.CreateInsertElement(vector, element, j);            // Insert the element into the vector
-                }
-                // Insert the vector into the matrix (array of vectors) at the i-th index
-                vector_array = b.CreateInsertValue(vector_array, vector, i);
-            }
-            return vector_array;
         }
+
+        if (type->is_matrix()) {
+            auto llvm_matrix_type = _translate_type(type, true);
+            auto llvm_matrix = llvm::UndefValue::get(llvm_matrix_type);
+            for (auto i = 0u; i < dim; i++) {
+                auto col = inst->operand(i);
+                LUISA_ASSERT(col->type()->is_vector() &&
+                                 col->type()->dimension() == dim &&
+                                 col->type()->element() == elem_type,
+                             "element type doesn't match");
+                auto llvm_col = _lookup_value(current, b, col);
+                for (auto j = 0u; j < dim; j++) {
+                    auto llvm_elem = b.CreateExtractElement(llvm_col, j);
+                    b.CreateInsertValue(llvm_matrix, llvm_elem, {i, j});
+                }
+            }
+            return llvm_matrix;
+        }
+
+        LUISA_NOT_IMPLEMENTED();
     }
 
     [[nodiscard]] llvm::Value *_translate_shuffle(CurrentFunction &current,
                                                   IRBuilder &b, const xir::IntrinsicInst *inst) {
 
-        // swfly has to give up using llvm's intrinsic for shuffle because it's too difficult
-        // don't give up
         auto result_type = inst->type();
         LUISA_ASSERT(result_type->is_vector(), "shuffle target must be a vector");
 
@@ -1709,9 +1749,6 @@ private:
                     LUISA_ERROR_WITH_LOCATION("invalid shuffle index type: {}.", index->type()->description());
                 }();
                 static_indices.push_back(static_index);
-            }
-            if (static_indices.size() == 3) {
-                static_indices.push_back(0);
             }
             auto llvm_poison_value = llvm::PoisonValue::get(llvm_src->getType());
             return b.CreateShuffleVector(llvm_src, llvm_poison_value, static_indices);
@@ -1940,45 +1977,44 @@ private:
         CurrentFunction &current,
         IRBuilder &b,
         const xir::IntrinsicInst *inst) noexcept {
-        // Lookup the operand (the matrix to be transposed)
+
         auto matrix = inst->operand(0u);
         auto dimension = inst->type()->dimension();
-
-        // Lookup the LLVM value
         auto llvm_matrix = _lookup_value(current, b, matrix);
-
-        // Type validation
-        LUISA_ASSERT(matrix->type()->is_matrix(), "Matrix transpose type mismatch");
-        LUISA_ASSERT(matrix->type()->dimension() > 2, "2x2 Matrix is yet unsupported");
-
-        // The resulting matrix will have the same dimension
-        llvm::Type *float_type = llvm::Type::getFloatTy(b.getContext());
-        llvm::ArrayType *vec4_type = llvm::ArrayType::get(float_type, 4);// Simulate vec4
-
-        // Initialize the resulting matrix with 'undef' values
-        llvm::ArrayType *result_type = llvm::ArrayType::get(vec4_type, dimension);
-        llvm::Value *result = llvm::UndefValue::get(result_type);
-
-        std::vector<llvm::Value *> values(dimension * dimension);
-        // Transpose the matrix by swapping rows and columns
-        for (unsigned i = 0; i < dimension; ++i) {
-            for (unsigned j = 0; j < dimension; ++j) {
-                // Extract value at position (i, j) in the original matrix
-                auto idx = i + j * dimension;
-                auto v = b.CreateExtractValue(llvm_matrix, {i, j});
-                values[idx] = v;
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::UndefValue::get(llvm_matrix->getType()));
+        for (auto i = 0u; i < dimension; i++) {
+            for (auto j = 0u; j < dimension; j++) {
+                auto llvm_elem = b.CreateExtractValue(llvm_matrix, {j, i});
+                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
             }
         }
-        for (unsigned i = 0; i < dimension; ++i) {
-            for (unsigned j = 0; j < dimension; ++j) {
-                auto idx = i + j * dimension;
-                result = b.CreateInsertValue(result, values[idx], {j, i});
+        return llvm_result;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_comp_op(CurrentFunction &current, IRBuilder &b,
+                                                         const xir::Value *lhs, const xir::Value *rhs,
+                                                         llvm::Instruction::BinaryOps llvm_op) noexcept {
+        auto lhs_is_matrix = lhs->type()->is_matrix();
+        auto rhs_is_matrix = rhs->type()->is_matrix();
+        LUISA_ASSERT((lhs_is_matrix && rhs_is_matrix) ||
+                         (lhs_is_matrix && rhs->type()->is_scalar()) ||
+                         (lhs->type()->is_scalar() && rhs_is_matrix),
+                     "Matrix or vector expected.");
+        auto matrix_type = lhs_is_matrix ? lhs->type() : rhs->type();
+        auto llvm_matrix_type = _translate_type(matrix_type, true);
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_matrix_type));
+        auto dim = matrix_type->dimension();
+        for (auto i = 0u; i < dim; i++) {
+            for (auto j = 0u; j < dim; j++) {
+                auto llvm_lhs_elem = lhs_is_matrix ? b.CreateExtractValue(llvm_lhs, {i, j}) : llvm_lhs;
+                auto llvm_rhs_elem = rhs_is_matrix ? b.CreateExtractValue(llvm_rhs, {i, j}) : llvm_rhs;
+                auto llvm_elem = b.CreateBinOp(llvm_op, llvm_lhs_elem, llvm_rhs_elem);
+                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
             }
         }
-
-        // Insert the value at position (j, i) in the transposed matrix
-
-        return result;
+        return llvm_result;
     }
 
     [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(
@@ -1997,48 +2033,51 @@ private:
         auto llvm_B = _lookup_value(current, b, B);
 
         // Type validation
-        LUISA_ASSERT(A->type()->is_matrix() && (B->type()->is_matrix() || B->type()->is_vector()),
+        LUISA_ASSERT(A->type()->is_matrix() &&
+                         (B->type()->is_matrix() || B->type()->is_vector()) &&
+                         A->type()->dimension() == B->type()->dimension() &&
+                         A->type()->element() == B->type()->element(),
                      "Matrix multiplication type mismatch");
-        // Initialize the resulting matrix
-        llvm::Type *float_type = llvm::Type::getFloatTy(b.getContext());
-        llvm::ArrayType *vec4_type = llvm::ArrayType::get(float_type, 4);// Simulate vec4
 
-        if (B->type()->is_matrix()) {
-            auto *result_type = llvm::ArrayType::get(vec4_type, dimension);
-            llvm::Value *result = llvm::UndefValue::get(result_type);
-            for (unsigned i = 0; i < dimension; ++i) {
-                for (unsigned j = 0; j < dimension; ++j) {
-                    // Dot product of row i of A and column j of B
-                    llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
-                    for (unsigned k = 0; k < dimension; ++k) {
-                        // Load A[i][k] and B[k][j]
-                        llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {i, k});
-                        llvm::Value *b_kj = b.CreateExtractValue(llvm_B, {k, j});
-                        llvm::Value *product = b.CreateFMul(a_ik, b_kj);
-                        sum = b.CreateFAdd(sum, product);
-                    }
-                    // Store the sum into the result
-                    result = b.CreateInsertValue(result, sum, {i, j});
+        auto dim = A->type()->dimension();
+
+        auto result_type = inst->type();
+        auto llvm_result_type = _translate_type(result_type, true);
+
+        // M * v
+        if (B->type()->is_vector()) {
+            auto llvm_result = llvm::cast<llvm::Value>(llvm::Constant::getNullValue(llvm_result_type));
+            for (auto i = 0u; i < dim; i++) {
+                auto vi = b.CreateExtractElement(llvm_B, i);
+                vi = b.CreateVectorSplat(dim, vi);
+                auto Mi = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_result_type));
+                for (auto j = 0u; j < dim; j++) {
+                    auto Aij = b.CreateExtractValue(llvm_A, {i, j});
+                    Mi = b.CreateInsertElement(Mi, Aij, j);
                 }
+                auto result = b.CreateFMul(Mi, vi);
+                llvm_result = b.CreateFAdd(llvm_result, result);
             }
-            return result;
-        } else {
-            llvm::Value *result = llvm::PoisonValue::get(_translate_type(inst->type(), true));
-            for (unsigned i = 0; i < dimension; ++i) {
-                // Dot product of row i of A and column j of B
-                llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
-                for (unsigned k = 0; k < dimension; ++k) {
-                    // Load A[i][k] and B[k][j]
-                    llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {k, i});
-                    llvm::Value *b_kj = b.CreateExtractElement(llvm_B, {k});
-                    llvm::Value *product = b.CreateFMul(a_ik, b_kj);
-                    sum = b.CreateFAdd(sum, product);
-                }
-                // Store the sum into the result
-                result = b.CreateInsertElement(result, sum, {i});
-            }
-            return result;
+            return llvm_result;
         }
+
+        // M * M
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_result_type));
+        auto llvm_elem_type = _translate_type(result_type->element(), true);
+        // Cij = sum_k (Akj * Bik)
+        for (auto i = 0u; i < dim; i++) {    // compute each column
+            for (auto j = 0u; j < dim; j++) {// compute each element in the column
+                auto llvm_elem = llvm::cast<llvm::Value>(llvm::ConstantFP::get(llvm_elem_type, 0.));
+                for (auto k = 0u; k < dim; k++) {
+                    auto Akj = b.CreateExtractValue(llvm_A, {k, j});
+                    auto Bik = b.CreateExtractValue(llvm_B, {i, k});
+                    auto Akj_Bik = b.CreateFMul(Akj, Bik);
+                    llvm_elem = b.CreateFAdd(llvm_elem, Akj_Bik);
+                }
+                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
+            }
+        }
+        return llvm_result;
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2265,23 +2304,77 @@ private:
             }
             case xir::IntrinsicOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::IntrinsicOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
-            case xir::IntrinsicOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acosf");
-            case xir::IntrinsicOp::ACOSH: break;
-            case xir::IntrinsicOp::ASIN: break;
-            case xir::IntrinsicOp::ASINH: break;
-            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "tanf");
-            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2f");
-            case xir::IntrinsicOp::ATANH: break;
+            case xir::IntrinsicOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+            case xir::IntrinsicOp::ACOSH: {
+                // acosh(x) = log(x + sqrt(x^2 - 1))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_x2 = b.CreateFMul(llvm_x, llvm_x);
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_x2_minus_one = b.CreateFSub(llvm_x2, llvm_one);
+                auto llvm_sqrt = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_x2_minus_one);
+                auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
+            }
+            case xir::IntrinsicOp::ASIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+            case xir::IntrinsicOp::ASINH: {
+                // asinh(x) = log(x + sqrt(x^2 + 1))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_x2 = b.CreateFMul(llvm_x, llvm_x);
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_x2_plus_one = b.CreateFAdd(llvm_x2, llvm_one);
+                auto llvm_sqrt = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_x2_plus_one);
+                auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
+            }
+            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
+            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            case xir::IntrinsicOp::ATANH: {
+                // atanh(x) = 0.5 * log((1 + x) / (1 - x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_one_plus_x = b.CreateFAdd(llvm_one, llvm_x);
+                auto llvm_one_minus_x = b.CreateFSub(llvm_one, llvm_x);
+                auto llvm_div = b.CreateFDiv(llvm_one_plus_x, llvm_one_minus_x);
+                auto llvm_log = b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_div);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_log);
+            }
             case xir::IntrinsicOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
-            case xir::IntrinsicOp::COSH: break;
+            case xir::IntrinsicOp::COSH: {
+                // cosh(x) = 0.5 * (exp(x) + exp(-x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
+                auto llvm_neg_x = b.CreateFNeg(llvm_x);
+                auto llvm_exp_neg_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_neg_x);
+                auto llvm_exp_sum = b.CreateFAdd(llvm_exp_x, llvm_exp_neg_x);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_exp_sum);
+            }
             case xir::IntrinsicOp::SIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
-            case xir::IntrinsicOp::SINH: break;
+            case xir::IntrinsicOp::SINH: {
+                // sinh(x) = 0.5 * (exp(x) - exp(-x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
+                auto llvm_neg_x = b.CreateFNeg(llvm_x);
+                auto llvm_exp_neg_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_neg_x);
+                auto llvm_exp_diff = b.CreateFSub(llvm_exp_x, llvm_exp_neg_x);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_exp_diff);
+            }
             case xir::IntrinsicOp::TAN: {
                 auto llvm_sin = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
                 auto llvm_cos = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
                 return b.CreateFDiv(llvm_sin, llvm_cos);
             }
-            case xir::IntrinsicOp::TANH: break;
+            case xir::IntrinsicOp::TANH: {
+                // tanh(x) = sinh(x) / cosh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_two_x = b.CreateFMul(llvm_x, llvm::ConstantFP::get(llvm_x->getType(), 2.f));
+                auto llvm_exp_2x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_two_x);
+                auto llvm_exp_2x_minus_one = b.CreateFSub(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
+                auto llvm_exp_2x_plus_one = b.CreateFAdd(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
+                return b.CreateFDiv(llvm_exp_2x_minus_one, llvm_exp_2x_plus_one);
+            }
             case xir::IntrinsicOp::EXP: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp);
             case xir::IntrinsicOp::EXP2: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp2);
             case xir::IntrinsicOp::EXP10: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp10);
@@ -2428,11 +2521,26 @@ private:
             case xir::IntrinsicOp::REDUCE_MIN: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MIN, inst->operand(0u));
             case xir::IntrinsicOp::REDUCE_MAX: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MAX, inst->operand(0u));
             case xir::IntrinsicOp::OUTER_PRODUCT: break;
-            case xir::IntrinsicOp::MATRIX_COMP_NEG: break;
-            case xir::IntrinsicOp::MATRIX_COMP_ADD: break;
-            case xir::IntrinsicOp::MATRIX_COMP_SUB: break;
-            case xir::IntrinsicOp::MATRIX_COMP_MUL: break;
-            case xir::IntrinsicOp::MATRIX_COMP_DIV: break;
+            case xir::IntrinsicOp::MATRIX_COMP_NEG: {
+                auto m = inst->operand(0u);
+                LUISA_ASSERT(m->type() != nullptr && m->type()->is_matrix(),
+                             "Invalid operand type for matrix component-wise negation.");
+                auto dim = m->type()->dimension();
+                auto llvm_m = _lookup_value(current, b, m);
+                auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_m->getType()));
+                for (auto i = 0u; i < dim; i++) {
+                    for (auto j = 0u; j < dim; j++) {
+                        auto llvm_elem = b.CreateExtractValue(llvm_m, {i, j});
+                        llvm_elem = b.CreateFNeg(llvm_elem);
+                        llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
+                    }
+                }
+                return llvm_result;
+            }
+            case xir::IntrinsicOp::MATRIX_COMP_ADD: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FAdd);
+            case xir::IntrinsicOp::MATRIX_COMP_SUB: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FSub);
+            case xir::IntrinsicOp::MATRIX_COMP_MUL: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FMul);
+            case xir::IntrinsicOp::MATRIX_COMP_DIV: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FDiv);
             case xir::IntrinsicOp::MATRIX_LINALG_MUL: return _translate_matrix_linalg_multiply(current, b, inst);
             case xir::IntrinsicOp::MATRIX_DETERMINANT: break;
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: return _translate_matrix_transpose(current, b, inst);
@@ -2566,7 +2674,7 @@ private:
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
             case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
         }
-        LUISA_INFO("unsupported intrinsic op type:{}", static_cast<int>(inst->op()));
+        LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
         // TODO: implement
         if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
