@@ -64,4 +64,6 @@ void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer);
 
 
 void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit);
+bool intersect_any_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask);
+
 void accel_transform_wrapper(void *accel, unsigned id, void* buffer);
