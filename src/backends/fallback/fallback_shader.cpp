@@ -174,13 +174,13 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
-    {
-        llvm_module->print(llvm::errs(), nullptr, true, true);
-        // std::error_code EC;
-        // llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
-        // llvm_module->print(file_stream, nullptr, true, true);
-        // file_stream.close();
-    }
+    // {
+    //     llvm_module->print(llvm::errs(), nullptr, true, true);
+    //     // std::error_code EC;
+    //     // llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
+    //     // llvm_module->print(file_stream, nullptr, true, true);
+    //     // file_stream.close();
+    // }
 
     // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
@@ -223,7 +223,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     //		llvm_module->print(file_stream, nullptr, true, true);
     //		file_stream.close();
     //	}
-    //llvm_module->print(llvm::outs(), nullptr, true, true);
+    llvm_module->print(llvm::errs(), nullptr, false, true);
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));

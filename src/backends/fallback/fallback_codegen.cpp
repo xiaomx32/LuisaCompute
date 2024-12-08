@@ -1682,7 +1682,7 @@ private:
 
         if (type->is_matrix()) {
             auto llvm_matrix_type = _translate_type(type, true);
-            auto llvm_matrix = llvm::UndefValue::get(llvm_matrix_type);
+            auto llvm_matrix = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_matrix_type));
             for (auto i = 0u; i < dim; i++) {
                 auto col = inst->operand(i);
                 LUISA_ASSERT(col->type()->is_vector() &&
@@ -1692,7 +1692,7 @@ private:
                 auto llvm_col = _lookup_value(current, b, col);
                 for (auto j = 0u; j < dim; j++) {
                     auto llvm_elem = b.CreateExtractElement(llvm_col, j);
-                    b.CreateInsertValue(llvm_matrix, llvm_elem, {i, j});
+                    llvm_matrix = b.CreateInsertValue(llvm_matrix, llvm_elem, {i, j});
                 }
             }
             return llvm_matrix;
