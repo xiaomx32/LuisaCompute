@@ -45,6 +45,12 @@ namespace luisa::compute::fallback {
 [[nodiscard]] static float luisa_atan2_f32(float a, float b) noexcept { return std::atan2(a, b); }
 [[nodiscard]] static double luisa_atan2_f64(double a, double b) noexcept { return std::atan2(a, b); }
 
+struct FallbackShaderLaunchConfig {
+    uint3 block_id;
+    uint3 dispatch_size;
+    uint3 block_size;
+};
+
 FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noexcept {
 
     // build JIT engine
@@ -106,6 +112,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Exported};
         symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
     };
+
     map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
     map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
     map_symbol("texture.write.2d.uint", &texture_write_2d_uint_wrapper);
@@ -240,38 +247,70 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     }
     LUISA_ASSERT(addr, "JIT compilation failed with error [{}]");
     _kernel_entry = addr->toPtr<kernel_entry_t>();
+
+    // compute argument buffer size
+    _argument_buffer_size = 0u;
+    static constexpr auto argument_alignment = 16u;
+    for (auto arg : kernel.arguments()) {
+        switch (arg.tag()) {
+            case Variable::Tag::LOCAL: {
+                _argument_buffer_size += arg.type()->size();
+                _argument_buffer_size = luisa::align(_argument_buffer_size, argument_alignment);
+                break;
+            }
+            case Variable::Tag::BUFFER: {
+                _argument_buffer_size += sizeof(FallbackBufferView);
+                _argument_buffer_size = luisa::align(_argument_buffer_size, argument_alignment);
+                break;
+            }
+            case Variable::Tag::TEXTURE: {
+                _argument_buffer_size += sizeof(FallbackTextureView);
+                _argument_buffer_size = luisa::align(_argument_buffer_size, argument_alignment);
+                break;
+            }
+            case Variable::Tag::BINDLESS_ARRAY: {
+                _argument_buffer_size += sizeof(FallbackBindlessArray *);
+                _argument_buffer_size = luisa::align(_argument_buffer_size, argument_alignment);
+                break;
+            }
+            case Variable::Tag::ACCEL: {
+                _argument_buffer_size += sizeof(FallbackAccel *);
+                _argument_buffer_size = luisa::align(_argument_buffer_size, argument_alignment);
+                break;
+            }
+            default: LUISA_ERROR_WITH_LOCATION("Unsupported argument type.");
+        }
+    }
 }
 
-void FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCommand *command) const noexcept {
-    thread_local std::array<std::byte, 65536u> argument_buffer;// should be enough
+void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *command) const noexcept {
+
+    auto argument_buffer = std::make_shared<std::byte[]>(_argument_buffer_size);
 
     auto argument_buffer_offset = static_cast<size_t>(0u);
     auto allocate_argument = [&](size_t bytes) noexcept {
         static constexpr auto alignment = 16u;
         auto offset = (argument_buffer_offset + alignment - 1u) / alignment * alignment;
-        LUISA_ASSERT(offset + bytes <= argument_buffer.size(),
+        LUISA_ASSERT(offset + bytes <= _argument_buffer_size,
                      "Too many arguments in ShaderDispatchCommand");
         argument_buffer_offset = offset + bytes;
-        return argument_buffer.data() + offset;
+        return argument_buffer.get() + offset;
     };
 
     auto encode_argument = [&allocate_argument, command](const auto &arg) noexcept {
         using Tag = ShaderDispatchCommand::Argument::Tag;
         switch (arg.tag) {
             case Tag::BUFFER: {
-                {
-                    auto buffer = reinterpret_cast<FallbackBuffer *>(arg.buffer.handle);
-                    auto buffer_view = buffer->view(arg.buffer.offset);
-                    auto ptr = allocate_argument(sizeof(buffer_view));
-                    std::memcpy(ptr, &buffer_view, sizeof(buffer_view));
-                }
+                auto buffer = reinterpret_cast<FallbackBuffer *>(arg.buffer.handle);
+                auto buffer_view = buffer->view(arg.buffer.offset);
+                auto ptr = allocate_argument(sizeof(buffer_view));
+                std::memcpy(ptr, &buffer_view, sizeof(buffer_view));
                 break;
             }
             case Tag::TEXTURE: {
                 auto texture = reinterpret_cast<const FallbackTexture *>(arg.texture.handle);
                 auto view = texture->view(arg.texture.level);
                 auto ptr = allocate_argument(sizeof(view));
-                FallbackTextureView *v = reinterpret_cast<FallbackTextureView *>(ptr);
                 std::memcpy(ptr, &view, sizeof(view));
                 break;
             }
@@ -298,27 +337,15 @@ void FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCom
     };
     for (auto &&arg : _bound_arguments) { encode_argument(arg); }
     for (auto &&arg : command->arguments()) { encode_argument(arg); }
-    struct LaunchConfig {
-        uint3 block_id;
-        uint3 dispatch_size;
-        uint3 block_size;
-    };
-    // TODO: fill in true values
-    LaunchConfig config{
-        .block_id = make_uint3(0u),
-        .dispatch_size = command->dispatch_size(),
-        .block_size = _block_size,
-    };
 
     auto round_up_division = [](unsigned a, unsigned b) {
         return (a + b - 1) / b;
     };
+    auto dispatch_size = command->dispatch_size();
     auto dispatch_counts = make_uint3(
-        round_up_division(config.dispatch_size.x, _block_size.x),
-        round_up_division(config.dispatch_size.y, _block_size.y),
-        round_up_division(config.dispatch_size.z, _block_size.z));
-
-    auto data = argument_buffer.data();
+        round_up_division(dispatch_size.x, _block_size.x),
+        round_up_division(dispatch_size.y, _block_size.y),
+        round_up_division(dispatch_size.z, _block_size.z));
 
     //     for (int i = 0; i < dispatch_counts.x; ++i) {
     //         for (int j = 0; j < dispatch_counts.y; ++j) {
@@ -331,13 +358,14 @@ void FallbackShader::dispatch(ThreadPool &pool, const compute::ShaderDispatchCom
     //     }
 
     pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
-                  [this, config, data](auto bx, auto by, auto bz) noexcept {
-                      auto c = config;
-                      c.block_id = make_uint3(bx, by, bz);
-                      (*_kernel_entry)(data, &c);
+                  [this, argument_buffer = std::move(argument_buffer), dispatch_size](auto bx, auto by, auto bz) noexcept {
+                      FallbackShaderLaunchConfig config{
+                          .block_id = make_uint3(bx, by, bz),
+                          .dispatch_size = dispatch_size,
+                          .block_size = _block_size,
+                      };
+                      (*_kernel_entry)(argument_buffer.get(), &config);
                   });
-    pool.synchronize();
-    //    pool.barrier();
 }
 
 void FallbackShader::build_bound_arguments(compute::Function kernel) {

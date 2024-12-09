@@ -22,10 +22,7 @@ private:
 
 public:
     FallbackStream() noexcept;
-    void synchronize() noexcept
-    {
-        _pool.synchronize();
-    }
+    void synchronize() noexcept { _pool.synchronize(); }
     void dispatch(CommandList &&cmd_list) noexcept;
     void dispatch(luisa::move_only_function<void()> &&f) noexcept;
     void signal(LLVMEvent *event) noexcept;
@@ -51,4 +48,4 @@ public:
     ~FallbackStream() noexcept override = default;
 };
 
-}// namespace luisa::compute::llvm
+}// namespace luisa::compute::fallback
