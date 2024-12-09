@@ -29,6 +29,8 @@
 #include "fallback_buffer.h"
 #include "fallback_texture.h"
 
+#include <llvm/Analysis/InlineAdvisor.h>
+
 namespace luisa::compute::fallback {
 
 class FallbackCodegen {
@@ -3185,6 +3187,13 @@ private:
         auto func_name = _get_name_from_metadata(f, default_name);
         auto llvm_func = llvm::Function::Create(llvm_func_type, linkage, llvm::Twine{func_name}, _llvm_module);
         _llvm_functions.emplace(f, llvm_func);
+
+        // inline functions that have too many arguments
+        static constexpr auto max_argument_count = 16u;
+        if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
+            llvm_func->arg_size() > max_argument_count) {
+            llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         // create current translation context
         CurrentFunction current{.func = llvm_func};
         // map arguments
