@@ -420,7 +420,7 @@ namespace luisa::compute::fallback
 		auto slt = bd->slot(slot);
 		auto tex2d = slt.tex2d;
 		auto result_f4 = reinterpret_cast<float4*>(out);
-		*result_f4 = bindless_texture_2d_sample_level(tex2d, slt.sampler2d.code(), x, y, level);
+		*result_f4 = bindless_texture_2d_sample_level(tex2d, slt.sampler_2d().code(), x, y, level);
 
 	}
 	void bindless_tex2d_wrapper(void* bindless, uint slot, float x, float y, void* out)
@@ -428,7 +428,7 @@ namespace luisa::compute::fallback
 		auto bd = reinterpret_cast<FallbackBindlessArray*>(bindless);
 		auto slt = bd->slot(slot);
 		auto tex2d = slt.tex2d;
-		*((float4*)out) = bindless_texture_2d_sample(tex2d, slt.sampler2d.code(), x, y);
+		*((float4*)out) = bindless_texture_2d_sample(tex2d, slt.sampler_2d().code(), x, y);
 	}
 
 	void bindless_tex2d_size_wrapper(void* bindless, uint slot, void* out)

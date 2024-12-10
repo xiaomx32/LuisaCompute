@@ -25,11 +25,9 @@
 #include <luisa/xir/metadata/location.h>
 
 #include "fallback_codegen.h"
-
+#include "fallback_bindless_array.h"
 #include "fallback_buffer.h"
 #include "fallback_texture.h"
-
-#include <llvm/Analysis/InlineAdvisor.h>
 
 namespace luisa::compute::fallback {
 
@@ -89,7 +87,7 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
             case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: return sizeof(void *);
+            case Type::Tag::BINDLESS_ARRAY: return sizeof(FallbackBindlessArrayView);
             case Type::Tag::ACCEL: return sizeof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
@@ -105,7 +103,7 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return alignof(FallbackBufferView);
             case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: return alignof(void *);
+            case Type::Tag::BINDLESS_ARRAY: return alignof(FallbackBindlessArrayView);
             case Type::Tag::ACCEL: return alignof(void *);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
@@ -182,7 +180,11 @@ private:
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
             case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
-            case Type::Tag::BINDLESS_ARRAY: return llvm::PointerType::get(_llvm_context, 0);
+            case Type::Tag::BINDLESS_ARRAY: {
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
+            }
             case Type::Tag::ACCEL: {
                 return llvm::PointerType::get(_llvm_context, 0);
             }
@@ -1324,36 +1326,32 @@ private:
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
         auto llvm_value = _lookup_value(current, b, value);            // Get the value to write
-        auto element_type = llvm_value->getType();                     // Type of the value being written
-        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
+        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
         auto target_address = b.CreateInBoundsGEP(
             slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(value->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
         return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{alignment});
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
-        //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
-        auto element_type = _translate_type(inst->type(), true);       // Type of the value being read
-        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
+        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(inst->type(), false);
         auto target_address = b.CreateInBoundsGEP(
             slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(inst->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
-        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{alignment});
+        auto llvm_element_type = _translate_type(inst->type(), true);// Type of the value being read
+        return b.CreateAlignedLoad(llvm_element_type, target_address, llvm::MaybeAlign{alignment});
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
@@ -1364,7 +1362,7 @@ private:
         auto llvm_result_type = _translate_type(inst->type(), true);
         llvm_byte_size = b.CreateZExtOrTrunc(llvm_byte_size, llvm_result_type);
         if (!byte_address) {
-            auto elem_size = buffer->type()->element()->size();
+            auto elem_size = _get_type_size(buffer->type()->element());
             auto llvm_elem_size = llvm::ConstantInt::get(llvm_result_type, elem_size);
             llvm_byte_size = b.CreateUDiv(llvm_byte_size, llvm_elem_size);
         }
@@ -1385,7 +1383,6 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         auto llvm_result_type = _translate_type(inst->type(), true);
         return b.CreateAlignedLoad(llvm_result_type, llvm_ptr, llvm::MaybeAlign{alignment});
     }
@@ -1396,7 +1393,6 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->operand(1u)->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
@@ -1430,7 +1426,7 @@ private:
                                              4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
@@ -1447,6 +1443,22 @@ private:
 
         // Get the function pointer from the symbol map
         auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
+        if (auto decl = llvm::cast<llvm::Function>(func.getCallee())) {
+            decl->setDoesNotFreeMemory();
+            decl->setDoesNotThrow();
+            decl->setOnlyAccessesInaccessibleMemOrArgMem();
+            decl->setWillReturn();
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->addFnAttr(llvm::Attribute::NoRecurse);
+            decl->addFnAttr(llvm::Attribute::NoSync);
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            for (auto &arg : decl->args()) {
+                if (arg.getType()->isPointerTy()) {
+                    arg.addAttr(llvm::Attribute::NoCapture);
+                    arg.addAttr(llvm::Attribute::NoAlias);
+                }
+            }
+        }
 
         // Call the function
         b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_alloca});
@@ -1460,6 +1472,8 @@ private:
         IRBuilder &b,
         const xir::Instruction *inst, bool level) noexcept {
 
+        LUISA_NOT_IMPLEMENTED();
+
         auto coord = inst->operand(1u);
 
         const char *function_name = level ? "bindless.tex2d.level" : "bindless.tex2d";
@@ -1472,7 +1486,7 @@ private:
         auto outType = _translate_type(inst->type(), true);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_uv, b.getInt32(0), "");
@@ -1516,10 +1530,13 @@ private:
         // Return the loaded result
         return b.CreateLoad(outType, result_alloca, "");
     }
+
     [[nodiscard]] llvm::Value *_translate_bindless_texture_size(
         CurrentFunction &current,
         IRBuilder &b,
         const xir::Instruction *inst, bool dimension2) noexcept {
+
+        LUISA_NOT_IMPLEMENTED();
 
         const char *function_name = dimension2 ? "bindless.tex2d.size" : "bindless.tex3d.size";
 
@@ -1530,7 +1547,7 @@ private:
         auto outType = _translate_type(inst->type(), true);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Define the function type: void(void*, uint, uint, void*)
         llvm::FunctionType *func_type;
@@ -1581,7 +1598,7 @@ private:
                                              4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
@@ -1655,6 +1672,22 @@ private:
 
         // Add attributes to the function (write operations typically do not use `readonly`)
         auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
+        if (auto decl = llvm::cast<llvm::Function>(func.getCallee())) {
+            decl->setDoesNotFreeMemory();
+            decl->setDoesNotThrow();
+            decl->setOnlyAccessesInaccessibleMemOrArgMem();
+            decl->setWillReturn();
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->addFnAttr(llvm::Attribute::NoRecurse);
+            decl->addFnAttr(llvm::Attribute::NoSync);
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            for (auto &arg : decl->args()) {
+                if (arg.getType()->isPointerTy()) {
+                    arg.addAttr(llvm::Attribute::NoCapture);
+                    arg.addAttr(llvm::Attribute::NoAlias);
+                }
+            }
+        }
 
         // Call the function
         return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_alloca});
@@ -1767,51 +1800,93 @@ private:
         return llvm_result;
     }
 
-    [[nodiscard]] llvm::Value *_translate_bindless_read(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-        auto bindless_ptr = inst->operand(0u);
-        auto slotIdx = inst->operand(1u);
-        auto elemIdx = inst->operand(2u);
-        auto type = inst->type();
-        auto alignment = _get_type_alignment(inst->type());
-        auto size = inst->type()->size();
+    [[nodiscard]] llvm::Type *_get_llvm_bindless_slot_type() noexcept {
+        // struct Slot {
+        //   ptr buffer_ptr;
+        //   i64 buffer_size[63:8] sampler2d[7:4] sampler3d[3:0];
+        //   ptr tex2d_ptr;
+        //   ptr tex3d_ptr;
+        // };
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+        return llvm::StructType::get(llvm_ptr_type, llvm_i64_type, llvm_ptr_type, llvm_ptr_type);
+    }
 
-        // Get LLVM values for the arguments
-        auto llvm_bindless = _lookup_value(current, b, bindless_ptr);
-        auto llvm_slot = _lookup_value(current, b, slotIdx);
-        auto llvm_elem = _lookup_value(current, b, elemIdx);
-        if (llvm_slot->getType() == b.getInt32Ty()) {
-            llvm_slot = b.CreateZExt(llvm_slot, b.getInt64Ty());// Zero-extend to i64
+    [[nodiscard]] llvm::Value *_load_bindless_array_slot(CurrentFunction &current, IRBuilder &b,
+                                                         llvm::Type *llvm_slot_type,
+                                                         const xir::Value *bindless,
+                                                         const xir::Value *slot_index) noexcept {
+        auto llvm_bindless = _lookup_value(current, b, bindless);
+        auto llvm_bindless_slots = b.CreateExtractValue(llvm_bindless, {0});
+        auto llvm_slot_index = _lookup_value(current, b, slot_index);
+        auto llvm_slot_ptr = b.CreateInBoundsGEP(llvm_slot_type, llvm_bindless_slots, {llvm_slot_index});
+        return b.CreateAlignedLoad(llvm_slot_type, llvm_slot_ptr, llvm::MaybeAlign{16}, "bindless.slot");
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_read(CurrentFunction &current, IRBuilder &b,
+                                                               const xir::IntrinsicInst *inst,
+                                                               bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto result_type = inst->type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto index_or_offset = inst->operand(2);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(result_type, false);
+        auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
+        auto alignment = _get_type_alignment(result_type);
+        auto llvm_result_type = _translate_type(result_type, true);
+        return b.CreateAlignedLoad(llvm_result_type, llvm_target_address, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_write(CurrentFunction &current, IRBuilder &b,
+                                                                const xir::IntrinsicInst *inst,
+                                                                bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto index_or_offset = inst->operand(2);
+        auto value = inst->operand(3);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
+        auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
+        auto alignment = _get_type_alignment(value->type());
+        return b.CreateAlignedStore(llvm_value, llvm_target_address, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_size(CurrentFunction &current, IRBuilder &b,
+                                                               const xir::IntrinsicInst *inst,
+                                                               bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_byte_size = b.CreateExtractValue(llvm_slot, {1});
+        llvm_byte_size = b.CreateLShr(llvm_byte_size, 8);
+        if (!byte_address) {
+            auto stride = inst->operand(2);
+            auto llvm_stride = _lookup_value(current, b, stride);
+            llvm_stride = b.CreateZExtOrTrunc(llvm_stride, llvm_byte_size->getType());
+            llvm_byte_size = b.CreateUDiv(llvm_byte_size, llvm_stride);
         }
-        if (llvm_elem->getType() == b.getInt32Ty()) {
-            llvm_elem = b.CreateZExt(llvm_elem, b.getInt64Ty());// Zero-extend to i64
-        }
-        auto llvm_data_stride = llvm::ConstantInt::get(b.getInt32Ty(), inst->type()->size());
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        return b.CreateZExtOrTrunc(llvm_byte_size, llvm_result_type);
+    }
 
-        auto llvm_value_type = _translate_type(inst->type(), true);
-        // Allocate space for the texture view struct
-        auto val_alloca = b.CreateAlloca(llvm_value_type, nullptr, "");
-        val_alloca->setAlignment(llvm::Align(alignment));
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt64Ty(),// slot
-             b.getInt64Ty(),// elem
-             b.getInt32Ty(),//stride
-             b.getPtrTy()}, // void* value
-            false);
-
-        // Add attributes to the function (write operations typically do not use `readonly`)
-        auto func = _llvm_module->getOrInsertFunction("bindless.buffer.read", func_type);
-
-        // Call the function
-        b.CreateCall(func, {llvm_bindless, llvm_slot, llvm_elem, llvm_data_stride, val_alloca});
-        // Return the loaded result
-        return b.CreateAlignedLoad(llvm_value_type, val_alloca, llvm::MaybeAlign(alignment), "");
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_device_address(CurrentFunction &current, IRBuilder &b,
+                                                                         const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_int_type = _translate_type(inst->type(), false);
+        return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
     }
 
     [[nodiscard]] llvm::Value *_translate_accel_trace(
@@ -1833,7 +1908,7 @@ private:
         auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
 
         auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
-        hit_alloca->setAlignment(llvm::Align(Type::of<luisa::compute::SurfaceHit>()->alignment()));
+        hit_alloca->setAlignment(llvm::Align(_get_type_alignment(Type::of<luisa::compute::SurfaceHit>())));
 
         // Extract ray components
         auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
@@ -2576,8 +2651,8 @@ private:
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_tex2d(current, b, inst, false);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_tex2d(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: break;
@@ -2596,19 +2671,19 @@ private:
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_size(current, b, inst, true);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_size(current, b, inst, false);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_read(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
+            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
+            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_TYPE: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: return _translate_buffer_device_address(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return _translate_bindless_buffer_device_address(current, b, inst);
             case xir::IntrinsicOp::DEVICE_ADDRESS_READ: return _translate_device_address_read(current, b, inst);
             case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: return _translate_device_address_write(current, b, inst);
             case xir::IntrinsicOp::AGGREGATE: return _translate_aggregate(current, b, inst);
@@ -3248,22 +3323,22 @@ public:
     explicit FallbackCodegen(llvm::LLVMContext &ctx) noexcept
         : _llvm_context{ctx} {}
 
-    [[nodiscard]] auto emit(const xir::Module *module) noexcept {
-        auto llvm_module = std::make_unique<llvm::Module>(llvm::StringRef{_get_name_from_metadata(module)}, _llvm_context);
+    void emit(llvm::Module *llvm_module, const xir::Module *module) noexcept {
         auto location_md = module->find_metadata<xir::LocationMD>();
         auto module_location = location_md ? location_md->file().string() : "unknown";
         llvm_module->setSourceFileName(location_md ? location_md->file().string() : "unknown");
-        _llvm_module = llvm_module.get();
+        if (auto module_name = _get_name_from_metadata(module); !module_name.empty()) {
+            llvm_module->setModuleIdentifier(module_name);
+        }
+        _llvm_module = llvm_module;
         _translate_module(module);
         _reset();
-        return llvm_module;
     }
 };
 
-std::unique_ptr<llvm::Module>
-luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, const xir::Module *module) noexcept {
+void luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, llvm::Module *llvm_module, const xir::Module *module) noexcept {
     FallbackCodegen codegen{llvm_ctx};
-    return codegen.emit(module);
+    codegen.emit(llvm_module, module);
 }
 
 }// namespace luisa::compute::fallback

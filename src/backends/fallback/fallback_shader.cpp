@@ -25,6 +25,8 @@
 #include "fallback_bindless_array.h"
 #include "fallback_shader.h"
 #include "fallback_buffer.h"
+#include "fallback_device_api.h"
+#include "fallback_device_api_ir_module.h"
 #include "thread_pool.h"
 
 namespace luisa::compute::fallback {
@@ -113,22 +115,11 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
     };
 
-    map_symbol("texture.write.2d.float", &texture_write_2d_float_wrapper);
-    map_symbol("texture.read.2d.float", &texture_read_2d_float_wrapper);
-    map_symbol("texture.write.2d.uint", &texture_write_2d_uint_wrapper);
-    map_symbol("texture.read.2d.uint", &texture_read_2d_uint_wrapper);
-
-    map_symbol("texture.read.3d.float", &texture_read_3d_float_wrapper);
-    map_symbol("texture.read.3d.uint", &texture_read_3d_uint_wrapper);
+#include "fallback_device_api_map_symbols.inl.h"
 
     map_symbol("accel.intersect.closest", &intersect_closest_wrapper);
     map_symbol("accel.intersect.any", &intersect_any_wrapper);
     map_symbol("accel.instance.transform", &accel_transform_wrapper);
-
-    map_symbol("bindless.buffer.read", &bindless_buffer_read);
-    map_symbol("bindless.tex2d", &bindless_tex2d_wrapper);
-    map_symbol("bindless.tex2d.level", &bindless_tex2d_level_wrapper);
-    map_symbol("bindless.tex2d.size", &bindless_tex2d_size_wrapper);
 
     // asin, acos, atan, atan2
     map_symbol("luisa.asin.f16", &luisa_asin_f16);
@@ -172,10 +163,14 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     //    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
-    auto llvm_module = luisa_fallback_backend_codegen(*llvm_ctx, xir_module);
+    auto builtin_module = fallback_backend_device_builtin_module();
+    llvm::SMDiagnostic parse_error;
+    auto llvm_module = llvm::parseIR(llvm::MemoryBufferRef{builtin_module, "module"}, parse_error, *llvm_ctx);
     if (!llvm_module) {
-        LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR.");
+        LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR: {}.",
+                                  luisa::string_view{parse_error.getMessage()});
     }
+    luisa_fallback_backend_codegen(*llvm_ctx, llvm_module.get(), xir_module);
     //llvm_module->print(llvm::errs(), nullptr, true, true);
     //llvm_module->print(llvm::outs(), nullptr, true, true);
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
@@ -302,7 +297,7 @@ void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *com
         switch (arg.tag) {
             case Tag::BUFFER: {
                 auto buffer = reinterpret_cast<FallbackBuffer *>(arg.buffer.handle);
-                auto buffer_view = buffer->view(arg.buffer.offset);
+                auto buffer_view = buffer->view(arg.buffer.offset, arg.buffer.size);
                 auto ptr = allocate_argument(sizeof(buffer_view));
                 std::memcpy(ptr, &buffer_view, sizeof(buffer_view));
                 break;
@@ -322,9 +317,9 @@ void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *com
             }
             case Tag::BINDLESS_ARRAY: {
                 auto bindless = reinterpret_cast<FallbackBindlessArray *>(arg.buffer.handle);
-                //auto binding = buffer->binding(arg.buffer.offset, arg.buffer.size);
-                auto ptr = allocate_argument(sizeof(bindless));
-                std::memcpy(ptr, &bindless, sizeof(bindless));
+                auto view = bindless->view();
+                auto ptr = allocate_argument(sizeof(view));
+                std::memcpy(ptr, &view, sizeof(view));
                 break;
             }
             case Tag::ACCEL: {
@@ -347,15 +342,20 @@ void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *com
         round_up_division(dispatch_size.y, _block_size.y),
         round_up_division(dispatch_size.z, _block_size.z));
 
-    //     for (int i = 0; i < dispatch_counts.x; ++i) {
-    //         for (int j = 0; j < dispatch_counts.y; ++j) {
-    //             for (int k = 0; k < dispatch_counts.z; ++k) {
-    //                 auto c = config;
-    //                 c.block_id = make_uint3(i, j, k);
-    //                 (*_kernel_entry)(data, &c);
-    //             }
+    // pool.synchronize();
+    // for (int i = 0; i < dispatch_counts.x; ++i) {
+    //     for (int j = 0; j < dispatch_counts.y; ++j) {
+    //         for (int k = 0; k < dispatch_counts.z; ++k) {
+    //             FallbackShaderLaunchConfig config{
+    //                 .block_id = make_uint3(i, j, k),
+    //                 .dispatch_size = dispatch_size,
+    //                 .block_size = _block_size,
+    //             };
+    //             (*_kernel_entry)(argument_buffer.get(), &config);
     //         }
     //     }
+    // }
+    // pool.synchronize();
 
     pool.parallel(dispatch_counts.x, dispatch_counts.y, dispatch_counts.z,
                   [this, argument_buffer = std::move(argument_buffer), dispatch_size](auto bx, auto by, auto bz) noexcept {

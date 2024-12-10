@@ -3,22 +3,23 @@
 //
 
 #pragma once
+
 #include <luisa/runtime/swapchain.h>
-//an extremely thin wrapper of CPU swapchain APIs
 
-namespace luisa::compute::fallback
-{
-	class FallbackSwapchain {
-	public:
-		FallbackSwapchain(const luisa::compute::SwapchainOption &option);
+namespace luisa::compute::fallback {
 
-		~FallbackSwapchain();
+class FallbackTexture;
+class FallbackStream;
 
-		void Present(void* image_data);
-	protected:
-		void* _swapchain_handle;
-		luisa::uint2 size;
+class FallbackSwapchain {
+private:
+    void *_handle;
+    luisa::uint2 size;
 
-	};
+public:
+    explicit FallbackSwapchain(const luisa::compute::SwapchainOption &option);
+    ~FallbackSwapchain() noexcept;
+    void present(FallbackStream *stream, FallbackTexture *frame);
+};
 
-}
+}// namespace luisa::compute::fallback
