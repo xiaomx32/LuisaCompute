@@ -1396,77 +1396,6 @@ private:
         return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_read(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Instruction *inst) noexcept {
-
-        auto view_struct = inst->operand(0u);
-        auto coord = inst->operand(1u);
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>() ||
-                         view_struct->type() == Type::of<Image<uint>>(),
-                     "Invalid texture view type.");
-
-        static const char *function_names[] =
-            {
-                "texture.read.2d.float",
-                "texture.read.2d.uint"};
-        unsigned int functionIdx = 0u;
-        if (view_struct->type() == Type::of<Image<uint>>())
-            functionIdx = 1u;
-
-        // Get LLVM values for the arguments
-        auto llvm_view_struct = _lookup_value(current, b, view_struct);
-        auto llvm_coord = _lookup_value(current, b, coord);
-
-        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
-        b.CreateStore(llvm_view_struct, texture_struct_alloca);
-
-        auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
-                                             4u, false);
-        // Allocate space for the result locally
-        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
-
-        // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// uint x
-             b.getInt32Ty(),// uint y
-             b.getPtrTy()}, // void* result
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
-        if (auto decl = llvm::cast<llvm::Function>(func.getCallee())) {
-            decl->setDoesNotFreeMemory();
-            decl->setDoesNotThrow();
-            decl->setOnlyAccessesInaccessibleMemOrArgMem();
-            decl->setWillReturn();
-            decl->addFnAttr(llvm::Attribute::NoUnwind);
-            decl->addFnAttr(llvm::Attribute::NoRecurse);
-            decl->addFnAttr(llvm::Attribute::NoSync);
-            decl->addFnAttr(llvm::Attribute::NoCallback);
-            for (auto &arg : decl->args()) {
-                if (arg.getType()->isPointerTy()) {
-                    arg.addAttr(llvm::Attribute::NoCapture);
-                    arg.addAttr(llvm::Attribute::NoAlias);
-                }
-            }
-        }
-
-        // Call the function
-        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_alloca});
-
-        // Return the loaded result
-        return b.CreateLoad(outType, result_alloca, "");
-    }
-
     [[nodiscard]] llvm::Value *_translate_bindless_tex2d(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1623,74 +1552,6 @@ private:
 
         // Return the loaded result
         return b.CreateLoad(outType, result_alloca, "");
-    }
-
-    [[nodiscard]] llvm::Value *_translate_texture_write(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Value *view_struct,
-        const xir::Value *coord,
-        const xir::Value *val) noexcept {
-
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>() ||
-                         view_struct->type() == Type::of<Image<uint>>(),
-                     "Invalid texture view type.");
-
-        static const char *function_names[] =
-            {
-                "texture.write.2d.float",
-                "texture.write.2d.uint"};
-
-        unsigned int functionIdx = 0u;
-        if (view_struct->type() == Type::of<Image<uint>>())
-            functionIdx = 1u;
-
-        // Get LLVM values for the arguments
-        auto llvm_view_struct = _lookup_value(current, b, view_struct);
-        auto llvm_coord = _lookup_value(current, b, coord);
-        auto llvm_val = _lookup_value(current, b, val);
-
-        // Allocate space for the texture view struct
-        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
-        b.CreateStore(llvm_view_struct, texture_struct_alloca);
-
-        // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
-
-        auto val_alloca = b.CreateAlloca(llvm_val->getType(), nullptr, "");
-        b.CreateStore(llvm_val, val_alloca);
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// uint x
-             b.getInt32Ty(),// uint y
-             b.getPtrTy()}, // void* value
-            false);
-
-        // Add attributes to the function (write operations typically do not use `readonly`)
-        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
-        if (auto decl = llvm::cast<llvm::Function>(func.getCallee())) {
-            decl->setDoesNotFreeMemory();
-            decl->setDoesNotThrow();
-            decl->setOnlyAccessesInaccessibleMemOrArgMem();
-            decl->setWillReturn();
-            decl->addFnAttr(llvm::Attribute::NoUnwind);
-            decl->addFnAttr(llvm::Attribute::NoRecurse);
-            decl->addFnAttr(llvm::Attribute::NoSync);
-            decl->addFnAttr(llvm::Attribute::NoCallback);
-            for (auto &arg : decl->args()) {
-                if (arg.getType()->isPointerTy()) {
-                    arg.addAttr(llvm::Attribute::NoCapture);
-                    arg.addAttr(llvm::Attribute::NoAlias);
-                }
-            }
-        }
-
-        // Call the function
-        return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_alloca});
     }
 
     [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
@@ -2155,6 +2016,61 @@ private:
             }
         }
         return llvm_result;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_texture_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto coord = inst->operand(1u);
+        auto llvm_func_name = [t = view->type()] {
+            auto dim = t->dimension();
+            switch (t->element()->tag()) {
+                case Type::Tag::INT32: return luisa::format("luisa.texture{}d.read.int", dim);
+                case Type::Tag::UINT32: return luisa::format("luisa.texture{}d.read.uint", dim);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.texture{}d.read.float", dim);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
+        }();
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        auto llvm_coord_alloca = b.CreateAlloca(llvm_coord->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        b.CreateStore(llvm_coord, llvm_coord_alloca);
+        auto llvm_value_type = _translate_type(inst->type(), true);
+        auto llvm_value_alloca = b.CreateAlloca(llvm_value_type);
+        b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
+        return b.CreateLoad(llvm_value_type, llvm_value_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_texture_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto coord = inst->operand(1u);
+        auto value = inst->operand(2u);
+        auto llvm_func_name = [t = view->type()] {
+            auto dim = t->dimension();
+            switch (t->element()->tag()) {
+                case Type::Tag::INT32: return luisa::format("luisa.texture{}d.write.int", dim);
+                case Type::Tag::UINT32: return luisa::format("luisa.texture{}d.write.uint", dim);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.texture{}d.write.float", dim);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
+        }();
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        auto llvm_coord_alloca = b.CreateAlloca(llvm_coord->getType());
+        auto llvm_value_alloca = b.CreateAlloca(llvm_value->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        b.CreateStore(llvm_coord, llvm_coord_alloca);
+        b.CreateStore(llvm_value, llvm_value_alloca);
+        return b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2638,14 +2554,14 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst->operand(0u), inst->operand(1u), inst->operand(2u));
+            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst);
             case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_volume_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_WRITE: break;
+            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_texture_read(current, b, inst);
+            case xir::IntrinsicOp::TEXTURE3D_WRITE: return _translate_texture_write(current, b, inst);
             case xir::IntrinsicOp::TEXTURE3D_SIZE: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
