@@ -441,4 +441,123 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_set_instance_opacity(Ac
     instance.dirty = true;
 }
 
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_exchange_int(int *a, int b) noexcept {
+    return __atomic_exchange_n(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_exchange_uint(uint *a, uint b) noexcept {
+    return __atomic_exchange_n(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_exchange_float(float *a, float b) noexcept {
+    return __builtin_bit_cast(float, __atomic_exchange_n(reinterpret_cast<int *>(a), __builtin_bit_cast(int, b), __ATOMIC_RELAXED));
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_compare_exchange_int(int *a, int b, int c) noexcept {
+    __atomic_compare_exchange_n(a, &b, c, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return b;
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_compare_exchange_uint(uint *a, uint b, uint c) noexcept {
+    __atomic_compare_exchange_n(a, &b, c, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return b;
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_compare_exchange_float(float *a, float b, float c) noexcept {
+    __atomic_compare_exchange_n(reinterpret_cast<int *>(a), reinterpret_cast<int *>(&b), __builtin_bit_cast(int, c), true, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return b;
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_add_int(int *a, int b) noexcept {
+    return __atomic_fetch_add(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_add_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_add(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_fetch_add_float(float *a, float b) noexcept {
+    for (;;) {
+        auto old = *a;
+        if (__atomic_compare_exchange_n(reinterpret_cast<int *>(a), reinterpret_cast<int *>(&old), __builtin_bit_cast(int, old + b), true, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+            return old;
+        }
+    }
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_sub_int(int *a, int b) noexcept {
+    return __atomic_fetch_sub(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_sub_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_sub(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_fetch_sub_float(float *a, float b) noexcept {
+    for (;;) {
+        auto old = *a;
+        if (__atomic_compare_exchange_n(reinterpret_cast<int *>(a), reinterpret_cast<int *>(&old), __builtin_bit_cast(int, old - b), true, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+            return old;
+        }
+    }
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_and_int(int *a, int b) noexcept {
+    return __atomic_fetch_and(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_and_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_and(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_or_int(int *a, int b) noexcept {
+    return __atomic_fetch_or(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_or_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_or(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_xor_int(int *a, int b) noexcept {
+    return __atomic_fetch_xor(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_xor_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_xor(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_min_int(int *a, int b) noexcept {
+    return __atomic_fetch_min(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_min_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_min(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_fetch_min_float(float *a, float b) noexcept {
+    for (;;) {
+        auto old = *a;
+        if (old <= b || __atomic_compare_exchange_n(reinterpret_cast<int *>(a), reinterpret_cast<int *>(&old), __builtin_bit_cast(int, b), true, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+            return old;
+        }
+    }
+}
+
+LUISA_FALLBACK_WRAPPER int luisa_fallback_wrapper_atomic_fetch_max_int(int *a, int b) noexcept {
+    return __atomic_fetch_max(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER uint luisa_fallback_wrapper_atomic_fetch_max_uint(uint *a, uint b) noexcept {
+    return __atomic_fetch_max(a, b, __ATOMIC_RELAXED);
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_atomic_fetch_max_float(float *a, float b) noexcept {
+    for (;;) {
+        auto old = *a;
+        if (old >= b || __atomic_compare_exchange_n(reinterpret_cast<int *>(a), reinterpret_cast<int *>(&old), __builtin_bit_cast(int, b), true, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+            return old;
+        }
+    }
+}
+
 }
