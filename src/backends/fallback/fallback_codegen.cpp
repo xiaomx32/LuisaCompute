@@ -1272,7 +1272,8 @@ private:
                                   operand_elem_type->description());
     }
 
-    [[nodiscard]] llvm::Value *_translate_vector_dot(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
+    [[nodiscard]] llvm::Value *_translate_vector_dot(CurrentFunction &current, IRBuilder &b,
+                                                     const xir::Value *lhs, const xir::Value *rhs) noexcept {
         auto llvm_mul = _translate_binary_mul(current, b, lhs, rhs);
         if (llvm_mul->getType()->isFPOrFPVectorTy()) {
             auto llvm_elem_type = llvm_mul->getType()->isVectorTy() ?
@@ -1284,7 +1285,8 @@ private:
         return b.CreateAddReduce(llvm_mul);
     }
 
-    [[nodiscard]] llvm::Value *_translate_isinf_isnan(CurrentFunction &current, IRBuilder &b, xir::IntrinsicOp op, const xir::Value *x) noexcept {
+    [[nodiscard]] llvm::Value *_translate_isinf_isnan(CurrentFunction &current, IRBuilder &b,
+                                                      xir::IntrinsicOp op, const xir::Value *x) noexcept {
         auto type = x->type();
         auto elem_type = type->is_vector() ? type->element() : type;
         auto llvm_x = _lookup_value(current, b, x);
@@ -1319,44 +1321,43 @@ private:
         return _zext_i1_to_i8(b, llvm_cmp);
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
-        auto buffer = inst->operand(0u);
-        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
-        auto slot = inst->operand(1u);
-        auto value = inst->operand(2u);
+    [[nodiscard]] llvm::Value *_get_buffer_element_ptr(CurrentFunction &current, IRBuilder &b,
+                                                       const xir::Value *buffer, const xir::Value *slot,
+                                                       bool byte_address) noexcept {
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
-        auto llvm_value = _lookup_value(current, b, value);            // Get the value to write
-        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
-        auto target_address = b.CreateInBoundsGEP(
+        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(buffer->type()->element(), false);
+        return b.CreateInBoundsGEP(
             slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
-        auto alignment = _get_type_alignment(value->type());
-        return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b,
+                                                       const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
         auto buffer = inst->operand(0u);
-        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
-        auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
-        auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
-        auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
-        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(inst->type(), false);
-        auto target_address = b.CreateInBoundsGEP(
-            slot_type,       // Element type
-            llvm_buffer_addr,// Base pointer
-            llvm_slot        // Index
-        );
+        auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
+        auto value = inst->operand(2u);
+        auto llvm_value = _lookup_value(current, b, value);// Get the value to write
+        auto alignment = _get_type_alignment(value->type());
+        return b.CreateAlignedStore(llvm_value, llvm_elem_ptr, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b,
+                                                      const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+        auto buffer = inst->operand(0u);
+        auto slot = inst->operand(1u);
+        auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
         auto alignment = _get_type_alignment(inst->type());
         auto llvm_element_type = _translate_type(inst->type(), true);// Type of the value being read
-        return b.CreateAlignedLoad(llvm_element_type, target_address, llvm::MaybeAlign{alignment});
+        return b.CreateAlignedLoad(llvm_element_type, llvm_elem_ptr, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b,
+                                                      const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto llvm_buffer = _lookup_value(current, b, buffer);
@@ -1371,7 +1372,8 @@ private:
         return llvm_byte_size;
     }
 
-    [[nodiscard]] llvm::Value *_translate_buffer_device_address(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_buffer_device_address(CurrentFunction &current, IRBuilder &b,
+                                                                const xir::IntrinsicInst *inst) noexcept {
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto llvm_buffer = _lookup_value(current, b, buffer);
@@ -1380,7 +1382,8 @@ private:
         return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
     }
 
-    [[nodiscard]] llvm::Value *_translate_device_address_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_device_address_read(CurrentFunction &current, IRBuilder &b,
+                                                              const xir::IntrinsicInst *inst) noexcept {
         auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
@@ -1389,7 +1392,8 @@ private:
         return b.CreateAlignedLoad(llvm_result_type, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_device_address_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_device_address_write(CurrentFunction &current, IRBuilder &b,
+                                                               const xir::IntrinsicInst *inst) noexcept {
         auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
         auto llvm_value = _lookup_value(current, b, inst->operand(1u));
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
@@ -1991,6 +1995,46 @@ private:
         return b.CreateCall(llvm_func, llvm_args);
     }
 
+    [[nodiscard]] llvm::Value *_translate_atomic_op(CurrentFunction &current, IRBuilder &b,
+                                                    const char *op_name, size_t value_count,
+                                                    const xir::IntrinsicInst *inst,
+                                                    bool byte_address = false) noexcept {
+        LUISA_ASSERT(2 + value_count <= inst->operand_count(), "Invalid atomic operation.");
+        auto buffer = inst->operand(0u);
+        LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
+        auto buffer_elem_type = buffer->type()->element();
+        LUISA_ASSERT(buffer_elem_type != nullptr, "Invalid buffer element type.");
+        auto slot = inst->operand(1u);
+        auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
+        if (byte_address) {
+            LUISA_ASSERT(2 + value_count == inst->operand_count(), "Invalid atomic operation.");
+        }
+        auto indices = inst->operand_uses().subspan(2, inst->operand_count() - 2 - value_count);
+        if (!indices.empty()) {
+            llvm_elem_ptr = _translate_gep(current, b, inst->type(),
+                                           buffer_elem_type, llvm_elem_ptr, indices);
+        }
+        auto llvm_func_name = [&] {
+            switch (inst->type()->tag()) {
+                case Type::Tag::INT32: return luisa::format("luisa.atomic.{}.int", op_name);
+                case Type::Tag::UINT32: return luisa::format("luisa.atomic.{}.uint", op_name);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.atomic.{}.float", op_name);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unsupported atomic operation value type: {}.", inst->type()->description());
+        }();
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr && llvm_func->arg_size() == 1 + value_count, "Invalid atomic operation function.");
+        llvm::SmallVector<llvm::Value *, 4u> llvm_args{llvm_elem_ptr};
+        for (auto value_uses : inst->operand_uses().subspan(inst->operand_count() - value_count)) {
+            auto value = value_uses->value();
+            LUISA_ASSERT(value->type() == inst->type(), "Atomic operation value type mismatch.");
+            auto llvm_value = _lookup_value(current, b, value);
+            llvm_args.emplace_back(llvm_value);
+        }
+        return b.CreateCall(llvm_func, llvm_args);
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -2456,15 +2500,15 @@ private:
             case xir::IntrinsicOp::MATRIX_DETERMINANT: return _translate_matrix_determinant(current, b, inst);
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: return _translate_matrix_transpose(current, b, inst);
             case xir::IntrinsicOp::MATRIX_INVERSE: return _translate_matrix_inverse(current, b, inst);
-            case xir::IntrinsicOp::ATOMIC_EXCHANGE: break;
-            case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_ADD: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_SUB: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_AND: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_OR: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_XOR: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_MIN: break;
-            case xir::IntrinsicOp::ATOMIC_FETCH_MAX: break;
+            case xir::IntrinsicOp::ATOMIC_EXCHANGE: return _translate_atomic_op(current, b, "exchange", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: return _translate_atomic_op(current, b, "compare.exchange", 2, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_ADD: return _translate_atomic_op(current, b, "fetch.add", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_SUB: return _translate_atomic_op(current, b, "fetch.sub", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_AND: return _translate_atomic_op(current, b, "fetch.and", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_OR: return _translate_atomic_op(current, b, "fetch.or", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_XOR: return _translate_atomic_op(current, b, "fetch.xor", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_MIN: return _translate_atomic_op(current, b, "fetch.min", 1, inst);
+            case xir::IntrinsicOp::ATOMIC_FETCH_MAX: return _translate_atomic_op(current, b, "fetch.max", 1, inst);
             case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
