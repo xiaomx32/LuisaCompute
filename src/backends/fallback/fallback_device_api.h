@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB
 namespace luisa::compute::fallback::api {
 #endif
@@ -72,12 +74,19 @@ struct alignas(16u) TextureView {
     uint _pixel_stride_shift : 4u;
 };
 
+struct alignas(16u) PackedTextureView {
+    void *data;
+    uint64_t extra;
+};
+
+static_assert(sizeof(TextureView) == 16 && sizeof(PackedTextureView) == 16);
+
 struct Texture;
 struct Accel;
 
 struct alignas(16) BindlessSlot {
     const void *buffer;
-    unsigned long long _compressed_buffer_size_sampler_2d_sampler_3d;
+    uint64_t _compressed_buffer_size_sampler_2d_sampler_3d;
     const Texture *tex2d;
     const Texture *tex3d;
 };
@@ -89,7 +98,7 @@ struct alignas(16) BindlessArrayView {
 
 struct alignas(16) AccelInstance {
     float affine[12];
-    unsigned char mask;
+    uint8_t mask;
     bool opaque;
     bool dirty;
     uint user_id;
@@ -105,21 +114,21 @@ struct alignas(16) AccelView {
 
 /* implementations */
 
-[[nodiscard]] int4 luisa_fallback_texture2d_read_int(TextureView handle, uint x, uint y) noexcept;
-[[nodiscard]] uint4 luisa_fallback_texture2d_read_uint(TextureView handle, uint x, uint y) noexcept;
-[[nodiscard]] float4 luisa_fallback_texture2d_read_float(TextureView handle, uint x, uint y) noexcept;
+[[nodiscard]] int4 luisa_fallback_texture2d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept;
+[[nodiscard]] uint4 luisa_fallback_texture2d_read_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept;
+[[nodiscard]] float4 luisa_fallback_texture2d_read_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept;
 
-void luisa_fallback_texture2d_write_float(TextureView handle, uint x, uint y, float4 value) noexcept;
-void luisa_fallback_texture2d_write_uint(TextureView handle, uint x, uint y, uint4 value) noexcept;
-void luisa_fallback_texture2d_write_int(TextureView handle, uint x, uint y, int4 value) noexcept;
+void luisa_fallback_texture2d_write_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, float4 value) noexcept;
+void luisa_fallback_texture2d_write_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint4 value) noexcept;
+void luisa_fallback_texture2d_write_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, int4 value) noexcept;
 
-[[nodiscard]] int4 luisa_fallback_texture3d_read_int(TextureView handle, uint x, uint y, uint z) noexcept;
-[[nodiscard]] uint4 luisa_fallback_texture3d_read_uint(TextureView handle, uint x, uint y, uint z) noexcept;
-[[nodiscard]] float4 luisa_fallback_texture3d_read_float(TextureView handle, uint x, uint y, uint z) noexcept;
+[[nodiscard]] int4 luisa_fallback_texture3d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept;
+[[nodiscard]] uint4 luisa_fallback_texture3d_read_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept;
+[[nodiscard]] float4 luisa_fallback_texture3d_read_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept;
 
-void luisa_fallback_texture3d_write_float(TextureView handle, uint x, uint y, uint z, float4 value) noexcept;
-void luisa_fallback_texture3d_write_uint(TextureView handle, uint x, uint y, uint z, uint4 value) noexcept;
-void luisa_fallback_texture3d_write_int(TextureView handle, uint x, uint y, uint z, int4 value) noexcept;
+void luisa_fallback_texture3d_write_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, float4 value) noexcept;
+void luisa_fallback_texture3d_write_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, uint4 value) noexcept;
+void luisa_fallback_texture3d_write_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, int4 value) noexcept;
 
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept;
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept;
@@ -139,7 +148,6 @@ void luisa_fallback_texture3d_write_int(TextureView handle, uint x, uint y, uint
 
 [[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
 [[nodiscard]] bool luisa_fallback_accel_trace_any(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
-
 }
 
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB

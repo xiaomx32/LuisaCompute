@@ -1823,6 +1823,7 @@ private:
         auto llvm_result_type = _translate_type(inst->type(), true);
         auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         b.CreateCall(llvm_func, {llvm_lhs_alloca, llvm_rhs_alloca, llvm_result_alloca});
         return b.CreateLoad(llvm_result_type, llvm_result_alloca);
     }
@@ -1842,6 +1843,7 @@ private:
             LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
         }();
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         auto llvm_view = _lookup_value(current, b, view);
         auto llvm_coord = _lookup_value(current, b, coord);
         auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
@@ -1870,6 +1872,7 @@ private:
             LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
         }();
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         auto llvm_view = _lookup_value(current, b, view);
         auto llvm_coord = _lookup_value(current, b, coord);
         auto llvm_value = _lookup_value(current, b, value);
@@ -1887,6 +1890,7 @@ private:
         LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
         auto llvm_func_name = luisa::format("luisa.texture{}d.size", view->type()->dimension());
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         auto llvm_view = _lookup_value(current, b, view);
         auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
         b.CreateStore(llvm_view, llvm_view_alloca);
@@ -1902,6 +1906,7 @@ private:
         auto llvm_m = _lookup_value(current, b, m);
         auto llvm_func_name = luisa::format("luisa.matrix{}d.inverse", m->type()->dimension());
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
         b.CreateStore(llvm_m, llvm_m_alloca);
         auto llvm_result_type = _translate_type(inst->type(), true);
@@ -1916,6 +1921,7 @@ private:
         auto llvm_m = _lookup_value(current, b, m);
         auto llvm_func_name = luisa::format("luisa.matrix{}d.determinant", m->type()->dimension());
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
         b.CreateStore(llvm_m, llvm_m_alloca);
         return b.CreateCall(llvm_func, {llvm_m_alloca});
@@ -1945,6 +1951,7 @@ private:
         auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
         llvm_args.emplace_back(llvm_result_alloca);
         auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         b.CreateCall(llvm_func, llvm_args);
         return b.CreateLoad(llvm_result_type, llvm_result_alloca);
     }
@@ -1971,16 +1978,17 @@ private:
                 llvm_args.emplace_back(llvm_arg_alloca);
             }
         }
+        auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         if (auto result_type = inst->type()) {
             auto llvm_result_type = _translate_type(inst->type(), true);
             auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
             llvm_args.emplace_back(llvm_result_alloca);
-            auto llvm_func = _llvm_module->getFunction(llvm_func_name);
             b.CreateCall(llvm_func, llvm_args);
             return b.CreateLoad(llvm_result_type, llvm_result_alloca);
         }
         // void return
-        return b.CreateCall(_llvm_module->getFunction(llvm_func_name), llvm_args);
+        return b.CreateCall(llvm_func, llvm_args);
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2525,18 +2533,18 @@ private:
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.instance.opacity", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.set.instance.transform", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.set.instance.visibility.mask", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.set.instance.opacity", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.set.instance.user.id", inst);
             case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_access(current, b, "luisa.accel.trace.closest", inst);
             case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: return _translate_accel_access(current, b, "luisa.accel.trace.any", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
             case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.matrix", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.srt", inst);
             case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.closest.motion", inst);
             case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.any.motion", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;

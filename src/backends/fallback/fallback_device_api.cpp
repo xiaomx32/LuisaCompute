@@ -20,7 +20,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
     bc_block->Decode(false, x % 4, y % 4, reinterpret_cast<float *>(&out));
 }
 
-[[nodiscard]] int4 luisa_fallback_texture2d_read_int(TextureView handle, uint x, uint y) noexcept {
+[[nodiscard]] int4 luisa_fallback_texture2d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -46,7 +47,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
     }
 }
 
-[[nodiscard]] uint4 luisa_fallback_texture2d_read_uint(TextureView handle, uint x, uint y) noexcept {
+[[nodiscard]] uint4 luisa_fallback_texture2d_read_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -72,7 +74,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
     }
 }
 
-[[nodiscard]] float4 luisa_fallback_texture2d_read_float(TextureView handle, uint x, uint y) noexcept {
+[[nodiscard]] float4 luisa_fallback_texture2d_read_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -92,7 +95,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
     }
 }
 
-void luisa_fallback_texture2d_write_float(TextureView handle, uint x, uint y, float4 value) noexcept {
+void luisa_fallback_texture2d_write_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, float4 value) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -110,7 +114,8 @@ void luisa_fallback_texture2d_write_float(TextureView handle, uint x, uint y, fl
     }
 }
 
-void luisa_fallback_texture2d_write_uint(TextureView handle, uint x, uint y, uint4 value) noexcept {
+void luisa_fallback_texture2d_write_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint4 value) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -128,7 +133,8 @@ void luisa_fallback_texture2d_write_uint(TextureView handle, uint x, uint y, uin
     }
 }
 
-void luisa_fallback_texture2d_write_int(TextureView handle, uint x, uint y, int4 value) noexcept {
+void luisa_fallback_texture2d_write_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, int4 value) noexcept {
+    PackedTextureView handle{texture_data, texture_data_extra};
     auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
@@ -146,55 +152,47 @@ void luisa_fallback_texture2d_write_int(TextureView handle, uint x, uint y, int4
     }
 }
 
-[[nodiscard]] int4 luisa_fallback_texture3d_read_int(TextureView handle, uint x, uint y, uint z) noexcept { return {}; }
-[[nodiscard]] uint4 luisa_fallback_texture3d_read_uint(TextureView handle, uint x, uint y, uint z) noexcept { return {}; }
-[[nodiscard]] float4 luisa_fallback_texture3d_read_float(TextureView handle, uint x, uint y, uint z) noexcept { return {}; }
+[[nodiscard]] int4 luisa_fallback_texture3d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept { return {}; }
+[[nodiscard]] uint4 luisa_fallback_texture3d_read_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept { return {}; }
+[[nodiscard]] float4 luisa_fallback_texture3d_read_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z) noexcept { return {}; }
 
-void luisa_fallback_texture3d_write_float(TextureView handle, uint x, uint y, uint z, float4 value) noexcept {}
-void luisa_fallback_texture3d_write_uint(TextureView handle, uint x, uint y, uint z, uint4 value) noexcept {}
-void luisa_fallback_texture3d_write_int(TextureView handle, uint x, uint y, uint z, int4 value) noexcept {}
-
+void luisa_fallback_texture3d_write_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, float4 value) noexcept {}
+void luisa_fallback_texture3d_write_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, uint4 value) noexcept {}
+void luisa_fallback_texture3d_write_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint z, int4 value) noexcept {}
 
 template<typename T>
-[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, const T& uv, T s) noexcept
-{
-    switch (address)
-    {
+[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, const T &uv, T s) noexcept {
+    switch (address) {
         case Sampler::Address::EDGE: return luisa::clamp(uv, 0.0f, one_minus_epsilon) * s;
         case Sampler::Address::REPEAT: return luisa::fract(uv) * s;
-        case Sampler::Address::MIRROR:
-        {
+        case Sampler::Address::MIRROR: {
             auto uv0 = luisa::fmod(luisa::abs(uv), T{2.0f});
             uv0 = select(2.f - uv, uv, uv < T{1.f});
-            return luisa::min(uv, one_minus_epsilon) * s;
+            return luisa::min(uv0, one_minus_epsilon) * s;
         }
         case Sampler::Address::ZERO: return luisa::select(uv * s, T{65536.f}, uv < 0.f || uv >= 1.f);
     }
     return T{65536.f};
 }
-[[nodiscard]] inline auto texture_sample_point(FallbackTextureView* view, Sampler::Address address,
-                                                   float u, float v) noexcept
-{
+
+[[nodiscard]] inline auto texture_sample_point(FallbackTextureView *view, Sampler::Address address, float u, float v) noexcept {
     auto size = make_float2(view->size2d());
-    auto p = texture_coord_point(address, make_float2(u,v), size);
+    auto p = texture_coord_point(address, make_float2(u, v), size);
     auto c = make_uint2(p);
     return texture_read_2d_float(view, c.x, c.y);
 }
 
-[[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float u, float v, float size_x, float size_y) noexcept
-{
+[[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float u, float v, float size_x, float size_y) noexcept {
     auto s = make_float2(size_x, size_y);
     auto inv_s = 1.f / s;
-    auto c_min = texture_coord_point(address, make_float2(u,v) - .5f * inv_s, s);
-    auto c_max = texture_coord_point(address, make_float2(u,v) + .5f * inv_s, s);
+    auto c_min = texture_coord_point(address, make_float2(u, v) - .5f * inv_s, s);
+    auto c_max = texture_coord_point(address, make_float2(u, v) + .5f * inv_s, s);
     return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
 }
 
-[[nodiscard]] inline auto texture_sample_linear(FallbackTextureView* view, Sampler::Address address,
-                                                    float u, float v) noexcept
-{
+[[nodiscard]] inline auto texture_sample_linear(FallbackTextureView *view, Sampler::Address address, float u, float v) noexcept {
     auto size = make_float2(view->size2d());
-    auto [st_min, st_max] = texture_coord_linear(address, u,v, size.x, size.y);
+    auto [st_min, st_max] = texture_coord_linear(address, u, v, size.x, size.y);
     auto t = luisa::fract(st_max);
     auto c0 = make_uint2(st_min);
     auto c1 = make_uint2(st_max);
@@ -206,41 +204,34 @@ template<typename T>
                        luisa::lerp(v10, v11, t.x), t.y);
 }
 
-[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept
-{
+[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept {
     auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
     auto s = Sampler::decode(sampler);
     auto view = tex->view(0);
-    return s.filter() == Sampler::Filter::POINT
-               ? bit_cast<float4>(texture_sample_point(&view, s.address(), u,v))
-               : bit_cast<float4>(texture_sample_linear(&view, s.address(), u,v));
-    return {};
+    return s.filter() == Sampler::Filter::POINT ?
+               bit_cast<float4>(texture_sample_point(&view, s.address(), u, v)) :
+               bit_cast<float4>(texture_sample_linear(&view, s.address(), u, v));
 }
-[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept
-{
+
+[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept {
     auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
     auto s = Sampler::decode(sampler);
     auto filter = s.filter();
-    if (level <= 0.f || tex->mip_levels() == 0u ||
-        filter == Sampler::Filter::POINT)
-    {
+    if (level <= 0.f || tex->mip_levels() == 0u || filter == Sampler::Filter::POINT) {
         return bit_cast<float4>(bindless_texture_2d_sample(tex, sampler, u, v));
     }
     auto level0 = std::min(static_cast<uint32_t>(level),
                            tex->mip_levels() - 1u);
     auto view0 = tex->view(level0);
-    auto v0 = texture_sample_linear(
-        &view0, s.address(), u, v);
-    if (level0 == tex->mip_levels() - 1u ||
-        filter == Sampler::Filter::LINEAR_POINT)
-    {
+    auto v0 = texture_sample_linear(&view0, s.address(), u, v);
+    if (level0 == tex->mip_levels() - 1u || filter == Sampler::Filter::LINEAR_POINT) {
         return bit_cast<float4>(v0);
     }
     auto view1 = tex->view(level0 + 1);
-    auto v1 = texture_sample_linear(
-        &view1, s.address(), u, v);
+    auto v1 = texture_sample_linear(&view1, s.address(), u, v);
     return bit_cast<float4>(luisa::lerp(v0, v1, luisa::fract(level)));
 }
+
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_grad(const Texture *handle, uint sampler, float u, float v, float dudx, float dudy, float dvdx, float dvdy) noexcept { return {}; }
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_grad_level(const Texture *handle, uint sampler, float u, float v, float dudx, float dudy, float dvdx, float dvdy, float level) noexcept { return {}; }
 
@@ -249,20 +240,32 @@ template<typename T>
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_sample_grad(const Texture *handle, uint sampler, float u, float v, float w, float dudx, float dvdx, float dwdx, float dudy, float dvdy, float dwdy) noexcept { return {}; }
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_sample_grad_level(const Texture *handle, uint sampler, float u, float v, float w, float dudx, float dvdx, float dwdx, float dudy, float dvdy, float dwdy, float level) noexcept { return {}; }
 
-[[nodiscard]] float4 luisa_fallback_bindless_texture2d_read(const Texture *handle, uint x, uint y) noexcept {
-    return {};
-}
-
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_read_level(const Texture *handle, uint x, uint y, uint level) noexcept {
-    return {};
+    auto texture = reinterpret_cast<const FallbackTexture *>(handle);
+    auto levels = texture->mip_levels();
+    LUISA_ASSUME(levels > 0);
+    if (level >= levels) { return {}; }
+    auto view = texture->view(level);
+    auto v = texture_read_2d_float(&view, x, y);
+    return {v.x, v.y, v.z, v.w};
 }
 
-[[nodiscard]] float4 luisa_fallback_bindless_texture3d_read(const Texture *handle, uint x, uint y, uint z) noexcept {
-    return {};
+[[nodiscard]] float4 luisa_fallback_bindless_texture2d_read(const Texture *handle, uint x, uint y) noexcept {
+    return luisa_fallback_bindless_texture2d_read_level(handle, x, y, 0u);
 }
 
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_read_level(const Texture *handle, uint x, uint y, uint z, uint level) noexcept {
-    return {};
+    auto texture = reinterpret_cast<const FallbackTexture *>(handle);
+    auto levels = texture->mip_levels();
+    LUISA_ASSUME(levels > 0);
+    if (level >= levels) { return {}; }
+    auto view = texture->view(level);
+    auto v = texture_read_3d_float(&view, x, y, z);
+    return {v.x, v.y, v.z, v.w};
+}
+
+[[nodiscard]] float4 luisa_fallback_bindless_texture3d_read(const Texture *handle, uint x, uint y, uint z) noexcept {
+    return luisa_fallback_bindless_texture3d_read_level(handle, x, y, z, 0u);
 }
 
 [[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {

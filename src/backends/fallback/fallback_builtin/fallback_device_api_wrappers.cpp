@@ -201,51 +201,63 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix4d_inverse(const float4
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_read_int(const TextureView *handle, const uint2 *coord, int4 *out) noexcept {
-    *out = luisa_fallback_texture2d_read_int(*handle, coord->x, coord->y);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture2d_read_int(packed_view->data, packed_view->extra, coord->x, coord->y);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_read_uint(const TextureView *handle, const uint2 *coord, uint4 *out) noexcept {
-    *out = luisa_fallback_texture2d_read_uint(*handle, coord->x, coord->y);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture2d_read_uint(packed_view->data, packed_view->extra, coord->x, coord->y);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_read_float(const TextureView *handle, const uint2 *coord, float4 *out) noexcept {
-    *out = luisa_fallback_texture2d_read_float(*handle, coord->x, coord->y);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture2d_read_float(packed_view->data, packed_view->extra, coord->x, coord->y);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_write_float(const TextureView *handle, const uint2 *coord, const float4 *value) noexcept {
-    luisa_fallback_texture2d_write_float(*handle, coord->x, coord->y, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture2d_write_float(packed_view->data, packed_view->extra, coord->x, coord->y, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_write_uint(const TextureView *handle, const uint2 *coord, const uint4 *value) noexcept {
-    luisa_fallback_texture2d_write_uint(*handle, coord->x, coord->y, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture2d_write_uint(packed_view->data, packed_view->extra, coord->x, coord->y, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_write_int(const TextureView *handle, const uint2 *coord, const int4 *value) noexcept {
-    luisa_fallback_texture2d_write_int(*handle, coord->x, coord->y, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture2d_write_int(packed_view->data, packed_view->extra, coord->x, coord->y, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_read_int(const TextureView *handle, const uint3 *coord, int4 *out) noexcept {
-    *out = luisa_fallback_texture3d_read_int(*handle, coord->x, coord->y, coord->z);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture3d_read_int(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_read_uint(const TextureView *handle, const uint3 *coord, uint4 *out) noexcept {
-    *out = luisa_fallback_texture3d_read_uint(*handle, coord->x, coord->y, coord->z);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture3d_read_uint(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_read_float(const TextureView *handle, const uint3 *coord, float4 *out) noexcept {
-    *out = luisa_fallback_texture3d_read_float(*handle, coord->x, coord->y, coord->z);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    *out = luisa_fallback_texture3d_read_float(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_write_float(const TextureView *handle, const uint3 *coord, const float4 *value) noexcept {
-    luisa_fallback_texture3d_write_float(*handle, coord->x, coord->y, coord->z, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture3d_write_float(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_write_uint(const TextureView *handle, const uint3 *coord, const uint4 *value) noexcept {
-    luisa_fallback_texture3d_write_uint(*handle, coord->x, coord->y, coord->z, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture3d_write_uint(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_write_int(const TextureView *handle, const uint3 *coord, const int4 *value) noexcept {
-    luisa_fallback_texture3d_write_int(*handle, coord->x, coord->y, coord->z, *value);
+    auto packed_view = reinterpret_cast<const PackedTextureView *>(handle);
+    luisa_fallback_texture3d_write_int(packed_view->data, packed_view->extra, coord->x, coord->y, coord->z, *value);
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_size(const TextureView *handle, uint2 *out) noexcept {
@@ -382,11 +394,15 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_any(const AccelVi
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_instance_transform(const AccelView *handle, uint instance_id, float4x4 *out) noexcept {
-    auto affine = handle->instances[instance_id].affine;
-    out->cols[0] = {affine[0], affine[4], affine[8], 0.f};
-    out->cols[1] = {affine[1], affine[5], affine[9], 0.f};
-    out->cols[2] = {affine[2], affine[6], affine[10], 0.f};
-    out->cols[3] = {affine[3], affine[7], affine[11], 1.f};
+    auto rows = reinterpret_cast<const llvm_float4 *>(handle->instances[instance_id].affine);
+    auto r0 = rows[0];
+    auto r1 = rows[1];
+    auto r2 = rows[2];
+    auto m = reinterpret_cast<llvm_float4x4 *>(out);
+    m->cols[0] = {r0.x, r1.x, r2.x, 0.f};
+    m->cols[1] = {r0.y, r1.y, r2.y, 0.f};
+    m->cols[2] = {r0.z, r1.z, r2.z, 0.f};
+    m->cols[3] = {r0.w, r1.w, r2.w, 1.f};
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_instance_user_id(const AccelView *handle, uint instance_id, uint *out) noexcept {
@@ -399,18 +415,11 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_instance_visibility_mas
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_set_instance_transform(AccelView *handle, uint instance_id, const float4x4 *transform) noexcept {
     auto &instance = handle->instances[instance_id];
-    instance.affine[0] = transform->cols[0].x;
-    instance.affine[1] = transform->cols[1].x;
-    instance.affine[2] = transform->cols[2].x;
-    instance.affine[3] = transform->cols[3].x;
-    instance.affine[4] = transform->cols[0].y;
-    instance.affine[5] = transform->cols[1].y;
-    instance.affine[6] = transform->cols[2].y;
-    instance.affine[7] = transform->cols[3].y;
-    instance.affine[8] = transform->cols[0].z;
-    instance.affine[9] = transform->cols[1].z;
-    instance.affine[10] = transform->cols[2].z;
-    instance.affine[11] = transform->cols[3].z;
+    auto rows = reinterpret_cast<llvm_float4 *>(instance.affine);
+    auto m = *reinterpret_cast<const llvm_float4x4 *>(transform);
+    rows[0] = {m.cols[0].x, m.cols[1].x, m.cols[2].x, m.cols[3].x};
+    rows[1] = {m.cols[0].y, m.cols[1].y, m.cols[2].y, m.cols[3].y};
+    rows[2] = {m.cols[0].z, m.cols[1].z, m.cols[2].z, m.cols[3].z};
     instance.dirty = true;
 }
 

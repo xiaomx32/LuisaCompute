@@ -16,7 +16,7 @@ if __name__ == "__main__":
     with open(dst_path, "r") as f:
         content = "".join(line for line in f.readlines()
                           if not line.strip().startswith("@llvm.used") and
-                          not line.strip().startswith("; ModuleID") and
+                          # not line.strip().startswith("; ModuleID") and
                           not line.strip().startswith("source_filename"))
     content = content.replace("define hidden", "define private")
     # find all @luisa_fallback_wrapper_(\w+) and collect in a list
