@@ -117,7 +117,7 @@ void FallbackStream::visit(TextureToBufferCopyCommand *command) noexcept {
 
 void FallbackStream::visit(AccelBuildCommand *command) noexcept {
     auto accel = reinterpret_cast<FallbackAccel *>(command->handle());
-    accel->build(_pool, command->instance_count(), command->modifications());
+    accel->build(_pool, command->instance_count(), command->steal_modifications());
     _pool.barrier();
 }
 

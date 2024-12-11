@@ -664,7 +664,7 @@ private:
             case CallOp::RAY_TRACING_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID);
             case CallOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK);
             case CallOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM);
-            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY);
+            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK);
             case CallOp::RAY_TRACING_SET_INSTANCE_OPACITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY);
             case CallOp::RAY_TRACING_SET_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID);
             case CallOp::RAY_TRACING_TRACE_CLOSEST: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_CLOSEST);

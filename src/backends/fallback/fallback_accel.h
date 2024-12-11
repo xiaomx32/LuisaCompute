@@ -21,19 +21,20 @@ namespace luisa::compute::fallback {
 
 class FallbackMesh;
 
-class FallbackAccel {
+class alignas(16) FallbackAccel {
 
 public:
     struct alignas(16) Instance {
         float affine[12];
-        bool visible;
+        uint8_t mask;
+        bool opaque;
         bool dirty;
-        uint pad;
+        uint user_id;
         RTCGeometry geometry;
     };
     static_assert(sizeof(Instance) == 64u);
 
-    struct alignas(16) Handle {
+    struct alignas(16) View {
         const FallbackAccel *accel;
         Instance *instances;
     };
@@ -48,22 +49,15 @@ private:
     [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
 
 public:
-	[[nodiscard]]auto device()const noexcept{return _device;}
-    [[nodiscard]] RTCScene scene()const noexcept {return _handle;}
+    [[nodiscard]] auto device() const noexcept { return _device; }
+    [[nodiscard]] RTCScene scene() const noexcept { return _handle; }
     FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
     ~FallbackAccel() noexcept;
     void build(ThreadPool &pool, size_t instance_count,
-               luisa::span<const AccelBuildCommand::Modification> mods) noexcept;
-    [[nodiscard]] auto handle() const noexcept { return Handle{this, _instances.data()}; }
+               luisa::vector<AccelBuildCommand::Modification> &&mods) noexcept;
+    [[nodiscard]] auto view() const noexcept { return View{this, _instances.data()}; }
 };
 
-void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept;
-[[nodiscard]] bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept;
-void fill_transform(const FallbackAccel* accel, uint id, float4x4* buffer);
+using FallbackAccelView = FallbackAccel::View;
+
 }// namespace luisa::compute::fallback
-
-
-void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit);
-bool intersect_any_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask);
-
-void accel_transform_wrapper(void *accel, unsigned id, void* buffer);

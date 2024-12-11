@@ -25,6 +25,8 @@
 #include <luisa/xir/metadata/location.h>
 
 #include "fallback_codegen.h"
+
+#include "fallback_accel.h"
 #include "fallback_bindless_array.h"
 #include "fallback_buffer.h"
 #include "fallback_texture.h"
@@ -88,7 +90,7 @@ private:
             case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
             case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
             case Type::Tag::BINDLESS_ARRAY: return sizeof(FallbackBindlessArrayView);
-            case Type::Tag::ACCEL: return sizeof(void *);
+            case Type::Tag::ACCEL: return sizeof(FallbackAccelView);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -104,7 +106,7 @@ private:
             case Type::Tag::BUFFER: return alignof(FallbackBufferView);
             case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
             case Type::Tag::BINDLESS_ARRAY: return alignof(FallbackBindlessArrayView);
-            case Type::Tag::ACCEL: return alignof(void *);
+            case Type::Tag::ACCEL: return alignof(FallbackAccelView);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -186,7 +188,8 @@ private:
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
             case Type::Tag::ACCEL: {
-                return llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_ptr_type});
             }
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
         }
@@ -1317,7 +1320,6 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
-        //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
@@ -1750,167 +1752,6 @@ private:
         return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
     }
 
-    [[nodiscard]] llvm::Value *_translate_accel_trace(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-
-        // Extract LLVM values for the operands
-        const xir::Value *accel = inst->operand(0u);
-        const xir::Value *ray = inst->operand(1u);
-        const xir::Value *mask = inst->operand(2u);
-
-        // Get LLVM values for the arguments
-        auto llvm_accel = _lookup_value(current, b, accel);
-        auto llvm_ray = _lookup_value(current, b, ray);
-        auto llvm_mask = _lookup_value(current, b, mask);
-
-        // Allocate space for the SurfaceHit result locally
-        auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
-
-        auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
-        hit_alloca->setAlignment(llvm::Align(_get_type_alignment(Type::of<luisa::compute::SurfaceHit>())));
-
-        // Extract ray components
-        auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
-        auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "");
-        auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "");
-        auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "");
-
-        // Extract x, y, z for origin
-        auto origin_x = b.CreateExtractValue(compressed_origin, 0, "");
-        auto origin_y = b.CreateExtractValue(compressed_origin, 1, "");
-        auto origin_z = b.CreateExtractValue(compressed_origin, 2, "");
-
-        // Extract x, y, z for direction
-        auto direction_x = b.CreateExtractValue(compressed_direction, 0, "");
-        auto direction_y = b.CreateExtractValue(compressed_direction, 1, "");
-        auto direction_z = b.CreateExtractValue(compressed_direction, 2, "");
-
-        // Define the function type: void(void*, float, float, float, float, float, float, float, float, unsigned, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {
-                b.getPtrTy(),  // void* accel
-                b.getFloatTy(),// float ox
-                b.getFloatTy(),// float oy
-                b.getFloatTy(),// float oz
-                b.getFloatTy(),// float dx
-                b.getFloatTy(),// float dy
-                b.getFloatTy(),// float dz
-                b.getFloatTy(),// float tmin
-                b.getFloatTy(),// float tmax
-                b.getInt32Ty(),// unsigned mask
-                b.getPtrTy()   // void* hit
-            },
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("accel.intersect.closest", func_type);
-
-        // Call the function
-        b.CreateCall(
-            func,
-            {
-                llvm_accel,      // accel pointer
-                origin_x,        // ray.origin.x
-                origin_y,        // ray.origin.y
-                origin_z,        // ray.origin.z
-                direction_x,     // ray.direction.x
-                direction_y,     // ray.direction.y
-                direction_z,     // ray.direction.z
-                compressed_t_min,// ray.t_min
-                compressed_t_max,// ray.t_max
-                llvm_mask,       // mask
-                hit_alloca       // hit pointer
-            });
-
-        // Load the SurfaceHit result and return
-        return b.CreateLoad(hit_type, hit_alloca, "");
-    }
-
-    [[nodiscard]] llvm::Value *_translate_accel_trace_any(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-        auto accel = inst->operand(0u);
-        auto ray = inst->operand(1u);
-        auto mask = inst->operand(2u);
-        auto llvm_accel = _lookup_value(current, b, accel);
-        auto llvm_ray = _lookup_value(current, b, ray);
-        auto llvm_mask = _lookup_value(current, b, mask);
-        auto llvm_ray_ox = b.CreateExtractValue(llvm_ray, {0, 0});
-        auto llvm_ray_oy = b.CreateExtractValue(llvm_ray, {0, 1});
-        auto llvm_ray_oz = b.CreateExtractValue(llvm_ray, {0, 2});
-        auto llvm_ray_t_min = b.CreateExtractValue(llvm_ray, 1);
-        auto llvm_ray_dx = b.CreateExtractValue(llvm_ray, {2, 0});
-        auto llvm_ray_dy = b.CreateExtractValue(llvm_ray, {2, 1});
-        auto llvm_ray_dz = b.CreateExtractValue(llvm_ray, {2, 2});
-        auto llvm_ray_t_max = b.CreateExtractValue(llvm_ray, 3);
-        auto func_type = llvm::FunctionType::get(
-            b.getInt8Ty(),
-            {
-                b.getPtrTy(),  // void *accel
-                b.getFloatTy(),// float ox
-                b.getFloatTy(),// float oy
-                b.getFloatTy(),// float oz
-                b.getFloatTy(),// float dx
-                b.getFloatTy(),// float dy
-                b.getFloatTy(),// float dz
-                b.getFloatTy(),// float tmin
-                b.getFloatTy(),// float tmax
-                b.getInt32Ty(),// unsigned mask
-            },
-            false);
-        auto func = _llvm_module->getOrInsertFunction("accel.intersect.any", func_type);
-        return b.CreateCall(func, {llvm_accel, llvm_ray_ox, llvm_ray_oy, llvm_ray_oz, llvm_ray_dx, llvm_ray_dy, llvm_ray_dz, llvm_ray_t_min, llvm_ray_t_max, llvm_mask});
-    }
-
-    [[nodiscard]] llvm::Value *_translate_accel_transform(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-
-        //Calling "accel.instance.transform"
-        // Extract LLVM values for the operands
-        const xir::Value *accel = inst->operand(0u);
-        const xir::Value *id = inst->operand(1u);
-
-        // Get LLVM values for the arguments
-        auto llvm_accel = _lookup_value(current, b, accel);
-        auto llvm_id = _lookup_value(current, b, id);
-
-        // Allocate space for the SurfaceHit result locally
-        auto transform_type = llvm::VectorType::get(b.getFloatTy(), 16, false);
-
-        auto transform_alloca = b.CreateAlloca(transform_type, nullptr, "");
-
-        // Define the function type: void(void*, unsigned, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {
-                b.getPtrTy(),  // void* accel
-                b.getInt32Ty(),// unsigned id
-                b.getPtrTy()   // void* hit
-            },
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("accel.instance.transform", func_type);
-
-        // Call the function
-        b.CreateCall(
-            func,
-            {
-                llvm_accel,     // accel pointer
-                llvm_id,        // mask
-                transform_alloca// hit pointer
-            });
-
-        // Load the SurfaceHit result and return
-        return b.CreateLoad(transform_type, transform_alloca, "");
-    }
-
     [[nodiscard]] llvm::Value *_translate_matrix_transpose(
         CurrentFunction &current,
         IRBuilder &b,
@@ -1955,67 +1796,35 @@ private:
         return llvm_result;
     }
 
-    [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-        // The built-in matrix multiplication only works for 4x4 or wider matrices!
-        // For 3x3 we are totally on our own
-        // And for now we totally run all the multiplications
-        auto A = inst->operand(0u);
-        auto B = inst->operand(1u);
-        auto dimension = inst->type()->dimension();
-
-        // Lookup the LLVM values
-        auto llvm_A = _lookup_value(current, b, A);
-        auto llvm_B = _lookup_value(current, b, B);
-
-        // Type validation
-        LUISA_ASSERT(A->type()->is_matrix() &&
-                         (B->type()->is_matrix() || B->type()->is_vector()) &&
-                         A->type()->dimension() == B->type()->dimension() &&
-                         A->type()->element() == B->type()->element(),
-                     "Matrix multiplication type mismatch");
-
-        auto dim = A->type()->dimension();
-
-        auto result_type = inst->type();
-        auto llvm_result_type = _translate_type(result_type, true);
-
-        // M * v
-        if (B->type()->is_vector()) {
-            auto llvm_result = llvm::cast<llvm::Value>(llvm::Constant::getNullValue(llvm_result_type));
-            for (auto i = 0u; i < dim; i++) {
-                auto vi = b.CreateExtractElement(llvm_B, i);
-                vi = b.CreateVectorSplat(dim, vi);
-                auto Mi = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_result_type));
-                for (auto j = 0u; j < dim; j++) {
-                    auto Aij = b.CreateExtractValue(llvm_A, {i, j});
-                    Mi = b.CreateInsertElement(Mi, Aij, j);
-                }
-                auto result = b.CreateFMul(Mi, vi);
-                llvm_result = b.CreateFAdd(llvm_result, result);
+    [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(CurrentFunction &current, IRBuilder &b,
+                                                                 const xir::IntrinsicInst *inst) noexcept {
+        auto lhs = inst->operand(0u);
+        auto rhs = inst->operand(1u);
+        LUISA_ASSERT(lhs->type()->is_matrix(), "Matrix expected.");
+        auto llvm_func_name = [&] {
+            if (rhs->type()->is_vector()) {
+                LUISA_ASSERT(lhs->type()->dimension() == rhs->type()->dimension() &&
+                                 lhs->type()->element() == rhs->type()->element(),
+                             "Matrix and vector dimension mismatch.");
+                return luisa::format("luisa.matrix{}d.mul.vector", lhs->type()->dimension());
             }
-            return llvm_result;
-        }
-
-        // M * M
-        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_result_type));
-        auto llvm_elem_type = _translate_type(result_type->element(), true);
-        // Cij = sum_k (Akj * Bik)
-        for (auto i = 0u; i < dim; i++) {    // compute each column
-            for (auto j = 0u; j < dim; j++) {// compute each element in the column
-                auto llvm_elem = llvm::cast<llvm::Value>(llvm::ConstantFP::get(llvm_elem_type, 0.));
-                for (auto k = 0u; k < dim; k++) {
-                    auto Akj = b.CreateExtractValue(llvm_A, {k, j});
-                    auto Bik = b.CreateExtractValue(llvm_B, {i, k});
-                    auto Akj_Bik = b.CreateFMul(Akj, Bik);
-                    llvm_elem = b.CreateFAdd(llvm_elem, Akj_Bik);
-                }
-                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
-            }
-        }
-        return llvm_result;
+            LUISA_ASSERT(rhs->type()->is_matrix() &&
+                             lhs->type()->dimension() == rhs->type()->dimension() &&
+                             lhs->type()->element() == rhs->type()->element(),
+                         "Matrix dimension mismatch.");
+            return luisa::format("luisa.matrix{}d.mul.matrix", lhs->type()->dimension());
+        }();
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto llvm_lhs_alloca = b.CreateAlloca(llvm_lhs->getType());
+        auto llvm_rhs_alloca = b.CreateAlloca(llvm_rhs->getType());
+        b.CreateStore(llvm_lhs, llvm_lhs_alloca);
+        b.CreateStore(llvm_rhs, llvm_rhs_alloca);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        b.CreateCall(llvm_func, {llvm_lhs_alloca, llvm_rhs_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
     }
 
     [[nodiscard]] llvm::Value *_translate_texture_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2110,6 +1919,68 @@ private:
         auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
         b.CreateStore(llvm_m, llvm_m_alloca);
         return b.CreateCall(llvm_func, {llvm_m_alloca});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_texture_access(CurrentFunction &current, IRBuilder &b,
+                                                                  llvm::StringRef llvm_func_name,
+                                                                  const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_bindless_alloca = b.CreateAlloca(llvm_bindless->getType());
+        b.CreateStore(llvm_bindless, llvm_bindless_alloca);
+        auto llvm_slot_index = _lookup_value(current, b, inst->operand(1u));
+        llvm_slot_index = b.CreateZExtOrTrunc(llvm_slot_index, b.getInt32Ty());
+        llvm::SmallVector<llvm::Value *, 8u> llvm_args{llvm_bindless_alloca, llvm_slot_index};
+        for (auto arg_use : inst->operand_uses().subspan(2)) {
+            auto arg = arg_use->value();
+            auto llvm_arg = _lookup_value(current, b, arg);
+            if (arg->type()->is_scalar()) {
+                llvm_args.emplace_back(llvm_arg);
+            } else {
+                auto llvm_arg_alloca = b.CreateAlloca(llvm_arg->getType());
+                b.CreateStore(llvm_arg, llvm_arg_alloca);
+                llvm_args.emplace_back(llvm_arg_alloca);
+            }
+        }
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        llvm_args.emplace_back(llvm_result_alloca);
+        auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+        b.CreateCall(llvm_func, llvm_args);
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_accel_access(CurrentFunction &current, IRBuilder &b,
+                                                       llvm::StringRef llvm_func_name,
+                                                       const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_accel = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_accel_alloca = b.CreateAlloca(llvm_accel->getType());
+        b.CreateStore(llvm_accel, llvm_accel_alloca);
+        llvm::SmallVector<llvm::Value *, 8u> llvm_args{llvm_accel_alloca};
+        for (auto arg_use : inst->operand_uses().subspan(1)) {
+            auto arg = arg_use->value();
+            auto llvm_arg = _lookup_value(current, b, arg);
+            if (llvm_arg->getType()->isIntegerTy() && !arg->type()->is_bool()) {
+                // cast non-bool integer to i32
+                llvm_arg = b.CreateZExtOrTrunc(llvm_arg, b.getInt32Ty());
+            }
+            if (arg->type()->is_scalar()) {
+                llvm_args.emplace_back(llvm_arg);
+            } else {
+                auto llvm_arg_alloca = b.CreateAlloca(llvm_arg->getType());
+                b.CreateStore(llvm_arg, llvm_arg_alloca);
+                llvm_args.emplace_back(llvm_arg_alloca);
+            }
+        }
+        if (auto result_type = inst->type()) {
+            auto llvm_result_type = _translate_type(inst->type(), true);
+            auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+            llvm_args.emplace_back(llvm_result_alloca);
+            auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+            b.CreateCall(llvm_func, llvm_args);
+            return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+        }
+        // void return
+        return b.CreateCall(_llvm_module->getFunction(llvm_func_name), llvm_args);
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2606,14 +2477,14 @@ private:
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad.level", inst);
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
@@ -2622,14 +2493,14 @@ private:
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size.level", inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
@@ -2651,23 +2522,23 @@ private:
             case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
             case xir::IntrinsicOp::AUTODIFF_DETACH: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_transform(current, b, inst);
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_trace(current, b, inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: return _translate_accel_trace_any(current, b, inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.instance.opacity", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_access(current, b, "luisa.accel.trace.closest", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: return _translate_accel_access(current, b, "luisa.accel.trace.any", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.closest.motion", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.any.motion", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
             case xir::IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: break;

@@ -18,3 +18,9 @@ map_symbol("luisa.bindless.texture3d.sample.impl", &api::luisa_fallback_bindless
 map_symbol("luisa.bindless.texture3d.sample.level.impl", &api::luisa_fallback_bindless_texture3d_sample_level);
 map_symbol("luisa.bindless.texture3d.sample.grad.impl", &api::luisa_fallback_bindless_texture3d_sample_grad);
 map_symbol("luisa.bindless.texture3d.sample.grad.level.impl", &api::luisa_fallback_bindless_texture3d_sample_grad_level);
+map_symbol("luisa.bindless.texture2d.read.impl", &api::luisa_fallback_bindless_texture2d_read);
+map_symbol("luisa.bindless.texture3d.read.impl", &api::luisa_fallback_bindless_texture3d_read);
+map_symbol("luisa.bindless.texture2d.read.level.impl", &api::luisa_fallback_bindless_texture2d_read_level);
+map_symbol("luisa.bindless.texture3d.read.level.impl", &api::luisa_fallback_bindless_texture3d_read_level);
+map_symbol("luisa.accel.trace.closest.impl", &api::luisa_fallback_accel_trace_closest);
+map_symbol("luisa.accel.trace.any.impl", &api::luisa_fallback_accel_trace_any);

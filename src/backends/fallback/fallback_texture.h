@@ -235,6 +235,7 @@ inline void write_pixel(PixelStorage storage, std::byte *p, Vector<T, 4u> v) noe
         default: break;
     }
 }
+
 }// namespace detail
 
 class FallbackTexture;

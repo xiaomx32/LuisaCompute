@@ -117,10 +117,6 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
 
 #include "fallback_device_api_map_symbols.inl.h"
 
-    map_symbol("accel.intersect.closest", &intersect_closest_wrapper);
-    map_symbol("accel.intersect.any", &intersect_any_wrapper);
-    map_symbol("accel.instance.transform", &accel_transform_wrapper);
-
     // asin, acos, atan, atan2
     map_symbol("luisa.asin.f16", &luisa_asin_f16);
     map_symbol("luisa.asin.f32", &luisa_asin_f32);
@@ -324,8 +320,9 @@ void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *com
             }
             case Tag::ACCEL: {
                 auto accel = reinterpret_cast<FallbackAccel *>(arg.accel.handle);
-                auto ptr = allocate_argument(sizeof(accel));
-                std::memcpy(ptr, &accel, sizeof(accel));
+                auto view = accel->view();
+                auto ptr = allocate_argument(sizeof(view));
+                std::memcpy(ptr, &view, sizeof(view));
                 break;
             }
         }

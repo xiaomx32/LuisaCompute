@@ -10,14 +10,14 @@ if __name__ == "__main__":
     file_name = "fallback_device_api_wrappers"
     src_path = os.path.join(builtin_dir, f"{file_name}.cpp")
     dst_path = os.path.join(builtin_dir, f"{file_name}.{system_name}.{machine_name}.ll")
-    subprocess.run(["clang++", "-c", "-emit-llvm", "-std=c++20", "-S", src_path, "-o", dst_path, "-fno-stack-protector", "-ffast-math", "-O3"])
+    subprocess.run(["clang++", "-c", "-emit-llvm", "-std=c++20", "-ffast-math", "-O3",
+                    "-S", src_path, "-o", dst_path,
+                    "-fno-stack-protector", "-fno-rtti", "-fno-exceptions"])
     with open(dst_path, "r") as f:
         content = "".join(line for line in f.readlines()
                           if not line.strip().startswith("@llvm.used") and
                           not line.strip().startswith("; ModuleID") and
-                          not line.strip().startswith("source_filename") and
-                          not line.strip().startswith("target datalayout") and
-                          not line.strip().startswith("target triple"))
+                          not line.strip().startswith("source_filename"))
     content = content.replace("define hidden", "define private")
     # find all @luisa_fallback_wrapper_(\w+) and collect in a list
     impl_prefix = "@luisa_fallback_"
