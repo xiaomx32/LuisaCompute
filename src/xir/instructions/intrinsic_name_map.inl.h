@@ -162,7 +162,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINDLESS_BUFFER_READ: return "bindless_buffer_read";
         case IntrinsicOp::BINDLESS_BUFFER_WRITE: return "bindless_buffer_write";
         case IntrinsicOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size";
-        case IntrinsicOp::BINDLESS_BUFFER_TYPE: return "bindless_buffer_type";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return "bindless_byte_buffer_write";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return "bindless_byte_buffer_size";
@@ -401,7 +400,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"bindless_buffer_read", IntrinsicOp::BINDLESS_BUFFER_READ},
         {"bindless_buffer_write", IntrinsicOp::BINDLESS_BUFFER_WRITE},
         {"bindless_buffer_size", IntrinsicOp::BINDLESS_BUFFER_SIZE},
-        {"bindless_buffer_type", IntrinsicOp::BINDLESS_BUFFER_TYPE},
         {"bindless_byte_buffer_read", IntrinsicOp::BINDLESS_BYTE_BUFFER_READ},
         {"bindless_byte_buffer_write", IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE},
         {"bindless_byte_buffer_size", IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE},

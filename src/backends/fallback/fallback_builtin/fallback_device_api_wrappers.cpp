@@ -276,7 +276,6 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_size(const TextureV
     auto texture = bindless_handle->slots[slot_index].tex3d; \
     auto sampler = bindless_handle->slots[slot_index]._compressed_buffer_size_sampler_2d_sampler_3d & 0x0fu;
 
-
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_bindless_texture2d_sample(const BindlessArrayView *handle, uint slot_index, const float2 *uv, float4 *out) noexcept {
     LUISA_FALLBACK_BINDLESS_DECODE_TEXTURE2D(handle, slot_index)
     *out = luisa_fallback_bindless_texture2d_sample(texture, sampler, uv->x, uv->y);

@@ -575,7 +575,7 @@ private:
             case CallOp::BINDLESS_BUFFER_WRITE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_WRITE);
             case CallOp::BINDLESS_BYTE_BUFFER_READ: return resource_call(IntrinsicOp::BINDLESS_BYTE_BUFFER_READ);
             case CallOp::BINDLESS_BUFFER_SIZE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_SIZE);
-            case CallOp::BINDLESS_BUFFER_TYPE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_TYPE);
+            case CallOp::BINDLESS_BUFFER_TYPE: LUISA_ERROR_WITH_LOCATION("Removed bindless_buffer_type operation.");
             case CallOp::BINDLESS_BUFFER_ADDRESS: return resource_call(IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS);
             case CallOp::MAKE_BOOL2: return make_vector_call(Type::of<bool>(), 2);
             case CallOp::MAKE_BOOL3: return make_vector_call(Type::of<bool>(), 3);

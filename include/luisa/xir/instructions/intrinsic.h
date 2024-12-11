@@ -208,8 +208,6 @@ enum struct IntrinsicOp {
     BINDLESS_BUFFER_READ, // (bindless_array, index: uint, elem_index: uint) -> T
     BINDLESS_BUFFER_WRITE,// (bindless_array, index: uint, elem_index: uint, value: T) -> void
     BINDLESS_BUFFER_SIZE, // (bindless_array, index: uint, stride: uint) -> size: uint64
-    BINDLESS_BUFFER_TYPE, // (bindless_array, index: uint) -> uint64 (type id of the element); the returned value
-                          // could be compared with the value of a TypeIDExpr to examine the type of the buffer
 
     BINDLESS_BYTE_BUFFER_READ, // (bindless_array, index: uint, offset_bytes: uint64) -> T
     BINDLESS_BYTE_BUFFER_WRITE,// (bindless_array, index: uint, offset_bytes: uint64, value: T) -> void

@@ -2512,7 +2512,6 @@ private:
             case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_TYPE: break;
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst, true);
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst, true);
             case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst, true);
