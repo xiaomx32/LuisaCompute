@@ -10,6 +10,7 @@
 
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
+#include <luisa/core/clock.h>
 #include "fallback_stream.h"
 #include "fallback_device.h"
 #include "fallback_texture.h"
@@ -182,10 +183,14 @@ SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &op
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
-    return ShaderCreationInfo{
-        ResourceCreationInfo{
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(option, kernel))}};
-    return ShaderCreationInfo();
+    Clock clk;
+    auto shader = luisa::new_with_allocator<FallbackShader>(option, kernel);
+    LUISA_VERBOSE("Shader compilation took {} ms.", clk.toc());
+    ShaderCreationInfo info{};
+    info.handle = reinterpret_cast<uint64_t>(shader);
+    info.native_handle = shader->native_handle();
+    info.block_size = kernel.block_size();
+    return info;
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, const ir::KernelModule *kernel) noexcept {

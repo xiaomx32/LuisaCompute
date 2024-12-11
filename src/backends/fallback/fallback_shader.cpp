@@ -31,21 +31,25 @@
 
 namespace luisa::compute::fallback {
 
-[[nodiscard]] static luisa::half luisa_asin_f16(luisa::half x) noexcept { return ::half_float::asin(x); }
-[[nodiscard]] static float luisa_asin_f32(float x) noexcept { return std::asin(x); }
-[[nodiscard]] static double luisa_asin_f64(double x) noexcept { return std::asin(x); }
+[[nodiscard]] static luisa::half luisa_fallback_asin_f16(luisa::half x) noexcept { return ::half_float::asin(x); }
+[[nodiscard]] static float luisa_fallback_asin_f32(float x) noexcept { return std::asin(x); }
+[[nodiscard]] static double luisa_fallback_asin_f64(double x) noexcept { return std::asin(x); }
 
-[[nodiscard]] static luisa::half luisa_acos_f16(luisa::half x) noexcept { return ::half_float::acos(x); }
-[[nodiscard]] static float luisa_acos_f32(float x) noexcept { return std::acos(x); }
-[[nodiscard]] static double luisa_acos_f64(double x) noexcept { return std::acos(x); }
+[[nodiscard]] static luisa::half luisa_fallback_acos_f16(luisa::half x) noexcept { return ::half_float::acos(x); }
+[[nodiscard]] static float luisa_fallback_acos_f32(float x) noexcept { return std::acos(x); }
+[[nodiscard]] static double luisa_fallback_acos_f64(double x) noexcept { return std::acos(x); }
 
-[[nodiscard]] static luisa::half luisa_atan_f16(luisa::half x) noexcept { return ::half_float::atan(x); }
-[[nodiscard]] static float luisa_atan_f32(float x) noexcept { return std::atan(x); }
-[[nodiscard]] static double luisa_atan_f64(double x) noexcept { return std::atan(x); }
+[[nodiscard]] static luisa::half luisa_fallback_atan_f16(luisa::half x) noexcept { return ::half_float::atan(x); }
+[[nodiscard]] static float luisa_fallback_atan_f32(float x) noexcept { return std::atan(x); }
+[[nodiscard]] static double luisa_fallback_atan_f64(double x) noexcept { return std::atan(x); }
 
-[[nodiscard]] static luisa::half luisa_atan2_f16(luisa::half a, luisa::half b) noexcept { return ::half_float::atan2(a, b); }
-[[nodiscard]] static float luisa_atan2_f32(float a, float b) noexcept { return std::atan2(a, b); }
-[[nodiscard]] static double luisa_atan2_f64(double a, double b) noexcept { return std::atan2(a, b); }
+[[nodiscard]] static luisa::half luisa_fallback_atan2_f16(luisa::half a, luisa::half b) noexcept { return ::half_float::atan2(a, b); }
+[[nodiscard]] static float luisa_fallback_atan2_f32(float a, float b) noexcept { return std::atan2(a, b); }
+[[nodiscard]] static double luisa_fallback_atan2_f64(double a, double b) noexcept { return std::atan2(a, b); }
+
+static void luisa_fallback_assert(bool condition, const char *message) noexcept {
+    if (!condition) { LUISA_ERROR_WITH_LOCATION("Assertion failed: {}.", message); }
+}
 
 struct FallbackShaderLaunchConfig {
     uint3 block_id;
@@ -68,6 +72,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         options.ApproxFuncFPMath = true;
         options.EnableIPRA = true;
         options.StackSymbolOrdering = true;
+        options.TrapUnreachable = false;
         options.EnableMachineFunctionSplitter = true;
         options.EnableMachineOutliner = true;
         options.NoTrapAfterNoreturn = true;
@@ -118,18 +123,21 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
 #include "fallback_device_api_map_symbols.inl.h"
 
     // asin, acos, atan, atan2
-    map_symbol("luisa.asin.f16", &luisa_asin_f16);
-    map_symbol("luisa.asin.f32", &luisa_asin_f32);
-    map_symbol("luisa.asin.f64", &luisa_asin_f64);
-    map_symbol("luisa.acos.f16", &luisa_acos_f16);
-    map_symbol("luisa.acos.f32", &luisa_acos_f32);
-    map_symbol("luisa.acos.f64", &luisa_acos_f64);
-    map_symbol("luisa.atan.f16", &luisa_atan_f16);
-    map_symbol("luisa.atan.f32", &luisa_atan_f32);
-    map_symbol("luisa.atan.f64", &luisa_atan_f64);
-    map_symbol("luisa.atan2.f16", &luisa_atan2_f16);
-    map_symbol("luisa.atan2.f32", &luisa_atan2_f32);
-    map_symbol("luisa.atan2.f64", &luisa_atan2_f64);
+    map_symbol("luisa.asin.f16", &luisa_fallback_asin_f16);
+    map_symbol("luisa.asin.f32", &luisa_fallback_asin_f32);
+    map_symbol("luisa.asin.f64", &luisa_fallback_asin_f64);
+    map_symbol("luisa.acos.f16", &luisa_fallback_acos_f16);
+    map_symbol("luisa.acos.f32", &luisa_fallback_acos_f32);
+    map_symbol("luisa.acos.f64", &luisa_fallback_acos_f64);
+    map_symbol("luisa.atan.f16", &luisa_fallback_atan_f16);
+    map_symbol("luisa.atan.f32", &luisa_fallback_atan_f32);
+    map_symbol("luisa.atan.f64", &luisa_fallback_atan_f64);
+    map_symbol("luisa.atan2.f16", &luisa_fallback_atan2_f16);
+    map_symbol("luisa.atan2.f32", &luisa_fallback_atan2_f32);
+    map_symbol("luisa.atan2.f64", &luisa_fallback_atan2_f64);
+
+    // assert
+    map_symbol("luisa.assert", &luisa_fallback_assert);
 
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
@@ -161,7 +169,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto builtin_module = fallback_backend_device_builtin_module();
     llvm::SMDiagnostic parse_error;
-    auto llvm_module = llvm::parseIR(llvm::MemoryBufferRef{builtin_module, "module"}, parse_error, *llvm_ctx);
+    auto llvm_module = llvm::parseIR(llvm::MemoryBufferRef{builtin_module, ""}, parse_error, *llvm_ctx);
     if (!llvm_module) {
         LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR: {}.",
                                   luisa::string_view{parse_error.getMessage()});
