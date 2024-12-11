@@ -154,8 +154,93 @@ void luisa_fallback_texture3d_write_float(TextureView handle, uint x, uint y, ui
 void luisa_fallback_texture3d_write_uint(TextureView handle, uint x, uint y, uint z, uint4 value) noexcept {}
 void luisa_fallback_texture3d_write_int(TextureView handle, uint x, uint y, uint z, int4 value) noexcept {}
 
-[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept { return {}; }
-[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept { return {}; }
+
+template<typename T>
+[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, const T& uv, T s) noexcept
+{
+    switch (address)
+    {
+        case Sampler::Address::EDGE: return luisa::clamp(uv, 0.0f, one_minus_epsilon) * s;
+        case Sampler::Address::REPEAT: return luisa::fract(uv) * s;
+        case Sampler::Address::MIRROR:
+        {
+            auto uv0 = luisa::fmod(luisa::abs(uv), T{2.0f});
+            uv0 = select(2.f - uv, uv, uv < T{1.f});
+            return luisa::min(uv, one_minus_epsilon) * s;
+        }
+        case Sampler::Address::ZERO: return luisa::select(uv * s, T{65536.f}, uv < 0.f || uv >= 1.f);
+    }
+    return T{65536.f};
+}
+[[nodiscard]] inline auto texture_sample_point(FallbackTextureView* view, Sampler::Address address,
+                                                   float u, float v) noexcept
+{
+    auto size = make_float2(view->size2d());
+    auto p = texture_coord_point(address, make_float2(u,v), size);
+    auto c = make_uint2(p);
+    return texture_read_2d_float(view, c.x, c.y);
+}
+
+[[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float u, float v, float size_x, float size_y) noexcept
+{
+    auto s = make_float2(size_x, size_y);
+    auto inv_s = 1.f / s;
+    auto c_min = texture_coord_point(address, make_float2(u,v) - .5f * inv_s, s);
+    auto c_max = texture_coord_point(address, make_float2(u,v) + .5f * inv_s, s);
+    return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
+}
+
+[[nodiscard]] inline auto texture_sample_linear(FallbackTextureView* view, Sampler::Address address,
+                                                    float u, float v) noexcept
+{
+    auto size = make_float2(view->size2d());
+    auto [st_min, st_max] = texture_coord_linear(address, u,v, size.x, size.y);
+    auto t = luisa::fract(st_max);
+    auto c0 = make_uint2(st_min);
+    auto c1 = make_uint2(st_max);
+    auto v00 = texture_read_2d_float(view, c0.x, c0.y);
+    auto v01 = texture_read_2d_float(view, c1.x, c0.y);
+    auto v10 = texture_read_2d_float(view, c0.x, c1.y);
+    auto v11 = texture_read_2d_float(view, c1.x, c1.y);
+    return luisa::lerp(luisa::lerp(v00, v01, t.x),
+                       luisa::lerp(v10, v11, t.x), t.y);
+}
+
+[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept
+{
+    auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
+    auto s = Sampler::decode(sampler);
+    auto view = tex->view(0);
+    return s.filter() == Sampler::Filter::POINT
+               ? bit_cast<float4>(texture_sample_point(&view, s.address(), u,v))
+               : bit_cast<float4>(texture_sample_linear(&view, s.address(), u,v));
+    return {};
+}
+[[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept
+{
+    auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
+    auto s = Sampler::decode(sampler);
+    auto filter = s.filter();
+    if (level <= 0.f || tex->mip_levels() == 0u ||
+        filter == Sampler::Filter::POINT)
+    {
+        return bit_cast<float4>(bindless_texture_2d_sample(tex, sampler, u, v));
+    }
+    auto level0 = std::min(static_cast<uint32_t>(level),
+                           tex->mip_levels() - 1u);
+    auto view0 = tex->view(level0);
+    auto v0 = texture_sample_linear(
+        &view0, s.address(), u, v);
+    if (level0 == tex->mip_levels() - 1u ||
+        filter == Sampler::Filter::LINEAR_POINT)
+    {
+        return bit_cast<float4>(v0);
+    }
+    auto view1 = tex->view(level0 + 1);
+    auto v1 = texture_sample_linear(
+        &view1, s.address(), u, v);
+    return bit_cast<float4>(luisa::lerp(v0, v1, luisa::fract(level)));
+}
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_grad(const Texture *handle, uint sampler, float u, float v, float dudx, float dudy, float dvdx, float dvdy) noexcept { return {}; }
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_grad_level(const Texture *handle, uint sampler, float u, float v, float dudx, float dudy, float dvdx, float dvdy, float level) noexcept { return {}; }
 
