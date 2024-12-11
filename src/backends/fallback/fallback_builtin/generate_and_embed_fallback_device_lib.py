@@ -11,7 +11,7 @@ if __name__ == "__main__":
     src_path = os.path.join(builtin_dir, f"{file_name}.cpp")
     dst_path = os.path.join(builtin_dir, f"{file_name}.{system_name}.{machine_name}.ll")
     subprocess.run(["clang++", "-c", "-emit-llvm", "-std=c++20", "-ffast-math", "-O3",
-                    "-S", src_path, "-o", dst_path,
+                    "-S", src_path, "-o", dst_path, "-fomit-frame-pointer",
                     "-fno-stack-protector", "-fno-rtti", "-fno-exceptions"])
     with open(dst_path, "r") as f:
         content = "".join(line for line in f.readlines()

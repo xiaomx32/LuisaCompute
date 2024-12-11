@@ -3,7 +3,7 @@
 
 extern "C" {// wrappers
 
-#define LUISA_FALLBACK_WRAPPER __attribute__((visibility("hidden"))) __attribute__((used))
+#define LUISA_FALLBACK_WRAPPER __attribute__((visibility("hidden"))) __attribute__((used)) __attribute__((always_inline))
 
 using llvm_float2 = float __attribute__((ext_vector_type(2)));
 using llvm_float3 = float __attribute__((ext_vector_type(3)));

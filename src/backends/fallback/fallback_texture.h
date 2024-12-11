@@ -354,8 +354,8 @@ public:
         detail::write_pixel<T>(_storage, _pixel3d(xyz), value);
     }
 
-    [[nodiscard]] auto size2d() const noexcept { return make_uint2(_width, _height); }
-    [[nodiscard]] auto size3d() const noexcept { return make_uint3(_width, _height, _depth); }
+    [[nodiscard]] uint2 size2d() const noexcept { return make_uint2(_width, _height); }
+    [[nodiscard]] uint3 size3d() const noexcept { return make_uint3(_width, _height, _depth); }
 
     void copy_from(const void *data) const noexcept;
 

@@ -17,7 +17,11 @@
 
 #elif defined(LUISA_PLATFORM_APPLE)
 
-#error Not implemented
+#ifdef LUISA_ARCH_X86_64
+#error Unsupported architecture
+#else
+#include "fallback_builtin/fallback_device_api_wrappers.darwin.arm64.inl"
+#endif
 
 #else// Linux or other Unix-like systems
 

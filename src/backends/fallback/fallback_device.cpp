@@ -188,7 +188,7 @@ ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Fun
     LUISA_VERBOSE("Shader compilation took {} ms.", clk.toc());
     ShaderCreationInfo info{};
     info.handle = reinterpret_cast<uint64_t>(shader);
-    info.native_handle = shader->native_handle();
+    info.native_handle = reinterpret_cast<void *>(shader->native_handle());
     info.block_size = kernel.block_size();
     return info;
 }
