@@ -130,14 +130,14 @@ void luisa_fallback_texture3d_write_int(void *texture_data, uint64_t texture_dat
 }
 
 template<typename T>
-[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, const T &uv, T s) noexcept {
+[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, T uv, T s) noexcept {
     switch (address) {
         case Sampler::Address::EDGE: return luisa::clamp(uv, 0.0f, one_minus_epsilon) * s;
         case Sampler::Address::REPEAT: return luisa::fract(uv) * s;
         case Sampler::Address::MIRROR: {
-            auto uv0 = luisa::fmod(luisa::abs(uv), T{2.0f});
-            uv0 = select(2.f - uv, uv, uv < T{1.f});
-            return luisa::min(uv0, one_minus_epsilon) * s;
+            uv = luisa::fmod(luisa::abs(uv), T{2.f});
+            uv = select(2.f - uv, uv, uv < T{1.f});
+            return luisa::min(uv, one_minus_epsilon) * s;
         }
         case Sampler::Address::ZERO: return luisa::select(uv * s, T{65536.f}, uv < 0.f || uv >= 1.f);
     }
