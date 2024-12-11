@@ -81,8 +81,8 @@ struct alignas(16u) PackedTextureView {
 
 static_assert(sizeof(TextureView) == 16 && sizeof(PackedTextureView) == 16);
 
-struct Texture;
-struct Accel;
+struct alignas(16) Texture;
+struct alignas(16) Accel;
 
 struct alignas(16) BindlessSlot {
     const void *buffer;

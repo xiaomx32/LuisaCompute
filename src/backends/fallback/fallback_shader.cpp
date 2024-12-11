@@ -312,7 +312,7 @@ void FallbackShader::dispatch(ThreadPool &pool, const ShaderDispatchCommand *com
                 break;
             }
             case Tag::BINDLESS_ARRAY: {
-                auto bindless = reinterpret_cast<FallbackBindlessArray *>(arg.buffer.handle);
+                auto bindless = reinterpret_cast<FallbackBindlessArray *>(arg.bindless_array.handle);
                 auto view = bindless->view();
                 auto ptr = allocate_argument(sizeof(view));
                 std::memcpy(ptr, &view, sizeof(view));

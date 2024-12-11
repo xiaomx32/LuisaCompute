@@ -21,8 +21,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
 }
 
 [[nodiscard]] int4 luisa_fallback_texture2d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             float4 out;
@@ -48,8 +48,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
 }
 
 [[nodiscard]] uint4 luisa_fallback_texture2d_read_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             float4 out;
@@ -75,8 +75,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
 }
 
 [[nodiscard]] float4 luisa_fallback_texture2d_read_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             float4 out;
@@ -96,8 +96,8 @@ void luisa_bc6h_read(const FallbackTextureView *tex, int x, int y, float4 &out) 
 }
 
 void luisa_fallback_texture2d_write_float(void *texture_data, uint64_t texture_data_extra, uint x, uint y, float4 value) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             LUISA_ERROR("cannot write to BC texture");
@@ -115,8 +115,8 @@ void luisa_fallback_texture2d_write_float(void *texture_data, uint64_t texture_d
 }
 
 void luisa_fallback_texture2d_write_uint(void *texture_data, uint64_t texture_data_extra, uint x, uint y, uint4 value) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             LUISA_ERROR("cannot write to BC texture");
@@ -134,8 +134,8 @@ void luisa_fallback_texture2d_write_uint(void *texture_data, uint64_t texture_da
 }
 
 void luisa_fallback_texture2d_write_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y, int4 value) noexcept {
-    PackedTextureView handle{texture_data, texture_data_extra};
-    auto tex = reinterpret_cast<const FallbackTextureView *>(&handle);
+    PackedTextureView view{texture_data, texture_data_extra};
+    auto tex = reinterpret_cast<const FallbackTextureView *>(&view);
     switch (tex->storage()) {
         case PixelStorage::BC7: {
             LUISA_ERROR("cannot write to BC texture");
@@ -205,7 +205,7 @@ template<typename T>
 }
 
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample(const Texture *handle, uint sampler, float u, float v) noexcept {
-    auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
+    auto tex = reinterpret_cast<const FallbackTexture *>(handle);
     auto s = Sampler::decode(sampler);
     auto view = tex->view(0);
     return s.filter() == Sampler::Filter::POINT ?
@@ -214,7 +214,7 @@ template<typename T>
 }
 
 [[nodiscard]] float4 luisa_fallback_bindless_texture2d_sample_level(const Texture *handle, uint sampler, float u, float v, float level) noexcept {
-    auto tex = reinterpret_cast<const FallbackTexture *>(&handle);
+    auto tex = reinterpret_cast<const FallbackTexture *>(handle);
     auto s = Sampler::decode(sampler);
     auto filter = s.filter();
     if (level <= 0.f || tex->mip_levels() == 0u || filter == Sampler::Filter::POINT) {
