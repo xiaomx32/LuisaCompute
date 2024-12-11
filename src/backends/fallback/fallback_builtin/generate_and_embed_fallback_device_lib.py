@@ -33,7 +33,8 @@ if __name__ == "__main__":
     with open(os.path.join(builtin_dir, "..", "fallback_device_api_map_symbols.inl.h"), "w") as f:
         for function_name in functions:
             dotted_name = function_name.replace("_", ".")
-            f.write(f"map_symbol(\"luisa.{dotted_name}.impl\", &api::luisa_fallback_{function_name});\n")
+            if f"luisa.{dotted_name}.impl(" in content:
+                f.write(f"map_symbol(\"luisa.{dotted_name}.impl\", &api::luisa_fallback_{function_name});\n")
     with open(os.path.join(builtin_dir, f"{file_name}.{system_name}.{machine_name}.inl"), "w") as f:
         data = [f"0x{ord(c):02x}" for c in content.replace("\r\n", "\n")]
         size = len(data)

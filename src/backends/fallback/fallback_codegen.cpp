@@ -2073,6 +2073,45 @@ private:
         return b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
     }
 
+    [[nodiscard]] llvm::Value *_translate_texture_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto llvm_func_name = luisa::format("luisa.texture{}d.size", view->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        auto llvm_size_type = _translate_type(inst->type(), true);
+        auto llvm_size_alloca = b.CreateAlloca(llvm_size_type);
+        b.CreateCall(llvm_func, {llvm_view_alloca, llvm_size_alloca});
+        return b.CreateLoad(llvm_size_type, llvm_size_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_inverse(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto m = inst->operand(0u);
+        LUISA_ASSERT(m->type()->is_matrix() && m->type() == inst->type(), "Invalid matrix type.");
+        auto llvm_m = _lookup_value(current, b, m);
+        auto llvm_func_name = luisa::format("luisa.matrix{}d.inverse", m->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
+        b.CreateStore(llvm_m, llvm_m_alloca);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        b.CreateCall(llvm_func, {llvm_m_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_determinant(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto m = inst->operand(0u);
+        LUISA_ASSERT(m->type()->is_matrix() && m->type()->element() == inst->type(), "Invalid matrix type.");
+        auto llvm_m = _lookup_value(current, b, m);
+        auto llvm_func_name = luisa::format("luisa.matrix{}d.determinant", m->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
+        b.CreateStore(llvm_m, llvm_m_alloca);
+        return b.CreateCall(llvm_func, {llvm_m_alloca});
+    }
+
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
@@ -2535,9 +2574,9 @@ private:
             case xir::IntrinsicOp::MATRIX_COMP_MUL: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FMul);
             case xir::IntrinsicOp::MATRIX_COMP_DIV: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FDiv);
             case xir::IntrinsicOp::MATRIX_LINALG_MUL: return _translate_matrix_linalg_multiply(current, b, inst);
-            case xir::IntrinsicOp::MATRIX_DETERMINANT: break;
+            case xir::IntrinsicOp::MATRIX_DETERMINANT: return _translate_matrix_determinant(current, b, inst);
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: return _translate_matrix_transpose(current, b, inst);
-            case xir::IntrinsicOp::MATRIX_INVERSE: break;
+            case xir::IntrinsicOp::MATRIX_INVERSE: return _translate_matrix_inverse(current, b, inst);
             case xir::IntrinsicOp::ATOMIC_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_ADD: break;
@@ -2555,14 +2594,14 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
             case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE2D_SIZE: return _translate_texture_size(current, b, inst);
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_texture_read(current, b, inst);
             case xir::IntrinsicOp::TEXTURE3D_WRITE: return _translate_texture_write(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE3D_SIZE: return _translate_texture_size(current, b, inst);
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;

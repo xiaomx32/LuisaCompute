@@ -36,6 +36,18 @@ struct alignas(16) uint3 {
     uint x, y, z;
 };
 
+struct float2x2 {
+    float2 cols[2];
+};
+
+struct float3x3 {
+    float3 cols[3];
+};
+
+struct float4x4 {
+    float4 cols[4];
+};
+
 struct alignas(16) Ray {
     float origin[3];
     float t_min;
@@ -89,7 +101,6 @@ void luisa_fallback_texture3d_write_int(TextureView handle, uint x, uint y, uint
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_sample_level(const Texture *handle, uint sampler, float u, float v, float w, float level) noexcept;
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_sample_grad(const Texture *handle, uint sampler, float u, float v, float w, float dudx, float dvdx, float dwdx, float dudy, float dvdy, float dwdy) noexcept;
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_sample_grad_level(const Texture *handle, uint sampler, float u, float v, float w, float dudx, float dvdx, float dwdx, float dudy, float dvdy, float dwdy, float level) noexcept;
-
 }
 
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB

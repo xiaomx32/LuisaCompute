@@ -5,6 +5,30 @@ extern "C" {// wrappers
 
 #define LUISA_FALLBACK_WRAPPER __attribute__((visibility("hidden"))) __attribute__((used))
 
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix2d_inverse(const float2x2 *m, float2x2 *out) noexcept {
+    // TODO
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix3d_inverse(const float3x3 *m, float3x3 *out) noexcept {
+    // TODO
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix4d_inverse(const float4x4 *m, float4x4 *out) noexcept {
+    // TODO
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_matrix2d_determinant(const float2x2 *m) noexcept {
+    return 1.f;
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_matrix3d_determinant(const float3x3 *m) noexcept {
+    return 1.f;
+}
+
+LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_matrix4d_determinant(const float4x4 *m) noexcept {
+    return 1.f;
+}
+
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_read_int(const TextureView *handle, const uint2 *coord, int4 *out) noexcept {
     *out = luisa_fallback_texture2d_read_int(*handle, coord->x, coord->y);
 }
@@ -51,6 +75,14 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_write_uint(const Te
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_write_int(const TextureView *handle, const uint3 *coord, const int4 *value) noexcept {
     luisa_fallback_texture3d_write_int(*handle, coord->x, coord->y, coord->z, *value);
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture2d_size(const TextureView *handle, uint2 *out) noexcept {
+    *out = {handle->_width, handle->_height};
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_texture3d_size(const TextureView *handle, uint3 *out) noexcept {
+    *out = {handle->_width, handle->_height, handle->_depth};
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_bindless_texture2d_sample(const Texture *handle, uint sampler, const float2 *uv, float4 *out) noexcept {
