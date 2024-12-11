@@ -5,6 +5,8 @@ if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
     set(LC_BACKEND_FALLBACK_SRC
             fallback_device.cpp
+            fallback_device_api.cpp
+            fallback_device_api_ir_module.cpp
             #llvm_codegen.cpp
             #llvm_codegen_value.cpp
             #llvm_codegen_builtin.cpp

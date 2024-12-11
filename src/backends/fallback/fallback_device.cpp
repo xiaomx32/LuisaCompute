@@ -10,6 +10,7 @@
 
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
+#include <luisa/core/clock.h>
 #include "fallback_stream.h"
 #include "fallback_device.h"
 #include "fallback_texture.h"
@@ -28,8 +29,6 @@
 #include <llvm/Support/SourceMgr.h>
 
 //#include "fallback_texture_sampling_wrapper.ll";
-
-
 
 namespace luisa::compute::fallback {
 
@@ -110,15 +109,17 @@ void FallbackDevice::destroy_accel(uint64_t handle) noexcept {
 }
 
 void FallbackDevice::destroy_swap_chain(uint64_t handle) noexcept {
-	auto b = reinterpret_cast<FallbackSwapchain*>(handle);
-	luisa::deallocate_with_allocator(b);
+    auto b = reinterpret_cast<FallbackSwapchain *>(handle);
+    luisa::deallocate_with_allocator(b);
 }
 
-void FallbackDevice::present_display_in_stream(
-    uint64_t stream_handle, uint64_t swap_chain_handle, uint64_t image_handle) noexcept {
-
-	auto b = reinterpret_cast<FallbackSwapchain*>(swap_chain_handle);
-	b->Present(reinterpret_cast<void*>(image_handle));
+void FallbackDevice::present_display_in_stream(uint64_t stream_handle,
+                                               uint64_t swap_chain_handle,
+                                               uint64_t image_handle) noexcept {
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    auto chain = reinterpret_cast<FallbackSwapchain *>(swap_chain_handle);
+    auto image = reinterpret_cast<FallbackTexture *>(image_handle);
+    chain->present(stream, image);
 }
 
 FallbackDevice::~FallbackDevice() noexcept {
@@ -133,19 +134,15 @@ BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t ele
 
     BufferCreationInfo info{};
 
-    if (element == Type::of<void>())
-    {
-        //Byte buffer...
-    info.element_stride = 1u;
-    }
-    else
-    {
-    info.element_stride = element->size();
+    if (element == Type::of<void>()) {
+        info.element_stride = 1u;
+    } else {
+        info.element_stride = element->size();
     }
     info.total_size_bytes = info.element_stride * elem_count;
-	auto buffer = luisa::new_with_allocator<FallbackBuffer>(elem_count, info.element_stride);
+    auto buffer = luisa::new_with_allocator<FallbackBuffer>(info.total_size_bytes);
     info.handle = reinterpret_cast<uint64_t>(buffer);
-    info.native_handle = reinterpret_cast<void *>(info.handle);
+    info.native_handle = reinterpret_cast<void *>(buffer->data());
     return info;
 }
 
@@ -178,19 +175,22 @@ void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const Devic
 
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
 
-	auto sc = luisa::new_with_allocator<FallbackSwapchain>(option);
-	return SwapchainCreationInfo{
-		ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
-							 .native_handle = nullptr},
-		(option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)
-	};
+    auto sc = luisa::new_with_allocator<FallbackSwapchain>(option);
+    return SwapchainCreationInfo{
+        ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
+                             .native_handle = nullptr},
+        (option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)};
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
-    return ShaderCreationInfo{
-        ResourceCreationInfo{
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(option, kernel))}};
-    return ShaderCreationInfo();
+    Clock clk;
+    auto shader = luisa::new_with_allocator<FallbackShader>(option, kernel);
+    LUISA_VERBOSE("Shader compilation took {} ms.", clk.toc());
+    ShaderCreationInfo info{};
+    info.handle = reinterpret_cast<uint64_t>(shader);
+    info.native_handle = shader->native_handle();
+    info.block_size = kernel.block_size();
+    return info;
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, const ir::KernelModule *kernel) noexcept {
@@ -336,4 +336,3 @@ LUISA_EXPORT_API void backend_device_names(luisa::vector<luisa::string> &names) 
     names.clear();
     names.emplace_back(luisa::cpu_name());
 }
-

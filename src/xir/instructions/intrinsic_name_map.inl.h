@@ -162,7 +162,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINDLESS_BUFFER_READ: return "bindless_buffer_read";
         case IntrinsicOp::BINDLESS_BUFFER_WRITE: return "bindless_buffer_write";
         case IntrinsicOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size";
-        case IntrinsicOp::BINDLESS_BUFFER_TYPE: return "bindless_buffer_type";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return "bindless_byte_buffer_write";
         case IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return "bindless_byte_buffer_size";
@@ -184,7 +183,7 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return "ray_tracing_instance_user_id";
         case IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return "ray_tracing_instance_visibility_mask";
         case IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return "ray_tracing_set_instance_transform";
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return "ray_tracing_set_instance_visibility";
+        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return "ray_tracing_set_instance_visibility_mask";
         case IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return "ray_tracing_set_instance_opacity";
         case IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return "ray_tracing_set_instance_user_id";
         case IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return "ray_tracing_trace_closest";
@@ -401,7 +400,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"bindless_buffer_read", IntrinsicOp::BINDLESS_BUFFER_READ},
         {"bindless_buffer_write", IntrinsicOp::BINDLESS_BUFFER_WRITE},
         {"bindless_buffer_size", IntrinsicOp::BINDLESS_BUFFER_SIZE},
-        {"bindless_buffer_type", IntrinsicOp::BINDLESS_BUFFER_TYPE},
         {"bindless_byte_buffer_read", IntrinsicOp::BINDLESS_BYTE_BUFFER_READ},
         {"bindless_byte_buffer_write", IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE},
         {"bindless_byte_buffer_size", IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE},
@@ -423,7 +421,7 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"ray_tracing_instance_user_id", IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID},
         {"ray_tracing_instance_visibility_mask", IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK},
         {"ray_tracing_set_instance_transform", IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM},
-        {"ray_tracing_set_instance_visibility", IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY},
+        {"ray_tracing_set_instance_visibility_mask", IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK},
         {"ray_tracing_set_instance_opacity", IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY},
         {"ray_tracing_set_instance_user_id", IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID},
         {"ray_tracing_trace_closest", IntrinsicOp::RAY_TRACING_TRACE_CLOSEST},

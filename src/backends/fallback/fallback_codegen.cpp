@@ -26,6 +26,8 @@
 
 #include "fallback_codegen.h"
 
+#include "fallback_accel.h"
+#include "fallback_bindless_array.h"
 #include "fallback_buffer.h"
 #include "fallback_texture.h"
 
@@ -47,7 +49,7 @@ private:
 
         // builtin variables
 #define LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(NAME, INDEX) \
-    static constexpr size_t builtin_variable_index_## NAME = INDEX;
+    static constexpr size_t builtin_variable_index_##NAME = INDEX;
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(thread_id, 0)
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(block_id, 1)
         LUISA_FALLBACK_BACKEND_DECL_BUILTIN_VARIABLE(dispatch_id, 2)
@@ -87,8 +89,8 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return sizeof(FallbackBufferView);
             case Type::Tag::TEXTURE: return sizeof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: return sizeof(void *);
-            case Type::Tag::ACCEL: return sizeof(void *);
+            case Type::Tag::BINDLESS_ARRAY: return sizeof(FallbackBindlessArrayView);
+            case Type::Tag::ACCEL: return sizeof(FallbackAccelView);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -103,8 +105,8 @@ private:
         switch (t->tag()) {
             case Type::Tag::BUFFER: return alignof(FallbackBufferView);
             case Type::Tag::TEXTURE: return alignof(FallbackTextureView);
-            case Type::Tag::BINDLESS_ARRAY: return alignof(void *);
-            case Type::Tag::ACCEL: return alignof(void *);
+            case Type::Tag::BINDLESS_ARRAY: return alignof(FallbackBindlessArrayView);
+            case Type::Tag::ACCEL: return alignof(FallbackAccelView);
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
             default: break;
         }
@@ -180,9 +182,14 @@ private:
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
             case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
-            case Type::Tag::BINDLESS_ARRAY: return llvm::PointerType::get(_llvm_context, 0);
+            case Type::Tag::BINDLESS_ARRAY: {
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
+            }
             case Type::Tag::ACCEL: {
-                return llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_ptr_type});
             }
             case Type::Tag::CUSTOM: LUISA_NOT_IMPLEMENTED();
         }
@@ -834,7 +841,7 @@ private:
                 "Invalid operand type for rotate left operation: {}.",
                 elem_type->description());
         }
-        auto llvm_elem_type = _translate_type(elem_type, false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
         auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
         if (value_type->is_vector()) {
             llvm_bit_width = llvm::ConstantVector::getSplat(
@@ -873,7 +880,7 @@ private:
                 "Invalid operand type for rotate right operation: {}.",
                 elem_type->description());
         }
-        auto llvm_elem_type = _translate_type(elem_type, false);
+        auto llvm_elem_type = _translate_type(elem_type, true);
         auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
         if (value_type->is_vector()) {
             llvm_bit_width = llvm::ConstantVector::getSplat(
@@ -1086,7 +1093,8 @@ private:
         LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
                                   intrinsic_id, operand_type->description());
     }
-    [[nodiscard]] llvm::Value *_translate_unary_fp_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, const char* func) noexcept {
+
+    [[nodiscard]] llvm::Value *_translate_unary_fp_math_operation(CurrentFunction &current, IRBuilder &b, const xir::Value *operand, const char *func) noexcept {
         // Lookup LLVM value for operand
         auto llvm_operand = _lookup_value(current, b, operand);
         auto operand_type = operand->type();
@@ -1097,32 +1105,49 @@ private:
 
         // Check if the operand is a valid floating-point type
         auto elem_type = operand_type->is_vector() ? operand_type->element() : operand_type;
+        auto func_name = [elem_type, func] {
+            switch (elem_type->tag()) {
+                case Type::Tag::FLOAT16: return luisa::format("luisa.{}.f16", func);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.{}.f32", func);
+                case Type::Tag::FLOAT64: return luisa::format("luisa.{}.f64", func);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
+                                      func, elem_type->description());
+        }();
 
-        auto func_type = llvm::FunctionType::get(
-            llvm_operand->getType(),
-            {
-                llvm_operand->getType()
-            },
-            false
-        );
+        auto llvm_elem_type = _translate_type(elem_type, true);
+        auto func_type = llvm::FunctionType::get(llvm_elem_type, {llvm_elem_type}, false);
 
-        auto f =
-            _llvm_module->getOrInsertFunction(func, func_type);
-
-        switch (elem_type->tag()) {
-            case Type::Tag::FLOAT16: [[fallthrough]];
-            case Type::Tag::FLOAT32: [[fallthrough]];
-            case Type::Tag::FLOAT64:
-                // Use LLVM's intrinsic function based on the provided intrinsic ID
-                    return b.CreateCall(f, {llvm_operand});
-            default:
-                break;
+        // declare the function and mark it as pure
+        auto f = _llvm_module->getOrInsertFunction(llvm::StringRef{func_name}, func_type);
+        if (auto decl = llvm::dyn_cast<llvm::Function>(f.getCallee())) {
+            // mark that the function is pure: mustprogress nocallback nofree nosync nounwind speculatable willreturn memory(none)
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->setMustProgress();
+            decl->setDoesNotFreeMemory();
+            decl->setNoSync();
+            decl->setDoesNotThrow();
+            decl->setSpeculatable();
+            decl->setWillReturn();
+            decl->setDoesNotAccessMemory();
+        } else {
+            LUISA_ERROR_WITH_LOCATION("Invalid function declaration for unary math operation: {}.", func_name);
         }
-        LUISA_ERROR_WITH_LOCATION("Invalid operand type for unary math operation {}: {}.",
-                                  func, operand_type->description());
+        // call the function
+        if (operand_type->is_scalar()) {
+            return b.CreateCall(f, {llvm_operand});
+        }
+        // vector type
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_operand->getType()));
+        for (auto i = 0u; i < operand_type->dimension(); i++) {
+            auto elem = b.CreateExtractElement(llvm_operand, i);
+            auto result_elem = b.CreateCall(f, {elem});
+            llvm_result = b.CreateInsertElement(llvm_result, result_elem, i);
+        }
+        return llvm_result;
     }
-
-
 
     [[nodiscard]] llvm::Value *_translate_binary_fp_math_operation(CurrentFunction &current, IRBuilder &b,
                                                                    const xir::Value *op0, const xir::Value *op1,
@@ -1146,41 +1171,60 @@ private:
                                   intrinsic_id, op0_type->description());
     }
 
-
     [[nodiscard]] llvm::Value *_translate_binary_fp_math_operation(CurrentFunction &current, IRBuilder &b,
                                                                    const xir::Value *op0, const xir::Value *op1,
-                                                                   const char* func) noexcept {
+                                                                   const char *func) noexcept {
         auto llvm_op0 = _lookup_value(current, b, op0);
         auto llvm_op1 = _lookup_value(current, b, op1);
         auto op0_type = op0->type();
         auto op1_type = op1->type();
         LUISA_ASSERT(op0_type == op1_type, "Type mismatch.");
         LUISA_ASSERT(op0_type != nullptr && (op0_type->is_scalar() || op0_type->is_vector()), "Invalid operand type.");
+
         auto elem_type = op0_type->is_vector() ? op0_type->element() : op0_type;
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            llvm_op0->getType(),
-            {
-                llvm_op0->getType(),
-                llvm_op0->getType()
-            },
-            false
-        );
+        auto func_name = [elem_type, func] {
+            switch (elem_type->tag()) {
+                case Type::Tag::FLOAT16: return luisa::format("luisa.{}.f16", func);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.{}.f32", func);
+                case Type::Tag::FLOAT64: return luisa::format("luisa.{}.f64", func);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
+                                      func, elem_type->description());
+        }();
 
-        auto f =
-            _llvm_module->getOrInsertFunction(func, func_type);
+        auto llvm_elem_type = _translate_type(elem_type, true);
+        auto func_type = llvm::FunctionType::get(llvm_elem_type, {llvm_elem_type, llvm_elem_type}, false);
 
-
-        switch (elem_type->tag()) {
-            case Type::Tag::FLOAT16: [[fallthrough]];
-            case Type::Tag::FLOAT32: [[fallthrough]];
-            case Type::Tag::FLOAT64:
-                return b.CreateCall(f, {llvm_op0, llvm_op1});
-            default:
-                break;
+        // declare the function and mark it as pure
+        auto f = _llvm_module->getOrInsertFunction(llvm::StringRef{func_name}, func_type);
+        if (auto decl = llvm::dyn_cast<llvm::Function>(f.getCallee())) {
+            // mark that the function is pure: mustprogress nocallback nofree nosync nounwind speculatable willreturn memory(none)
+            decl->addFnAttr(llvm::Attribute::NoCallback);
+            decl->addFnAttr(llvm::Attribute::NoUnwind);
+            decl->setMustProgress();
+            decl->setDoesNotFreeMemory();
+            decl->setNoSync();
+            decl->setDoesNotThrow();
+            decl->setSpeculatable();
+            decl->setWillReturn();
+            decl->setDoesNotAccessMemory();
+        } else {
+            LUISA_ERROR_WITH_LOCATION("Invalid function declaration for binary math operation: {}.", func_name);
         }
-        LUISA_ERROR_WITH_LOCATION("Invalid operand type for binary math operation {}: {}.",
-                                  func, op0_type->description());
+        // call the function
+        if (op0_type->is_scalar()) {
+            return b.CreateCall(f, {llvm_op0, llvm_op1});
+        }
+        // vector type
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_op0->getType()));
+        for (auto i = 0u; i < op0_type->dimension(); i++) {
+            auto elem0 = b.CreateExtractElement(llvm_op0, i);
+            auto elem1 = b.CreateExtractElement(llvm_op1, i);
+            auto result_elem = b.CreateCall(f, {elem0, elem1});
+            llvm_result = b.CreateInsertElement(llvm_result, result_elem, i);
+        }
+        return llvm_result;
     }
 
     [[nodiscard]] llvm::Value *_translate_vector_reduce(CurrentFunction &current, IRBuilder &b,
@@ -1276,7 +1320,6 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
-        //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
@@ -1285,36 +1328,32 @@ private:
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
         auto llvm_value = _lookup_value(current, b, value);            // Get the value to write
-        auto element_type = llvm_value->getType();                     // Type of the value being written
-        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
+        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
         auto target_address = b.CreateInBoundsGEP(
             slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(value->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
         return b.CreateAlignedStore(llvm_value, target_address, llvm::MaybeAlign{alignment});
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
-        //LUISA_NOT_IMPLEMENTED();
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto slot = inst->operand(1u);
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
-        auto element_type = _translate_type(inst->type(), true);       // Type of the value being read
-        auto slot_type = byte_address ? b.getInt8Ty() : element_type;
+        auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(inst->type(), false);
         auto target_address = b.CreateInBoundsGEP(
             slot_type,       // Element type
             llvm_buffer_addr,// Base pointer
             llvm_slot        // Index
         );
         auto alignment = _get_type_alignment(inst->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), target_address, alignment);
-        return b.CreateAlignedLoad(element_type, target_address, llvm::MaybeAlign{alignment});
+        auto llvm_element_type = _translate_type(inst->type(), true);// Type of the value being read
+        return b.CreateAlignedLoad(llvm_element_type, target_address, llvm::MaybeAlign{alignment});
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
@@ -1325,7 +1364,7 @@ private:
         auto llvm_result_type = _translate_type(inst->type(), true);
         llvm_byte_size = b.CreateZExtOrTrunc(llvm_byte_size, llvm_result_type);
         if (!byte_address) {
-            auto elem_size = buffer->type()->element()->size();
+            auto elem_size = _get_type_size(buffer->type()->element());
             auto llvm_elem_size = llvm::ConstantInt::get(llvm_result_type, elem_size);
             llvm_byte_size = b.CreateUDiv(llvm_byte_size, llvm_elem_size);
         }
@@ -1346,7 +1385,6 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         auto llvm_result_type = _translate_type(inst->type(), true);
         return b.CreateAlignedLoad(llvm_result_type, llvm_ptr, llvm::MaybeAlign{alignment});
     }
@@ -1357,168 +1395,109 @@ private:
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
         auto alignment = _get_type_alignment(inst->operand(1u)->type());
-        //b.CreateAlignmentAssumption(current.func->getDataLayout(), llvm_ptr, alignment);
         return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_read(
+    [[nodiscard]] llvm::Value *_translate_bindless_tex2d(
         CurrentFunction &current,
         IRBuilder &b,
-        const xir::Instruction *inst) noexcept {
+        const xir::Instruction *inst, bool level) noexcept {
 
-        auto view_struct = inst->operand(0u);
+        LUISA_NOT_IMPLEMENTED();
+
         auto coord = inst->operand(1u);
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>()||
-            view_struct->type() == Type::of<Image<uint>>(), "Invalid texture view type.");
 
-        static const char* function_names[] =
-        {
-            "texture.read.2d.float",
-            "texture.read.2d.uint"
-        };
-        unsigned int functionIdx = 0u;
-        if (view_struct->type() == Type::of<Image<uint>>())
-            functionIdx = 1u;
+        const char *function_name = level ? "bindless.tex2d.level" : "bindless.tex2d";
 
         // Get LLVM values for the arguments
-        auto llvm_view_struct = _lookup_value(current, b, view_struct);
-        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
+        auto llvm_uv = _lookup_value(current, b, inst->operand(2u));
 
-        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
-        b.CreateStore(llvm_view_struct, texture_struct_alloca);
-
-        auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
-            4u, false);
+        auto outType = _translate_type(inst->type(), true);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
+        auto coord_x = b.CreateExtractElement(llvm_uv, b.getInt32(0), "");
+        auto coord_y = b.CreateExtractElement(llvm_uv, b.getInt32(1), "");
 
         // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// uint x
-             b.getInt32Ty(),// uint y
-             b.getPtrTy()}, // void* result
-            false);
+        llvm::FunctionType *func_type;
+        if (level) {
+            //void* bindless, uint slot, float level, float x, float y, void* out
+            func_type = llvm::FunctionType::get(
+                b.getVoidTy(),
+                {b.getPtrTy(),  // void* bindless
+                 b.getInt32Ty(),// uint slot
+                 b.getFloatTy(),// float level
+                 b.getFloatTy(),// float x
+                 b.getFloatTy(),// float y
+                 b.getPtrTy()}, // void* result
+                false);
+        } else {
+            //void* bindless, uint slot, float x, float y, void* out
+            func_type = llvm::FunctionType::get(
+                b.getVoidTy(),
+                {b.getPtrTy(),  // void* bindless
+                 b.getInt32Ty(),// uint slot
+                 b.getFloatTy(),// float x
+                 b.getFloatTy(),// float y
+                 b.getPtrTy()}, // void* result
+                false);
+        }
 
         // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
+        auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
 
         // Call the function
-        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, result_alloca});
+        if (level) {
+            b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, _lookup_value(current, b, inst->operand(3u)), result_alloca});
+        } else {
+            b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, result_alloca});
+        }
 
         // Return the loaded result
         return b.CreateLoad(outType, result_alloca, "");
     }
 
-	[[nodiscard]] llvm::Value *_translate_bindless_tex2d(
-			CurrentFunction &current,
-			IRBuilder &b,
-			const xir::Instruction *inst, bool level) noexcept {
+    [[nodiscard]] llvm::Value *_translate_bindless_texture_size(
+        CurrentFunction &current,
+        IRBuilder &b,
+        const xir::Instruction *inst, bool dimension2) noexcept {
 
-		auto coord = inst->operand(1u);
+        LUISA_NOT_IMPLEMENTED();
 
-		const char* function_name = level?"bindless.tex2d.level":"bindless.tex2d";
+        const char *function_name = dimension2 ? "bindless.tex2d.size" : "bindless.tex3d.size";
 
-		// Get LLVM values for the arguments
-		auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
-		auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
-		auto llvm_uv = _lookup_value(current, b, inst->operand(2u));
+        // Get LLVM values for the arguments
+        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
 
+        auto outType = _translate_type(inst->type(), true);
+        // Allocate space for the result locally
+        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
-		auto outType = _translate_type(inst->type(), false);
-		// Allocate space for the result locally
-		auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        // Define the function type: void(void*, uint, uint, void*)
+        llvm::FunctionType *func_type;
+        //void* bindless, uint slot, float level, float x, float y, void* out
+        func_type = llvm::FunctionType::get(
+            b.getVoidTy(),
+            {b.getPtrTy(),// void* bindless
+             b.getInt32Ty(),
+             b.getPtrTy()},// void* result
+            false);
 
-		// Extract x and y from uint2 coordinate
-		auto coord_x = b.CreateExtractElement(llvm_uv, b.getInt32(0), "");
-		auto coord_y = b.CreateExtractElement(llvm_uv, b.getInt32(1), "");
+        // Get the function pointer from the symbol map
+        auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
 
-		// Define the function type: void(void*, uint, uint, void*)
-		llvm::FunctionType* func_type;
-		if(level)
-		{
-			//void* bindless, uint slot, float level, float x, float y, void* out
-			func_type = llvm::FunctionType::get(
-					b.getVoidTy(),
-					{b.getPtrTy(),  // void* bindless
-					 b.getInt32Ty(),// uint slot
-					 b.getFloatTy(),// float level
-					 b.getFloatTy(),// float x
-					 b.getFloatTy(),// float y
-					 b.getPtrTy()}, // void* result
-					false);
-		}
-		else
-		{
-			//void* bindless, uint slot, float x, float y, void* out
-			func_type = llvm::FunctionType::get(
-				b.getVoidTy(),
-				{b.getPtrTy(),  // void* bindless
-				 b.getInt32Ty(),// uint slot
-				 b.getFloatTy(),// float x
-				 b.getFloatTy(),// float y
-				 b.getPtrTy()}, // void* result
-				false);
-		}
+        b.CreateCall(func, {llvm_bindless, llvm_slot, result_alloca});
 
-		// Get the function pointer from the symbol map
-		auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
-
-		// Call the function
-		if(level)
-		{
-			b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, _lookup_value(current, b, inst->operand(3u)), result_alloca});
-		}
-		else
-		{
-			b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, result_alloca});
-		}
-
-		// Return the loaded result
-		return b.CreateLoad(outType, result_alloca, "");
-	}
-	[[nodiscard]] llvm::Value *_translate_bindless_texture_size(
-			CurrentFunction &current,
-			IRBuilder &b,
-			const xir::Instruction *inst, bool dimension2) noexcept {
-
-		const char* function_name = dimension2?"bindless.tex2d.size":"bindless.tex3d.size";
-
-		// Get LLVM values for the arguments
-		auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
-		auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
-
-
-		auto outType = _translate_type(inst->type(), false);
-		// Allocate space for the result locally
-		auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
-
-		// Define the function type: void(void*, uint, uint, void*)
-		llvm::FunctionType* func_type;
-		//void* bindless, uint slot, float level, float x, float y, void* out
-		func_type = llvm::FunctionType::get(
-				b.getVoidTy(),
-				{b.getPtrTy(),  // void* bindless
-				 b.getInt32Ty(),
-				 b.getPtrTy()}, // void* result
-				false);
-
-		// Get the function pointer from the symbol map
-		auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
-
-		b.CreateCall(func, {llvm_bindless, llvm_slot, result_alloca});
-
-		// Return the loaded result
-		return b.CreateLoad(outType, result_alloca, "");
-	}
+        // Return the loaded result
+        return b.CreateLoad(outType, result_alloca, "");
+    }
 
     [[nodiscard]] llvm::Value *_translate_volume_read(
         CurrentFunction &current,
@@ -1527,14 +1506,14 @@ private:
 
         auto view_struct = inst->operand(0u);
         auto coord = inst->operand(1u);
-        LUISA_ASSERT(view_struct->type() == Type::of<Volume<float>>()||
-            view_struct->type() == Type::of<Volume<uint>>(), "Invalid volume view type.");
+        LUISA_ASSERT(view_struct->type() == Type::of<Volume<float>>() ||
+                         view_struct->type() == Type::of<Volume<uint>>(),
+                     "Invalid volume view type.");
 
-        static const char* function_names[] =
-        {
-            "texture.read.3d.float",
-            "texture.read.3d.uint"
-        };
+        static const char *function_names[] =
+            {
+                "texture.read.3d.float",
+                "texture.read.3d.uint"};
         unsigned int functionIdx = 0u;
         if (view_struct->type() == Type::of<Image<uint>>())
             functionIdx = 1u;
@@ -1547,10 +1526,10 @@ private:
         b.CreateStore(llvm_view_struct, texture_struct_alloca);
 
         auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
-            4u, false);
+                                             4u, false);
         // Allocate space for the result locally
         auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-		result_alloca->setAlignment(llvm::Align(inst->type()->alignment()));
+        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
 
         // Extract x and y from uint2 coordinate
         auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
@@ -1577,65 +1556,12 @@ private:
         return b.CreateLoad(outType, result_alloca, "");
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_write(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Value *view_struct,
-        const xir::Value *coord,
-        const xir::Value *val) noexcept {
-
-        LUISA_ASSERT(view_struct->type() == Type::of<Image<float>>()||
-            view_struct->type() == Type::of<Image<uint>>(), "Invalid texture view type.");
-
-        static const char* function_names[] =
-        {
-            "texture.write.2d.float",
-            "texture.write.2d.uint"
-        };
-
-        unsigned int functionIdx = 0u;
-        if (view_struct->type() == Type::of<Image<uint>>())
-            functionIdx = 1u;
-
-        // Get LLVM values for the arguments
-        auto llvm_view_struct = _lookup_value(current, b, view_struct);
-        auto llvm_coord = _lookup_value(current, b, coord);
-        auto llvm_val = _lookup_value(current, b, val);
-
-        // Allocate space for the texture view struct
-        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
-        b.CreateStore(llvm_view_struct, texture_struct_alloca);
-
-        // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
-
-        auto val_alloca = b.CreateAlloca(llvm_val->getType(), nullptr, "");
-        b.CreateStore(llvm_val, val_alloca);
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// uint x
-             b.getInt32Ty(),// uint y
-             b.getPtrTy()}, // void* value
-            false);
-
-        // Add attributes to the function (write operations typically do not use `readonly`)
-        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
-
-        // Call the function
-        return b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, val_alloca});
-    }
-
     [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
                                                     IRBuilder &b, const xir::IntrinsicInst *inst) {
         auto type = inst->type();
         auto elem_type = type->element();
         auto dim = type->dimension();
-        if (type->is_vector())
-        {
+        if (type->is_vector()) {
             auto llvm_elem_type = _translate_type(elem_type, true);
 
             auto llvm_return_type = llvm::VectorType::get(llvm_elem_type, dim, false);
@@ -1651,41 +1577,31 @@ private:
             }
             return vector;
         }
-        else
-        {
-            //matrix: aggregate multiple vectors
-            auto llvm_elem_type = _translate_type(elem_type, true);
-            auto type = inst->operand(0)->type()->description();
-            auto llvm_vector_type = llvm::VectorType::get(llvm_elem_type, 4, false);
-            auto llvm_return_type = llvm::ArrayType::get(llvm_vector_type, dim); // Array of vectors, with 'dim' vectors
 
-            // Initialize the result as an undefined array of vectors
-            llvm::Value *vector_array = llvm::UndefValue::get(llvm_return_type);
-
-            // Loop through the input vectors and insert them one by one into the array
-            for (int i = 0; i < dim; i++) {
-                auto operand = inst->operand(i);  // Get the i-th operand (which should be an array of floats)
-                auto llvm_operand = _lookup_value(current, b, operand);  // Translate operand to LLVM value
-                // Create a new vector from the i-th operand (which is an array of floats)
-                llvm::Value *vector = llvm::UndefValue::get(llvm_vector_type); // Initialize an empty vector
-                for (int j = 0; j < dim; ++j) { // Assuming each vector has 4 components
-                    // Extract the j-th float from the operand and insert it into the vector
-                    llvm::Value *element = b.CreateExtractElement(llvm_operand, j); // Get the j-th element from the array of floats
-                    vector = b.CreateInsertElement(vector, element, j);  // Insert the element into the vector
+        if (type->is_matrix()) {
+            auto llvm_matrix_type = _translate_type(type, true);
+            auto llvm_matrix = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_matrix_type));
+            for (auto i = 0u; i < dim; i++) {
+                auto col = inst->operand(i);
+                LUISA_ASSERT(col->type()->is_vector() &&
+                                 col->type()->dimension() == dim &&
+                                 col->type()->element() == elem_type,
+                             "element type doesn't match");
+                auto llvm_col = _lookup_value(current, b, col);
+                for (auto j = 0u; j < dim; j++) {
+                    auto llvm_elem = b.CreateExtractElement(llvm_col, j);
+                    llvm_matrix = b.CreateInsertValue(llvm_matrix, llvm_elem, {i, j});
                 }
-                // Insert the vector into the matrix (array of vectors) at the i-th index
-                vector_array = b.CreateInsertValue(vector_array, vector, i);
             }
-            return vector_array;
+            return llvm_matrix;
         }
 
+        LUISA_NOT_IMPLEMENTED();
     }
 
     [[nodiscard]] llvm::Value *_translate_shuffle(CurrentFunction &current,
                                                   IRBuilder &b, const xir::IntrinsicInst *inst) {
 
-        // swfly has to give up using llvm's intrinsic for shuffle because it's too difficult
-        // don't give up
         auto result_type = inst->type();
         LUISA_ASSERT(result_type->is_vector(), "shuffle target must be a vector");
 
@@ -1732,10 +1648,6 @@ private:
                 }();
                 static_indices.push_back(static_index);
             }
-			if(static_indices.size() == 3)
-			{
-				static_indices.push_back(0);
-			}
             auto llvm_poison_value = llvm::PoisonValue::get(llvm_src->getType());
             return b.CreateShuffleVector(llvm_src, llvm_poison_value, static_indices);
         }
@@ -1751,290 +1663,332 @@ private:
         return llvm_result;
     }
 
-    [[nodiscard]] llvm::Value *_translate_bindless_read(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept
-    {
-        auto bindless_ptr = inst->operand(0u);
-        auto slotIdx = inst->operand(1u);
-        auto elemIdx = inst->operand(2u);
-        auto type = inst->type();
-        auto alignment = _get_type_alignment(inst->type());
-        auto size = inst->type()->size();
-
-        // Get LLVM values for the arguments
-        auto llvm_bindless = _lookup_value(current, b, bindless_ptr);
-        auto llvm_slot = _lookup_value(current, b, slotIdx);
-        auto llvm_elem = _lookup_value(current, b, elemIdx);
-        if (llvm_slot->getType() == b.getInt32Ty()) {
-            llvm_slot = b.CreateZExt(llvm_slot, b.getInt64Ty());  // Zero-extend to i64
-        }
-        if (llvm_elem->getType() == b.getInt32Ty()) {
-            llvm_elem = b.CreateZExt(llvm_elem, b.getInt64Ty());  // Zero-extend to i64
-        }
-        auto llvm_data_stride = llvm::ConstantInt::get(b.getInt32Ty(), inst->type()->size());
-
-        auto llvm_value_type = _translate_type(inst->type(), true);
-        // Allocate space for the texture view struct
-        auto val_alloca = b.CreateAlloca(llvm_value_type, nullptr, "");
-		val_alloca->setAlignment(llvm::Align(alignment));
-
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt64Ty(),// slot
-             b.getInt64Ty(),// elem
-            b.getInt32Ty(), //stride
-             b.getPtrTy()}, // void* value
-            false);
-
-        // Add attributes to the function (write operations typically do not use `readonly`)
-        auto func = _llvm_module->getOrInsertFunction("bindless.buffer.read", func_type);
-
-        // Call the function
-        b.CreateCall(func, {llvm_bindless, llvm_slot, llvm_elem, llvm_data_stride, val_alloca});
-        // Return the loaded result
-        return b.CreateAlignedLoad(llvm_value_type, val_alloca, llvm::MaybeAlign(alignment), "");
+    [[nodiscard]] llvm::Type *_get_llvm_bindless_slot_type() noexcept {
+        // struct Slot {
+        //   ptr buffer_ptr;
+        //   i64 buffer_size[63:8] sampler2d[7:4] sampler3d[3:0];
+        //   ptr tex2d_ptr;
+        //   ptr tex3d_ptr;
+        // };
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+        return llvm::StructType::get(llvm_ptr_type, llvm_i64_type, llvm_ptr_type, llvm_ptr_type);
     }
 
-    [[nodiscard]] llvm::Value *_translate_accel_trace(
+    [[nodiscard]] llvm::Value *_load_bindless_array_slot(CurrentFunction &current, IRBuilder &b,
+                                                         llvm::Type *llvm_slot_type,
+                                                         const xir::Value *bindless,
+                                                         const xir::Value *slot_index) noexcept {
+        auto llvm_bindless = _lookup_value(current, b, bindless);
+        auto llvm_bindless_slots = b.CreateExtractValue(llvm_bindless, {0});
+        auto llvm_slot_index = _lookup_value(current, b, slot_index);
+        auto llvm_slot_ptr = b.CreateInBoundsGEP(llvm_slot_type, llvm_bindless_slots, {llvm_slot_index});
+        return b.CreateAlignedLoad(llvm_slot_type, llvm_slot_ptr, llvm::MaybeAlign{16}, "bindless.slot");
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_read(CurrentFunction &current, IRBuilder &b,
+                                                               const xir::IntrinsicInst *inst,
+                                                               bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto result_type = inst->type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto index_or_offset = inst->operand(2);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(result_type, false);
+        auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
+        auto alignment = _get_type_alignment(result_type);
+        auto llvm_result_type = _translate_type(result_type, true);
+        return b.CreateAlignedLoad(llvm_result_type, llvm_target_address, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_write(CurrentFunction &current, IRBuilder &b,
+                                                                const xir::IntrinsicInst *inst,
+                                                                bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto index_or_offset = inst->operand(2);
+        auto value = inst->operand(3);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
+        auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
+        auto alignment = _get_type_alignment(value->type());
+        return b.CreateAlignedStore(llvm_value, llvm_target_address, llvm::MaybeAlign{alignment});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_size(CurrentFunction &current, IRBuilder &b,
+                                                               const xir::IntrinsicInst *inst,
+                                                               bool byte_address = false) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_byte_size = b.CreateExtractValue(llvm_slot, {1});
+        llvm_byte_size = b.CreateLShr(llvm_byte_size, 8);
+        if (!byte_address) {
+            auto stride = inst->operand(2);
+            auto llvm_stride = _lookup_value(current, b, stride);
+            llvm_stride = b.CreateZExtOrTrunc(llvm_stride, llvm_byte_size->getType());
+            llvm_byte_size = b.CreateUDiv(llvm_byte_size, llvm_stride);
+        }
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        return b.CreateZExtOrTrunc(llvm_byte_size, llvm_result_type);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_buffer_device_address(CurrentFunction &current, IRBuilder &b,
+                                                                         const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_slot_type = _get_llvm_bindless_slot_type();
+        auto bindless = inst->operand(0);
+        auto slot_index = inst->operand(1);
+        auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
+        auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
+        auto llvm_int_type = _translate_type(inst->type(), false);
+        return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_transpose(
         CurrentFunction &current,
         IRBuilder &b,
         const xir::IntrinsicInst *inst) noexcept {
 
-        // Extract LLVM values for the operands
-        const xir::Value *accel = inst->operand(0u);
-        const xir::Value *ray = inst->operand(1u);
-        const xir::Value *mask = inst->operand(2u);
-
-        // Get LLVM values for the arguments
-        auto llvm_accel = _lookup_value(current, b, accel);
-        auto llvm_ray = _lookup_value(current, b, ray);
-        auto llvm_mask = _lookup_value(current, b, mask);
-
-        // Allocate space for the SurfaceHit result locally
-        auto hit_type = _translate_type(Type::of<luisa::compute::SurfaceHit>(), false);
-
-        auto hit_alloca = b.CreateAlloca(hit_type, nullptr, "");
-		hit_alloca->setAlignment(llvm::Align(Type::of<luisa::compute::SurfaceHit>()->alignment()));
-
-        // Extract ray components
-        auto compressed_origin = b.CreateExtractValue(llvm_ray, 0, "");
-        auto compressed_t_min = b.CreateExtractValue(llvm_ray, 1, "");
-        auto compressed_direction = b.CreateExtractValue(llvm_ray, 2, "");
-        auto compressed_t_max = b.CreateExtractValue(llvm_ray, 3, "");
-
-        // Extract x, y, z for origin
-        auto origin_x = b.CreateExtractValue(compressed_origin, 0, "");
-        auto origin_y = b.CreateExtractValue(compressed_origin, 1, "");
-        auto origin_z = b.CreateExtractValue(compressed_origin, 2, "");
-
-        // Extract x, y, z for direction
-        auto direction_x = b.CreateExtractValue(compressed_direction, 0, "");
-        auto direction_y = b.CreateExtractValue(compressed_direction, 1, "");
-        auto direction_z = b.CreateExtractValue(compressed_direction, 2, "");
-
-        // Define the function type: void(void*, float, float, float, float, float, float, float, float, unsigned, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {
-                b.getPtrTy(),  // void* accel
-                b.getFloatTy(),// float ox
-                b.getFloatTy(),// float oy
-                b.getFloatTy(),// float oz
-                b.getFloatTy(),// float dx
-                b.getFloatTy(),// float dy
-                b.getFloatTy(),// float dz
-                b.getFloatTy(),// float tmin
-                b.getFloatTy(),// float tmax
-                b.getInt32Ty(),// unsigned mask
-                b.getPtrTy()   // void* hit
-            },
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("accel.intersect.closest", func_type);
-
-        // Call the function
-        b.CreateCall(
-            func,
-            {
-                llvm_accel,      // accel pointer
-                origin_x,        // ray.origin.x
-                origin_y,        // ray.origin.y
-                origin_z,        // ray.origin.z
-                direction_x,     // ray.direction.x
-                direction_y,     // ray.direction.y
-                direction_z,     // ray.direction.z
-                compressed_t_min,// ray.t_min
-                compressed_t_max,// ray.t_max
-                llvm_mask,       // mask
-                hit_alloca       // hit pointer
-            });
-
-        // Load the SurfaceHit result and return
-        return b.CreateLoad(hit_type, hit_alloca, "");
-    }
-
-    [[nodiscard]] llvm::Value *_translate_accel_transform(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-
-        //Calling "accel.instance.transform"
-        // Extract LLVM values for the operands
-        const xir::Value *accel = inst->operand(0u);
-        const xir::Value *id = inst->operand(1u);
-
-        // Get LLVM values for the arguments
-        auto llvm_accel = _lookup_value(current, b, accel);
-        auto llvm_id = _lookup_value(current, b, id);
-
-        // Allocate space for the SurfaceHit result locally
-        auto transform_type = llvm::VectorType::get(b.getFloatTy(), 16, false);
-
-        auto transform_alloca = b.CreateAlloca(transform_type, nullptr, "");
-
-        // Define the function type: void(void*, unsigned, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {
-                b.getPtrTy(),  // void* accel
-                b.getInt32Ty(),// unsigned id
-                b.getPtrTy()   // void* hit
-            },
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction("accel.instance.transform", func_type);
-
-        // Call the function
-        b.CreateCall(
-            func,
-            {
-                llvm_accel,      // accel pointer
-                llvm_id,       // mask
-                transform_alloca       // hit pointer
-            });
-
-        // Load the SurfaceHit result and return
-        return b.CreateLoad(transform_type, transform_alloca, "");
-    }
-
-
-	[[nodiscard]] llvm::Value *_translate_matrix_transpose(
-			CurrentFunction &current,
-			IRBuilder &b,
-			const xir::IntrinsicInst *inst) noexcept
-	{
-		// Lookup the operand (the matrix to be transposed)
-		auto matrix = inst->operand(0u);
-		auto dimension = inst->type()->dimension();
-
-		// Lookup the LLVM value
-		auto llvm_matrix = _lookup_value(current, b, matrix);
-
-		// Type validation
-		LUISA_ASSERT(matrix->type()->is_matrix(), "Matrix transpose type mismatch");
-		LUISA_ASSERT(matrix->type()->dimension()>2, "2x2 Matrix is yet unsupported");
-
-		// The resulting matrix will have the same dimension
-		llvm::Type *float_type = llvm::Type::getFloatTy(b.getContext());
-		llvm::ArrayType *vec4_type = llvm::ArrayType::get(float_type, 4); // Simulate vec4
-
-		// Initialize the resulting matrix with 'undef' values
-		llvm::ArrayType *result_type = llvm::ArrayType::get(vec4_type, dimension);
-		llvm::Value *result = llvm::UndefValue::get(result_type);
-
-		std::vector<llvm::Value *> values(dimension*dimension);
-		// Transpose the matrix by swapping rows and columns
-		for (unsigned i = 0; i < dimension; ++i) {
-			for (unsigned j = 0; j < dimension; ++j) {
-				// Extract value at position (i, j) in the original matrix
-				auto idx = i + j*dimension;
-				auto v = b.CreateExtractValue(llvm_matrix, {i, j});
-				values[idx] = v;
-			}
-		}
-		for (unsigned i = 0; i < dimension; ++i) {
-			for (unsigned j = 0; j < dimension; ++j) {
-				auto idx = i + j * dimension;
-				result = b.CreateInsertValue(result, values[idx], {j, i});
-			}
-		}
-
-		// Insert the value at position (j, i) in the transposed matrix
-
-		return result;
-	}
-
-
-
-    [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept
-    {
-        // The built-in matrix multiplication only works for 4x4 or wider matrices!
-        // For 3x3 we are totally on our own
-        // And for now we totally run all the multiplications
-        auto A = inst->operand(0u);
-        auto B = inst->operand(1u);
+        auto matrix = inst->operand(0u);
         auto dimension = inst->type()->dimension();
-
-        // Lookup the LLVM values
-        auto llvm_A = _lookup_value(current, b, A);
-        auto llvm_B = _lookup_value(current, b, B);
-
-        // Type validation
-        LUISA_ASSERT(A->type()->is_matrix() && (B->type()->is_matrix() ||B->type()->is_vector()),
-                     "Matrix multiplication type mismatch");
-        // Initialize the resulting matrix
-        llvm::Type *float_type = llvm::Type::getFloatTy(b.getContext());
-        llvm::ArrayType *vec4_type = llvm::ArrayType::get(float_type, 4); // Simulate vec4
-
-        if (B->type()->is_matrix())
-        {
-            auto *result_type = llvm::ArrayType::get(vec4_type, dimension);
-            llvm::Value *result = llvm::UndefValue::get(result_type);
-            for (unsigned i = 0; i < dimension; ++i) {
-                for (unsigned j = 0; j < dimension; ++j) {
-                    // Dot product of row i of A and column j of B
-                    llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
-                    for (unsigned k = 0; k < dimension; ++k) {
-                        // Load A[i][k] and B[k][j]
-                        llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {i, k});
-                        llvm::Value *b_kj = b.CreateExtractValue(llvm_B, {k, j});
-                        llvm::Value *product = b.CreateFMul(a_ik, b_kj);
-                        sum = b.CreateFAdd(sum, product);
-                    }
-                    // Store the sum into the result
-                    result = b.CreateInsertValue(result, sum, {i, j});
-                }
+        auto llvm_matrix = _lookup_value(current, b, matrix);
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::UndefValue::get(llvm_matrix->getType()));
+        for (auto i = 0u; i < dimension; i++) {
+            for (auto j = 0u; j < dimension; j++) {
+                auto llvm_elem = b.CreateExtractValue(llvm_matrix, {j, i});
+                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
             }
-            return result;
         }
-        else
-        {
-            llvm::Value *result = llvm::PoisonValue::get(_translate_type(inst->type(), true));
-            for (unsigned i = 0; i < dimension; ++i) {
-                // Dot product of row i of A and column j of B
-                llvm::Value *sum = llvm::ConstantFP::get(float_type, 0.0);
-                for (unsigned k = 0; k < dimension; ++k) {
-                    // Load A[i][k] and B[k][j]
-                    llvm::Value *a_ik = b.CreateExtractValue(llvm_A, {k, i});
-                    llvm::Value *b_kj = b.CreateExtractElement(llvm_B, {k});
-                    llvm::Value *product = b.CreateFMul(a_ik, b_kj);
-                    sum = b.CreateFAdd(sum, product);
-                }
-                // Store the sum into the result
-                result = b.CreateInsertElement(result, sum, {i});
+        return llvm_result;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_comp_op(CurrentFunction &current, IRBuilder &b,
+                                                         const xir::Value *lhs, const xir::Value *rhs,
+                                                         llvm::Instruction::BinaryOps llvm_op) noexcept {
+        auto lhs_is_matrix = lhs->type()->is_matrix();
+        auto rhs_is_matrix = rhs->type()->is_matrix();
+        LUISA_ASSERT((lhs_is_matrix && rhs_is_matrix) ||
+                         (lhs_is_matrix && rhs->type()->is_scalar()) ||
+                         (lhs->type()->is_scalar() && rhs_is_matrix),
+                     "Matrix or vector expected.");
+        auto matrix_type = lhs_is_matrix ? lhs->type() : rhs->type();
+        auto llvm_matrix_type = _translate_type(matrix_type, true);
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_matrix_type));
+        auto dim = matrix_type->dimension();
+        for (auto i = 0u; i < dim; i++) {
+            for (auto j = 0u; j < dim; j++) {
+                auto llvm_lhs_elem = lhs_is_matrix ? b.CreateExtractValue(llvm_lhs, {i, j}) : llvm_lhs;
+                auto llvm_rhs_elem = rhs_is_matrix ? b.CreateExtractValue(llvm_rhs, {i, j}) : llvm_rhs;
+                auto llvm_elem = b.CreateBinOp(llvm_op, llvm_lhs_elem, llvm_rhs_elem);
+                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
             }
-            return result;
         }
+        return llvm_result;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_linalg_multiply(CurrentFunction &current, IRBuilder &b,
+                                                                 const xir::IntrinsicInst *inst) noexcept {
+        auto lhs = inst->operand(0u);
+        auto rhs = inst->operand(1u);
+        LUISA_ASSERT(lhs->type()->is_matrix(), "Matrix expected.");
+        auto llvm_func_name = [&] {
+            if (rhs->type()->is_vector()) {
+                LUISA_ASSERT(lhs->type()->dimension() == rhs->type()->dimension() &&
+                                 lhs->type()->element() == rhs->type()->element(),
+                             "Matrix and vector dimension mismatch.");
+                return luisa::format("luisa.matrix{}d.mul.vector", lhs->type()->dimension());
+            }
+            LUISA_ASSERT(rhs->type()->is_matrix() &&
+                             lhs->type()->dimension() == rhs->type()->dimension() &&
+                             lhs->type()->element() == rhs->type()->element(),
+                         "Matrix dimension mismatch.");
+            return luisa::format("luisa.matrix{}d.mul.matrix", lhs->type()->dimension());
+        }();
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto llvm_lhs_alloca = b.CreateAlloca(llvm_lhs->getType());
+        auto llvm_rhs_alloca = b.CreateAlloca(llvm_rhs->getType());
+        b.CreateStore(llvm_lhs, llvm_lhs_alloca);
+        b.CreateStore(llvm_rhs, llvm_rhs_alloca);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        b.CreateCall(llvm_func, {llvm_lhs_alloca, llvm_rhs_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_texture_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto coord = inst->operand(1u);
+        auto llvm_func_name = [t = view->type()] {
+            auto dim = t->dimension();
+            switch (t->element()->tag()) {
+                case Type::Tag::INT32: return luisa::format("luisa.texture{}d.read.int", dim);
+                case Type::Tag::UINT32: return luisa::format("luisa.texture{}d.read.uint", dim);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.texture{}d.read.float", dim);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
+        }();
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        auto llvm_coord_alloca = b.CreateAlloca(llvm_coord->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        b.CreateStore(llvm_coord, llvm_coord_alloca);
+        auto llvm_value_type = _translate_type(inst->type(), true);
+        auto llvm_value_alloca = b.CreateAlloca(llvm_value_type);
+        b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
+        return b.CreateLoad(llvm_value_type, llvm_value_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_texture_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto coord = inst->operand(1u);
+        auto value = inst->operand(2u);
+        auto llvm_func_name = [t = view->type()] {
+            auto dim = t->dimension();
+            switch (t->element()->tag()) {
+                case Type::Tag::INT32: return luisa::format("luisa.texture{}d.write.int", dim);
+                case Type::Tag::UINT32: return luisa::format("luisa.texture{}d.write.uint", dim);
+                case Type::Tag::FLOAT32: return luisa::format("luisa.texture{}d.write.float", dim);
+                default: break;
+            }
+            LUISA_ERROR_WITH_LOCATION("Unsupported texture element type: {}.", t->element()->description());
+        }();
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_coord = _lookup_value(current, b, coord);
+        auto llvm_value = _lookup_value(current, b, value);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        auto llvm_coord_alloca = b.CreateAlloca(llvm_coord->getType());
+        auto llvm_value_alloca = b.CreateAlloca(llvm_value->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        b.CreateStore(llvm_coord, llvm_coord_alloca);
+        b.CreateStore(llvm_value, llvm_value_alloca);
+        return b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_texture_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto view = inst->operand(0u);
+        LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
+        auto llvm_func_name = luisa::format("luisa.texture{}d.size", view->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        auto llvm_view = _lookup_value(current, b, view);
+        auto llvm_view_alloca = b.CreateAlloca(llvm_view->getType());
+        b.CreateStore(llvm_view, llvm_view_alloca);
+        auto llvm_size_type = _translate_type(inst->type(), true);
+        auto llvm_size_alloca = b.CreateAlloca(llvm_size_type);
+        b.CreateCall(llvm_func, {llvm_view_alloca, llvm_size_alloca});
+        return b.CreateLoad(llvm_size_type, llvm_size_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_inverse(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto m = inst->operand(0u);
+        LUISA_ASSERT(m->type()->is_matrix() && m->type() == inst->type(), "Invalid matrix type.");
+        auto llvm_m = _lookup_value(current, b, m);
+        auto llvm_func_name = luisa::format("luisa.matrix{}d.inverse", m->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
+        b.CreateStore(llvm_m, llvm_m_alloca);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        b.CreateCall(llvm_func, {llvm_m_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_matrix_determinant(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+        auto m = inst->operand(0u);
+        LUISA_ASSERT(m->type()->is_matrix() && m->type()->element() == inst->type(), "Invalid matrix type.");
+        auto llvm_m = _lookup_value(current, b, m);
+        auto llvm_func_name = luisa::format("luisa.matrix{}d.determinant", m->type()->dimension());
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        auto llvm_m_alloca = b.CreateAlloca(llvm_m->getType());
+        b.CreateStore(llvm_m, llvm_m_alloca);
+        return b.CreateCall(llvm_func, {llvm_m_alloca});
+    }
+
+    [[nodiscard]] llvm::Value *_translate_bindless_texture_access(CurrentFunction &current, IRBuilder &b,
+                                                                  llvm::StringRef llvm_func_name,
+                                                                  const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_bindless_alloca = b.CreateAlloca(llvm_bindless->getType());
+        b.CreateStore(llvm_bindless, llvm_bindless_alloca);
+        auto llvm_slot_index = _lookup_value(current, b, inst->operand(1u));
+        llvm_slot_index = b.CreateZExtOrTrunc(llvm_slot_index, b.getInt32Ty());
+        llvm::SmallVector<llvm::Value *, 8u> llvm_args{llvm_bindless_alloca, llvm_slot_index};
+        for (auto arg_use : inst->operand_uses().subspan(2)) {
+            auto arg = arg_use->value();
+            auto llvm_arg = _lookup_value(current, b, arg);
+            if (arg->type()->is_scalar()) {
+                llvm_args.emplace_back(llvm_arg);
+            } else {
+                auto llvm_arg_alloca = b.CreateAlloca(llvm_arg->getType());
+                b.CreateStore(llvm_arg, llvm_arg_alloca);
+                llvm_args.emplace_back(llvm_arg_alloca);
+            }
+        }
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        llvm_args.emplace_back(llvm_result_alloca);
+        auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        b.CreateCall(llvm_func, llvm_args);
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_accel_access(CurrentFunction &current, IRBuilder &b,
+                                                       llvm::StringRef llvm_func_name,
+                                                       const xir::IntrinsicInst *inst) noexcept {
+        auto llvm_accel = _lookup_value(current, b, inst->operand(0u));
+        auto llvm_accel_alloca = b.CreateAlloca(llvm_accel->getType());
+        b.CreateStore(llvm_accel, llvm_accel_alloca);
+        llvm::SmallVector<llvm::Value *, 8u> llvm_args{llvm_accel_alloca};
+        for (auto arg_use : inst->operand_uses().subspan(1)) {
+            auto arg = arg_use->value();
+            auto llvm_arg = _lookup_value(current, b, arg);
+            if (llvm_arg->getType()->isIntegerTy() && !arg->type()->is_bool()) {
+                // cast non-bool integer to i32
+                llvm_arg = b.CreateZExtOrTrunc(llvm_arg, b.getInt32Ty());
+            }
+            if (arg->type()->is_scalar()) {
+                llvm_args.emplace_back(llvm_arg);
+            } else {
+                auto llvm_arg_alloca = b.CreateAlloca(llvm_arg->getType());
+                b.CreateStore(llvm_arg, llvm_arg_alloca);
+                llvm_args.emplace_back(llvm_arg_alloca);
+            }
+        }
+        auto llvm_func = _llvm_module->getFunction(llvm_func_name);
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        if (auto result_type = inst->type()) {
+            auto llvm_result_type = _translate_type(inst->type(), true);
+            auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+            llvm_args.emplace_back(llvm_result_alloca);
+            b.CreateCall(llvm_func, llvm_args);
+            return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+        }
+        // void return
+        return b.CreateCall(llvm_func, llvm_args);
     }
 
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
@@ -2261,23 +2215,77 @@ private:
             }
             case xir::IntrinsicOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::IntrinsicOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
-            case xir::IntrinsicOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acosf");
-            case xir::IntrinsicOp::ACOSH: break;
-            case xir::IntrinsicOp::ASIN: break;
-            case xir::IntrinsicOp::ASINH: break;
-            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "tanf");
-            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1),"atan2f");
-            case xir::IntrinsicOp::ATANH: break;
+            case xir::IntrinsicOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+            case xir::IntrinsicOp::ACOSH: {
+                // acosh(x) = log(x + sqrt(x^2 - 1))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_x2 = b.CreateFMul(llvm_x, llvm_x);
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_x2_minus_one = b.CreateFSub(llvm_x2, llvm_one);
+                auto llvm_sqrt = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_x2_minus_one);
+                auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
+            }
+            case xir::IntrinsicOp::ASIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+            case xir::IntrinsicOp::ASINH: {
+                // asinh(x) = log(x + sqrt(x^2 + 1))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_x2 = b.CreateFMul(llvm_x, llvm_x);
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_x2_plus_one = b.CreateFAdd(llvm_x2, llvm_one);
+                auto llvm_sqrt = b.CreateUnaryIntrinsic(llvm::Intrinsic::sqrt, llvm_x2_plus_one);
+                auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
+                return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
+            }
+            case xir::IntrinsicOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
+            case xir::IntrinsicOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            case xir::IntrinsicOp::ATANH: {
+                // atanh(x) = 0.5 * log((1 + x) / (1 - x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_one = llvm::ConstantFP::get(llvm_x->getType(), 1.f);
+                auto llvm_one_plus_x = b.CreateFAdd(llvm_one, llvm_x);
+                auto llvm_one_minus_x = b.CreateFSub(llvm_one, llvm_x);
+                auto llvm_div = b.CreateFDiv(llvm_one_plus_x, llvm_one_minus_x);
+                auto llvm_log = b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_div);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_log);
+            }
             case xir::IntrinsicOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
-            case xir::IntrinsicOp::COSH: break;
+            case xir::IntrinsicOp::COSH: {
+                // cosh(x) = 0.5 * (exp(x) + exp(-x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
+                auto llvm_neg_x = b.CreateFNeg(llvm_x);
+                auto llvm_exp_neg_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_neg_x);
+                auto llvm_exp_sum = b.CreateFAdd(llvm_exp_x, llvm_exp_neg_x);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_exp_sum);
+            }
             case xir::IntrinsicOp::SIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
-            case xir::IntrinsicOp::SINH: break;
+            case xir::IntrinsicOp::SINH: {
+                // sinh(x) = 0.5 * (exp(x) - exp(-x))
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
+                auto llvm_neg_x = b.CreateFNeg(llvm_x);
+                auto llvm_exp_neg_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_neg_x);
+                auto llvm_exp_diff = b.CreateFSub(llvm_exp_x, llvm_exp_neg_x);
+                auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
+                return b.CreateFMul(llvm_half, llvm_exp_diff);
+            }
             case xir::IntrinsicOp::TAN: {
                 auto llvm_sin = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
                 auto llvm_cos = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
                 return b.CreateFDiv(llvm_sin, llvm_cos);
             }
-            case xir::IntrinsicOp::TANH: break;
+            case xir::IntrinsicOp::TANH: {
+                // tanh(x) = sinh(x) / cosh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+                auto llvm_x = _lookup_value(current, b, inst->operand(0u));
+                auto llvm_two_x = b.CreateFMul(llvm_x, llvm::ConstantFP::get(llvm_x->getType(), 2.f));
+                auto llvm_exp_2x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_two_x);
+                auto llvm_exp_2x_minus_one = b.CreateFSub(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
+                auto llvm_exp_2x_plus_one = b.CreateFAdd(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
+                return b.CreateFDiv(llvm_exp_2x_minus_one, llvm_exp_2x_plus_one);
+            }
             case xir::IntrinsicOp::EXP: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp);
             case xir::IntrinsicOp::EXP2: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp2);
             case xir::IntrinsicOp::EXP10: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp10);
@@ -2424,15 +2432,30 @@ private:
             case xir::IntrinsicOp::REDUCE_MIN: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MIN, inst->operand(0u));
             case xir::IntrinsicOp::REDUCE_MAX: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MAX, inst->operand(0u));
             case xir::IntrinsicOp::OUTER_PRODUCT: break;
-            case xir::IntrinsicOp::MATRIX_COMP_NEG: break;
-            case xir::IntrinsicOp::MATRIX_COMP_ADD: break;
-            case xir::IntrinsicOp::MATRIX_COMP_SUB: break;
-            case xir::IntrinsicOp::MATRIX_COMP_MUL: break;
-            case xir::IntrinsicOp::MATRIX_COMP_DIV: break;
+            case xir::IntrinsicOp::MATRIX_COMP_NEG: {
+                auto m = inst->operand(0u);
+                LUISA_ASSERT(m->type() != nullptr && m->type()->is_matrix(),
+                             "Invalid operand type for matrix component-wise negation.");
+                auto dim = m->type()->dimension();
+                auto llvm_m = _lookup_value(current, b, m);
+                auto llvm_result = llvm::cast<llvm::Value>(llvm::PoisonValue::get(llvm_m->getType()));
+                for (auto i = 0u; i < dim; i++) {
+                    for (auto j = 0u; j < dim; j++) {
+                        auto llvm_elem = b.CreateExtractValue(llvm_m, {i, j});
+                        llvm_elem = b.CreateFNeg(llvm_elem);
+                        llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
+                    }
+                }
+                return llvm_result;
+            }
+            case xir::IntrinsicOp::MATRIX_COMP_ADD: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FAdd);
+            case xir::IntrinsicOp::MATRIX_COMP_SUB: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FSub);
+            case xir::IntrinsicOp::MATRIX_COMP_MUL: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FMul);
+            case xir::IntrinsicOp::MATRIX_COMP_DIV: return _translate_matrix_comp_op(current, b, inst->operand(0), inst->operand(1), llvm::Instruction::FDiv);
             case xir::IntrinsicOp::MATRIX_LINALG_MUL: return _translate_matrix_linalg_multiply(current, b, inst);
-            case xir::IntrinsicOp::MATRIX_DETERMINANT: break;
+            case xir::IntrinsicOp::MATRIX_DETERMINANT: return _translate_matrix_determinant(current, b, inst);
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: return _translate_matrix_transpose(current, b, inst);
-            case xir::IntrinsicOp::MATRIX_INVERSE: break;
+            case xir::IntrinsicOp::MATRIX_INVERSE: return _translate_matrix_inverse(current, b, inst);
             case xir::IntrinsicOp::ATOMIC_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: break;
             case xir::IntrinsicOp::ATOMIC_FETCH_ADD: break;
@@ -2449,27 +2472,27 @@ private:
             case xir::IntrinsicOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
             case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst->operand(0u), inst->operand(1u), inst->operand(2u));
-            case xir::IntrinsicOp::TEXTURE2D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst);
+            case xir::IntrinsicOp::TEXTURE2D_SIZE: return _translate_texture_size(current, b, inst);
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_volume_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_WRITE: break;
-            case xir::IntrinsicOp::TEXTURE3D_SIZE: break;
+            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_texture_read(current, b, inst);
+            case xir::IntrinsicOp::TEXTURE3D_WRITE: return _translate_texture_write(current, b, inst);
+            case xir::IntrinsicOp::TEXTURE3D_SIZE: return _translate_texture_size(current, b, inst);
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
             case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_tex2d(current, b, inst, false);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_tex2d(current, b, inst, true);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad.level", inst);
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
@@ -2478,23 +2501,22 @@ private:
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
             case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_size(current, b, inst, true);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_size(current, b, inst, false);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_read(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: break;
-            case xir::IntrinsicOp::BINDLESS_BUFFER_TYPE: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: break;
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: break;
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size.level", inst);
+            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size.level", inst);
+            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
+            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
+            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst, true);
+            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst, true);
             case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: return _translate_buffer_device_address(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: break;
+            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return _translate_bindless_buffer_device_address(current, b, inst);
             case xir::IntrinsicOp::DEVICE_ADDRESS_READ: return _translate_device_address_read(current, b, inst);
             case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: return _translate_device_address_write(current, b, inst);
             case xir::IntrinsicOp::AGGREGATE: return _translate_aggregate(current, b, inst);
@@ -2507,23 +2529,23 @@ private:
             case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
             case xir::IntrinsicOp::AUTODIFF_DETACH: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_transform(current, b, inst);
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_trace(current, b, inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.set.instance.transform", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.set.instance.visibility.mask", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.set.instance.opacity", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.set.instance.user.id", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_access(current, b, "luisa.accel.trace.closest", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: return _translate_accel_access(current, b, "luisa.accel.trace.any", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: break;
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: break;
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: break;
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
+            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.matrix", inst);
+            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.srt", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.closest.motion", inst);
+            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.any.motion", inst);
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
             case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
             case xir::IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: break;
@@ -2562,7 +2584,7 @@ private:
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
             case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
         }
-        LUISA_INFO("unsupported intrinsic op type:{}", static_cast<int>(inst->op()));
+        LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
         // TODO: implement
         if (auto llvm_ret_type = _translate_type(inst->type(), true)) {
@@ -3073,6 +3095,13 @@ private:
         auto func_name = _get_name_from_metadata(f, default_name);
         auto llvm_func = llvm::Function::Create(llvm_func_type, linkage, llvm::Twine{func_name}, _llvm_module);
         _llvm_functions.emplace(f, llvm_func);
+
+        // inline functions that have too many arguments
+        static constexpr auto max_argument_count = 16u;
+        if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
+            llvm_func->arg_size() > max_argument_count) {
+            llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         // create current translation context
         CurrentFunction current{.func = llvm_func};
         // map arguments
@@ -3127,22 +3156,22 @@ public:
     explicit FallbackCodegen(llvm::LLVMContext &ctx) noexcept
         : _llvm_context{ctx} {}
 
-    [[nodiscard]] auto emit(const xir::Module *module) noexcept {
-        auto llvm_module = std::make_unique<llvm::Module>(llvm::StringRef{_get_name_from_metadata(module)}, _llvm_context);
+    void emit(llvm::Module *llvm_module, const xir::Module *module) noexcept {
         auto location_md = module->find_metadata<xir::LocationMD>();
         auto module_location = location_md ? location_md->file().string() : "unknown";
         llvm_module->setSourceFileName(location_md ? location_md->file().string() : "unknown");
-        _llvm_module = llvm_module.get();
+        if (auto module_name = _get_name_from_metadata(module); !module_name.empty()) {
+            llvm_module->setModuleIdentifier(module_name);
+        }
+        _llvm_module = llvm_module;
         _translate_module(module);
         _reset();
-        return llvm_module;
     }
 };
 
-std::unique_ptr<llvm::Module>
-luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, const xir::Module *module) noexcept {
+void luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, llvm::Module *llvm_module, const xir::Module *module) noexcept {
     FallbackCodegen codegen{llvm_ctx};
-    return codegen.emit(module);
+    codegen.emit(llvm_module, module);
 }
 
 }// namespace luisa::compute::fallback

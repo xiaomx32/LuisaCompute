@@ -11,8 +11,8 @@ class Module;
 
 namespace luisa::compute::fallback {
 
-[[nodiscard]] std::unique_ptr<llvm::Module>
-luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx,
-                               const xir::Module *module) noexcept;
+void luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx,
+                                    llvm::Module *llvm_module,
+                                    const xir::Module *module) noexcept;
 
 }// namespace luisa::compute::fallback

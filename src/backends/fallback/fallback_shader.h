@@ -59,7 +59,7 @@ public:
     [[nodiscard]] auto argument_buffer_size() const noexcept { return _argument_buffer_size; }
     [[nodiscard]] auto shared_memory_size() const noexcept { return _shared_memory_size; }
     [[nodiscard]] size_t argument_offset(uint uid) const noexcept;
-    //[[nodiscard]] auto callbacks() const noexcept { return _callbacks.data(); }
+    [[nodiscard]] auto native_handle() const noexcept { return _kernel_entry; }
 };
 
 }// namespace luisa::compute::fallback
