@@ -526,7 +526,7 @@ ResourceCreationInfo DxRasterExt::create_raster_shader(
         //         cacheType = CacheType::ByteCode;
         //     }
         // }
-        ResourceCreationInfo info;
+        ResourceCreationInfo info{};
         // auto res = RasterShader::CompileRaster(
         //     nativeDevice.fileIo,
         //     &nativeDevice,

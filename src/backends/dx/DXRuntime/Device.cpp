@@ -224,7 +224,7 @@ Device::Device(Context &&ctx, DeviceConfig const *settings)
                 LUISA_INFO("Adapter mismatch, shader cache cleared.");
                 fileIo->clear_shader_cache();
             }
-            fileIo->write_shader_cache("dx_adapterid", {reinterpret_cast<std::byte const *>(&adapterID), sizeof(vstd::MD5)});
+            static_cast<void>(fileIo->write_shader_cache("dx_adapterid", {reinterpret_cast<std::byte const *>(&adapterID), sizeof(vstd::MD5)}));
         }
         defaultAllocator = vstd::make_unique<GpuAllocator>(this, profiler);
         allocatorInterface.device = this;

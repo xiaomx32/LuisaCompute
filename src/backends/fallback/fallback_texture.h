@@ -4,20 +4,14 @@
 
 #pragma once
 
-#include <bit>
-
 #include <luisa/core/basic_types.h>
 #include <luisa/core/mathematics.h>
 #include <luisa/core/stl.h>
 #include <luisa/runtime/rhi/pixel.h>
 #include <luisa/runtime/rhi/sampler.h>
-#include "llvm_abi.h"
 
 namespace luisa::compute::fallback {
 namespace detail {
-[[nodiscard]] float16_t float_to_half(float f) noexcept;
-
-[[nodiscard]] float half_to_float(float16_t h) noexcept;
 
 template<typename T>
 [[nodiscard]] inline float scalar_to_float(T x) noexcept {
@@ -27,8 +21,8 @@ template<typename T>
         return x / 255.f;
     } else if constexpr (std::is_same_v<T, uint16_t>) {
         return x / 65535.f;
-    } else if constexpr (std::is_same_v<T, float16_t>) {
-        return half_to_float(x);
+    } else if constexpr (std::is_same_v<T, luisa::half>) {
+        return static_cast<float>(x);
     } else {
         return 0.f;
     }
@@ -42,8 +36,8 @@ template<typename T>
         return static_cast<T>(std::clamp(std::round(x * 255.f), 0.f, 255.f));
     } else if constexpr (std::is_same_v<T, uint16_t>) {
         return static_cast<T>(std::clamp(std::round(x * 65535.f), 0.f, 65535.f));
-    } else if constexpr (std::is_same_v<T, float16_t>) {
-        return static_cast<T>(float_to_half(x));
+    } else if constexpr (std::is_same_v<T, luisa::half>) {
+        return static_cast<T>(x);
     } else {
         return static_cast<T>(0);
     }
@@ -150,7 +144,7 @@ template<typename Dst, typename Src, uint dim>
 }
 
 template<typename Dst, typename Src, uint dim>
-[[nodiscard]] inline auto write_pixel(std::byte *p, Vector<Dst, 4u> value) noexcept {
+inline auto write_pixel(std::byte *p, Vector<Dst, 4u> value) noexcept {
     if constexpr (std::is_same_v<Dst, float>) {
         float4_to_pixel<Src, dim>(p, value);
     } else {
@@ -173,9 +167,9 @@ template<typename T>
         case PixelStorage::INT1: return detail::read_pixel<T, uint32_t, 1u>(p);
         case PixelStorage::INT2: return detail::read_pixel<T, uint32_t, 2u>(p);
         case PixelStorage::INT4: return detail::read_pixel<T, uint32_t, 4u>(p);
-        case PixelStorage::HALF1: return detail::read_pixel<T, float16_t, 1u>(p);
-        case PixelStorage::HALF2: return detail::read_pixel<T, float16_t, 2u>(p);
-        case PixelStorage::HALF4: return detail::read_pixel<T, float16_t, 4u>(p);
+        case PixelStorage::HALF1: return detail::read_pixel<T, luisa::half, 1u>(p);
+        case PixelStorage::HALF2: return detail::read_pixel<T, luisa::half, 2u>(p);
+        case PixelStorage::HALF4: return detail::read_pixel<T, luisa::half, 4u>(p);
         case PixelStorage::FLOAT1: return detail::read_pixel<T, float, 1u>(p);
         case PixelStorage::FLOAT2: return detail::read_pixel<T, float, 2u>(p);
         case PixelStorage::FLOAT4: return detail::read_pixel<T, float, 4u>(p);
@@ -215,13 +209,13 @@ inline void write_pixel(PixelStorage storage, std::byte *p, Vector<T, 4u> v) noe
             detail::write_pixel<T, uint32_t, 4u>(p, v);
             break;
         case PixelStorage::HALF1:
-            detail::write_pixel<T, float16_t, 1u>(p, v);
+            detail::write_pixel<T, luisa::half, 1u>(p, v);
             break;
         case PixelStorage::HALF2:
-            detail::write_pixel<T, float16_t, 2u>(p, v);
+            detail::write_pixel<T, luisa::half, 2u>(p, v);
             break;
         case PixelStorage::HALF4:
-            detail::write_pixel<T, float16_t, 4u>(p, v);
+            detail::write_pixel<T, luisa::half, 4u>(p, v);
             break;
         case PixelStorage::FLOAT1:
             detail::write_pixel<T, float, 1u>(p, v);
@@ -271,18 +265,6 @@ public:
 
     [[nodiscard]] auto storage() const noexcept { return _storage; }
     [[nodiscard]] auto mip_levels() const noexcept { return _mip_levels; }
-
-    // reading
-    //    [[nodiscard]] float4 read2d(uint level, uint2 uv) const noexcept;
-    //    [[nodiscard]] float4 read3d(uint level, uint3 uvw) const noexcept;
-    //
-    //    // sampling
-    //    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv) const noexcept;
-    //    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw) const noexcept;
-    //    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float lod) const noexcept;
-    //    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float lod) const noexcept;
-    //    [[nodiscard]] float4 sample2d(Sampler sampler, float2 uv, float2 dpdx, float2 dpdy) const noexcept;
-    //    [[nodiscard]] float4 sample3d(Sampler sampler, float3 uvw, float3 dpdx, float3 dpdy) const noexcept;
 };
 
 class alignas(16u) FallbackTextureView {
@@ -366,80 +348,4 @@ public:
 
 static_assert(sizeof(FallbackTextureView) == 16u);
 
-void texture_write_2d_float_wrapper(void *ptr, uint x, uint y, void *val);
-void texture_read_2d_float_wrapper(void *ptr, uint x, uint y, void *out);
-void texture_write_2d_uint_wrapper(void *ptr, uint x, uint y, void *val);
-void texture_read_2d_uint_wrapper(void *ptr, uint x, uint y, void *out);
-
-void texture_read_3d_float_wrapper(void *ptr, uint x, uint y, uint z, void *out);
-void texture_read_3d_uint_wrapper(void *ptr, uint x, uint y, uint z, void *out);
-
-void bindless_tex2d_level_wrapper(void *bindless, uint slot, float x, float y, float level, void *out);
-void bindless_tex2d_size_wrapper(void *bindless, uint slot, void *out);
-void bindless_tex2d_wrapper(void *bindless, uint slot, float x, float y, void *out);
-// [[nodiscard]] float32x4_t texture_read_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// [[nodiscard]] float32x4_t texture_read_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// [[nodiscard]] float32x4_t texture_read_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// [[nodiscard]] float32x4_t texture_read_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// [[nodiscard]] float32x4_t texture_read_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// [[nodiscard]] float32x4_t texture_read_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept;
-// void texture_write_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-// void texture_write_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-// void texture_write_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-// void texture_write_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-// void texture_write_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-// void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept;
-
-//swfly tries to write the accessors again
-[[nodiscard]] int4 texture_read_2d_int(const FallbackTextureView *tex, uint x, uint y) noexcept;
-
-[[nodiscard]] int4 texture_read_3d_int(const FallbackTextureView *tex, uint x, uint y, uint z) noexcept;
-
-[[nodiscard]] uint4 texture_read_2d_uint(const FallbackTextureView *tex, uint x, uint y) noexcept;
-
-[[nodiscard]] uint4 texture_read_3d_uint(const FallbackTextureView *tex, uint x, uint y, uint z) noexcept;
-
-[[nodiscard]] float4 texture_read_2d_float(const FallbackTextureView *tex, uint x, uint y) noexcept;
-
-[[nodiscard]] float4 texture_read_3d_float(const FallbackTextureView *tex, uint x, uint y, uint z) noexcept;
-
-//
-//
-[[nodiscard]] void texture_write_2d_int(const FallbackTextureView *tex, uint x, uint y, int4 val) noexcept;
-
-[[nodiscard]] void texture_write_3d_int(const FallbackTextureView *tex, uint x, uint y, uint z, int4 val) noexcept;
-
-[[nodiscard]] void texture_write_2d_uint(const FallbackTextureView *tex, uint x, uint y, uint4 val) noexcept;
-
-[[nodiscard]] void texture_write_3d_uint(const FallbackTextureView *tex, uint x, uint y, uint z,
-                                         uint4 val) noexcept;
-
-[[nodiscard]] void texture_write_2d_float(const FallbackTextureView *tex, uint x, uint y, float4 val) noexcept;
-
-[[nodiscard]] void texture_write_3d_float(const FallbackTextureView *tex, uint x, uint y, uint z,
-                                          float4 val) noexcept;
-
-//
-[[nodiscard]] float4 bindless_texture_2d_read(const FallbackTexture *tex, uint level, uint x, uint y) noexcept;
-
-[[nodiscard]] float4 bindless_texture_3d_read(const FallbackTexture *tex, uint level, uint x, uint y,
-                                              uint z) noexcept;
-
-[[nodiscard]] float4
-bindless_texture_2d_sample(const FallbackTexture *tex, uint sampler, float u, float v) noexcept;
-
-[[nodiscard]] float4 bindless_texture_3d_sample(const FallbackTexture *tex, uint sampler, float u, float v,
-                                                float w) noexcept;
-
-[[nodiscard]] float4 bindless_texture_2d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v,
-                                                      float lod) noexcept;
-
-[[nodiscard]] float4 bindless_texture_3d_sample_level(const FallbackTexture *tex, uint sampler, float u, float v,
-                                                      float w, float lod) noexcept;
-
-[[nodiscard]] float4 bindless_texture_2d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v,
-                                                     int64_t dpdx, int64_t dpdy) noexcept;
-
-[[nodiscard]] float4 bindless_texture_3d_sample_grad(const FallbackTexture *tex, uint sampler, float u, float v,
-                                                     float w, int64_t dudxy, int64_t dvdxy, int64_t dwdxy) noexcept;
 }// namespace luisa::compute::fallback

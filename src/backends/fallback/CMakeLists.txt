@@ -24,7 +24,6 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_mesh.cpp
             fallback_accel.cpp
             fallback_texture_bc.cpp
-            fallback_texture_sampling.cpp
             fallback_codegen.cpp
             fallback_shader.cpp
             fallback_buffer.cpp

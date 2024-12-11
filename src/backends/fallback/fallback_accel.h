@@ -11,7 +11,6 @@
 #include <luisa/runtime/rtx/hit.h>
 
 #include "fallback_embree.h"
-#include "llvm_abi.h"
 
 namespace luisa {
 class ThreadPool;
