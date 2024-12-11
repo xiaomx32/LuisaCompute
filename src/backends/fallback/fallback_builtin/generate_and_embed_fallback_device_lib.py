@@ -16,7 +16,7 @@ if __name__ == "__main__":
     with open(dst_path, "r") as f:
         content = "".join(line for line in f.readlines()
                           if not line.strip().startswith("@llvm.used") and
-                          # not line.strip().startswith("; ModuleID") and
+                          not line.strip().startswith("; ModuleID") and
                           not line.strip().startswith("source_filename"))
     content = content.replace("define hidden", "define private")
     # find all @luisa_fallback_wrapper_(\w+) and collect in a list
@@ -35,10 +35,16 @@ if __name__ == "__main__":
             dotted_name = function_name.replace("_", ".")
             if f"luisa.{dotted_name}.impl(" in content:
                 f.write(f"map_symbol(\"luisa.{dotted_name}.impl\", &api::luisa_fallback_{function_name});\n")
+    # compile to bitcode
+    bc_path = dst_path.replace(".ll", ".bc")
+    subprocess.run(["llvm-as", dst_path, "-o", bc_path])
+    with open(bc_path, "rb") as f:
+        content = f.read()
+    print(content)
     with open(os.path.join(builtin_dir, f"{file_name}.{system_name}.{machine_name}.inl"), "w") as f:
-        data = [f"0x{ord(c):02x}" for c in content.replace("\r\n", "\n")]
+        data = [f"0x{c:02x}" for c in content]
         size = len(data)
-        f.write(f'\nstatic const char luisa_fallback_backend_device_builtin_module[{size}] = {{\n')
+        f.write(f'\nstatic const unsigned char luisa_fallback_backend_device_builtin_module[{size}] = {{\n')
         wrapped = ["    " + ", ".join(data[i: i + 16]) for i in range(0, len(data), 16)]
         f.write(",\n".join(wrapped))
         f.write("\n};\n")

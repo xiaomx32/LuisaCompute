@@ -31,6 +31,7 @@
 
 namespace luisa::compute::fallback {
 luisa::string_view fallback_backend_device_builtin_module() noexcept {
-    return luisa_fallback_backend_device_builtin_module;
+    return {reinterpret_cast<const char *>(luisa_fallback_backend_device_builtin_module),
+            std::size(luisa_fallback_backend_device_builtin_module)};
 }
 }// namespace luisa::compute::fallback
