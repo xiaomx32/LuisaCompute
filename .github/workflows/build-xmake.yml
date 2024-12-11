@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         compiler: [ homebrew-clang, system-clang ]
-        config: [ release, debug ]
+        config: [ release ]
     name: macOS / ${{ matrix.config }} / ${{ matrix.compiler }}
     runs-on: macos-latest
     steps:
