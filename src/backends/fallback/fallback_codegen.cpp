@@ -181,7 +181,11 @@ private:
                 auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
-            case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
+            case Type::Tag::TEXTURE: {
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
+            }
             case Type::Tag::BINDLESS_ARRAY: {
                 auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
                 auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
