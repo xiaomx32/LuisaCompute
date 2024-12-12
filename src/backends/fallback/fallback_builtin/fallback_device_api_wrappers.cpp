@@ -68,6 +68,75 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix4d_mul_matrix(const flo
     luisa_fallback_wrapper_matrix4d_mul_vector(pm, &pn->cols[3], &out->cols[3]);
 }
 
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix2d_transpose(const float2x2 *pm, float2x2 *p_out) noexcept {
+    auto m = *reinterpret_cast<const llvm_float2x2 *>(pm);
+    auto out = reinterpret_cast<llvm_float2x2 *>(p_out);
+    out->cols[0] = {m.cols[0].x, m.cols[1].x};
+    out->cols[1] = {m.cols[0].y, m.cols[1].y};
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix3d_transpose(const float3x3 *pm, float3x3 *p_out) noexcept {
+    auto m = *reinterpret_cast<const llvm_float3x3 *>(pm);
+    auto out = reinterpret_cast<llvm_float3x3 *>(p_out);
+    out->cols[0] = {m.cols[0].x, m.cols[1].x, m.cols[2].x};
+    out->cols[1] = {m.cols[0].y, m.cols[1].y, m.cols[2].y};
+    out->cols[2] = {m.cols[0].z, m.cols[1].z, m.cols[2].z};
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix4d_transpose(const float4x4 *pm, float4x4 *p_out) noexcept {
+    auto m = *reinterpret_cast<const llvm_float4x4 *>(pm);
+    auto out = reinterpret_cast<llvm_float4x4 *>(p_out);
+    out->cols[0] = {m.cols[0].x, m.cols[1].x, m.cols[2].x, m.cols[3].x};
+    out->cols[1] = {m.cols[0].y, m.cols[1].y, m.cols[2].y, m.cols[3].y};
+    out->cols[2] = {m.cols[0].z, m.cols[1].z, m.cols[2].z, m.cols[3].z};
+    out->cols[3] = {m.cols[0].w, m.cols[1].w, m.cols[2].w, m.cols[3].w};
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_vector2d_outer_product(const float2 *p_lhs, const float2 *p_rhs, float2x2 *p_out) noexcept {
+    auto lhs = *reinterpret_cast<const llvm_float2 *>(p_lhs);
+    auto rhs = *reinterpret_cast<const llvm_float2 *>(p_rhs);
+    auto out = reinterpret_cast<llvm_float2x2 *>(p_out);
+    out->cols[0] = lhs * rhs.x;
+    out->cols[1] = lhs * rhs.y;
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_vector3d_outer_product(const float3 *p_lhs, const float3 *p_rhs, float3x3 *p_out) noexcept {
+    auto lhs = *reinterpret_cast<const llvm_float3 *>(p_lhs);
+    auto rhs = *reinterpret_cast<const llvm_float3 *>(p_rhs);
+    auto out = reinterpret_cast<llvm_float3x3 *>(p_out);
+    out->cols[0] = lhs * rhs.x;
+    out->cols[1] = lhs * rhs.y;
+    out->cols[2] = lhs * rhs.z;
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_vector4d_outer_product(const float4 *p_lhs, const float4 *p_rhs, float4x4 *p_out) noexcept {
+    auto lhs = *reinterpret_cast<const llvm_float4 *>(p_lhs);
+    auto rhs = *reinterpret_cast<const llvm_float4 *>(p_rhs);
+    auto out = reinterpret_cast<llvm_float4x4 *>(p_out);
+    out->cols[0] = lhs * rhs.x;
+    out->cols[1] = lhs * rhs.y;
+    out->cols[2] = lhs * rhs.z;
+    out->cols[3] = lhs * rhs.w;
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix2d_outer_product(const float2x2 *p_lhs, const float2x2 *p_rhs, float2x2 *p_out) noexcept {
+    float2x2 rhs_T;
+    luisa_fallback_wrapper_matrix2d_transpose(p_rhs, &rhs_T);
+    luisa_fallback_wrapper_matrix2d_mul_matrix(p_lhs, &rhs_T, p_out);
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix3d_outer_product(const float3x3 *p_lhs, const float3x3 *p_rhs, float3x3 *p_out) noexcept {
+    float3x3 rhs_T;
+    luisa_fallback_wrapper_matrix3d_transpose(p_rhs, &rhs_T);
+    luisa_fallback_wrapper_matrix3d_mul_matrix(p_lhs, &rhs_T, p_out);
+}
+
+LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_matrix4d_outer_product(const float4x4 *p_lhs, const float4x4 *p_rhs, float4x4 *p_out) noexcept {
+    float4x4 rhs_T;
+    luisa_fallback_wrapper_matrix4d_transpose(p_rhs, &rhs_T);
+    luisa_fallback_wrapper_matrix4d_mul_matrix(p_lhs, &rhs_T, p_out);
+}
+
 LUISA_FALLBACK_WRAPPER float luisa_fallback_wrapper_matrix2d_determinant(const float2x2 *pm) noexcept {
     auto m = *reinterpret_cast<const llvm_float2x2 *>(pm);
     return m.cols[0].x * m.cols[1].y - m.cols[1].x * m.cols[0].y;

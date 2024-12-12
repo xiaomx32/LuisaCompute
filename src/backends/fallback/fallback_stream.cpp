@@ -144,13 +144,12 @@ void FallbackStream::visit(BindlessArrayUpdateCommand *command) noexcept {
 }
 
 void FallbackStream::dispatch(luisa::move_only_function<void()> &&f) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-    //    auto ptr = new_with_allocator<luisa::move_only_function<void()>>(std::move(f));
-    //    _pool.async([ptr] {
-    //        (*ptr)();
-    //        delete_with_allocator(ptr);
-    //    });
-    //    _pool.barrier();
+    using F = std::remove_cvref_t<decltype(f)>;
+    _pool.async([p = luisa::new_with_allocator<F>(std::move(f))] {
+        (*p)();
+        luisa::delete_with_allocator(p);
+    });
+    _pool.barrier();
 }
 
 FallbackStream::FallbackStream() noexcept = default;
