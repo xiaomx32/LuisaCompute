@@ -3194,11 +3194,11 @@ private:
         llvm_func->setCallingConv(llvm::CallingConv::Fast);
 
         // inline functions that have too many arguments
-        static constexpr auto max_argument_count = 16u;
-        if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
-            llvm_func->arg_size() > max_argument_count) {
-            llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
-        }
+        // static constexpr auto max_argument_count = 16u;
+        // if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
+        //     llvm_func->arg_size() > max_argument_count) {
+        //     llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
+        // }
         // create current translation context
         CurrentFunction current{.func = llvm_func};
         // map arguments
