@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         compiler: [ homebrew-clang, system-clang ]
-        config: [ release ]
+        config: [ release, debug ]
     name: macOS / ${{ matrix.config }} / ${{ matrix.compiler }}
     runs-on: macos-latest
     steps:
@@ -60,6 +60,12 @@ jobs:
           fi
           brew install molten-vk ninja cmake xmake
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          sudo xcode-select -switch /Applications/Xcode_16.1.app
+          echo "Check the relevant software versions"
+          brew --version
+          xcodebuild -version
+          clang++ --version
+          echo "Check End"
       - name: "Configure and Build"
         run: |
           xmake lua setup.lua

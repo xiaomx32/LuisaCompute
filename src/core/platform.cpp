@@ -228,8 +228,10 @@ void *dynamic_module_load(const luisa::filesystem::path &path) noexcept {
         }
         LUISA_WARNING_WITH_LOCATION(
             "Failed to load dynamic module '{}', reason: {}.",
-            luisa::to_string(p), dlerror());
+            luisa::to_string(p), dlerror()
+        );
     }
+
     return nullptr;
 }
 
