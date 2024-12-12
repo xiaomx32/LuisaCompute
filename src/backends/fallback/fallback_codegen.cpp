@@ -2842,7 +2842,9 @@ private:
                 for (auto &builtin_variable : current.builtin_variables) {
                     llvm_args.emplace_back(builtin_variable);
                 }
-                return b.CreateCall(llvm_func, llvm_args);
+                auto llvm_call = b.CreateCall(llvm_func, llvm_args);
+                llvm_call->setCallingConv(llvm::CallingConv::Fast);
+                return llvm_call;
             }
             case xir::DerivedInstructionTag::INTRINSIC: {
                 auto intrinsic_inst = static_cast<const xir::IntrinsicInst *>(inst);
@@ -3097,7 +3099,8 @@ private:
                 default: LUISA_ERROR_WITH_LOCATION("Invalid builtin variable index.");
             }
         }
-        b.CreateCall(llvm_kernel, call_args);
+        auto llvm_call = b.CreateCall(llvm_kernel, call_args);
+        llvm_call->setCallingConv(llvm::CallingConv::Fast);
         b.CreateBr(llvm_loop_update_block);
         // loop update
         b.SetInsertPoint(llvm_loop_update_block);
@@ -3139,6 +3142,9 @@ private:
         auto func_name = _get_name_from_metadata(f, default_name);
         auto llvm_func = llvm::Function::Create(llvm_func_type, linkage, llvm::Twine{func_name}, _llvm_module);
         _llvm_functions.emplace(f, llvm_func);
+
+        // use fastcc
+        llvm_func->setCallingConv(llvm::CallingConv::Fast);
 
         // inline functions that have too many arguments
         static constexpr auto max_argument_count = 16u;
