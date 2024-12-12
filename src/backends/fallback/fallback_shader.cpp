@@ -70,7 +70,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         options.NoTrappingFPMath = true;
         options.NoSignedZerosFPMath = true;
         options.ApproxFuncFPMath = true;
-        options.EnableIPRA = true;
+        options.EnableIPRA = false;// true causes crash
         options.StackSymbolOrdering = true;
         options.TrapUnreachable = false;
         options.EnableMachineFunctionSplitter = true;

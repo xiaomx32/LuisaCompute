@@ -181,7 +181,11 @@ private:
                 auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
                 return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
             }
-            case Type::Tag::TEXTURE: return llvm::VectorType::get(llvm::Type::getFloatTy(_llvm_context), 4u, false);//I don't know why but yeah a texture view is 16bytes
+            case Type::Tag::TEXTURE: {
+                auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+                auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
+                return llvm::StructType::get(_llvm_context, {llvm_ptr_type, llvm_i64_type});
+            }
             case Type::Tag::BINDLESS_ARRAY: {
                 auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
                 auto llvm_i64_type = llvm::Type::getInt64Ty(_llvm_context);
@@ -1756,22 +1760,24 @@ private:
         return b.CreatePtrToInt(llvm_buffer_ptr, llvm_int_type);
     }
 
-    [[nodiscard]] llvm::Value *_translate_matrix_transpose(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::IntrinsicInst *inst) noexcept {
-
+    [[nodiscard]] llvm::Value *_translate_matrix_transpose(CurrentFunction &current, IRBuilder &b,
+                                                           const xir::IntrinsicInst *inst) noexcept {
         auto matrix = inst->operand(0u);
+        LUISA_ASSERT(matrix->type() != nullptr &&
+                         matrix->type() == inst->type() &&
+                         matrix->type()->is_matrix(),
+                     "Invalid matrix type for transpose operation.");
         auto dimension = inst->type()->dimension();
         auto llvm_matrix = _lookup_value(current, b, matrix);
-        auto llvm_result = llvm::cast<llvm::Value>(llvm::UndefValue::get(llvm_matrix->getType()));
-        for (auto i = 0u; i < dimension; i++) {
-            for (auto j = 0u; j < dimension; j++) {
-                auto llvm_elem = b.CreateExtractValue(llvm_matrix, {j, i});
-                llvm_result = b.CreateInsertValue(llvm_result, llvm_elem, {i, j});
-            }
-        }
-        return llvm_result;
+        auto llvm_matrix_alloca = b.CreateAlloca(llvm_matrix->getType());
+        b.CreateStore(llvm_matrix, llvm_matrix_alloca);
+        auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        auto llvm_func_name = luisa::format("luisa.matrix{}d.transpose", dimension);
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        b.CreateCall(llvm_func, {llvm_matrix_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
     }
 
     [[nodiscard]] llvm::Value *_translate_matrix_comp_op(CurrentFunction &current, IRBuilder &b,
@@ -1825,6 +1831,47 @@ private:
         b.CreateStore(llvm_lhs, llvm_lhs_alloca);
         b.CreateStore(llvm_rhs, llvm_rhs_alloca);
         auto llvm_result_type = _translate_type(inst->type(), true);
+        auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
+        auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
+        LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
+        b.CreateCall(llvm_func, {llvm_lhs_alloca, llvm_rhs_alloca, llvm_result_alloca});
+        return b.CreateLoad(llvm_result_type, llvm_result_alloca);
+    }
+
+    [[nodiscard]] llvm::Value *_translate_outer_product(CurrentFunction &current, IRBuilder &b,
+                                                        const xir::IntrinsicInst *inst) noexcept {
+        auto result_type = inst->type();
+        LUISA_ASSERT(result_type != nullptr && result_type->is_matrix(),
+                     "Invalid outer product operands.");
+        // outer_product(lhs, rhs) = lhs * transpose(rhs)
+        auto lhs = inst->operand(0u);
+        auto rhs = inst->operand(1u);
+        auto llvm_func_name = [&] {
+            auto lhs_type = lhs->type();
+            auto rhs_type = rhs->type();
+            LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr,
+                         "Invalid outer product operands.");
+            LUISA_ASSERT((lhs_type->is_matrix() && rhs_type->is_matrix()) ||
+                             (lhs_type->is_vector() && rhs_type->is_vector()),
+                         "Invalid outer product operands: ({}, {}) -> {}.",
+                         lhs_type->description(), rhs_type->description(), result_type->description());
+            LUISA_ASSERT(lhs_type->dimension() == result_type->dimension() &&
+                             rhs_type->dimension() == result_type->dimension() &&
+                             lhs_type->element() == result_type->element() &&
+                             rhs_type->element() == result_type->element(),
+                         "Dimension and/or element mismatch.");
+            return luisa::format(lhs_type->is_matrix() && rhs_type->is_matrix() ?
+                                     "luisa.matrix{}d.outer.product" :
+                                     "luisa.vector{}d.outer.product",
+                                 result_type->dimension());
+        }();
+        auto llvm_lhs = _lookup_value(current, b, lhs);
+        auto llvm_rhs = _lookup_value(current, b, rhs);
+        auto llvm_lhs_alloca = b.CreateAlloca(llvm_lhs->getType());
+        auto llvm_rhs_alloca = b.CreateAlloca(llvm_rhs->getType());
+        b.CreateStore(llvm_lhs, llvm_lhs_alloca);
+        b.CreateStore(llvm_rhs, llvm_rhs_alloca);
+        auto llvm_result_type = _translate_type(result_type, true);
         auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
         LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
@@ -2475,7 +2522,7 @@ private:
             case xir::IntrinsicOp::REDUCE_PRODUCT: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_PRODUCT, inst->operand(0u));
             case xir::IntrinsicOp::REDUCE_MIN: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MIN, inst->operand(0u));
             case xir::IntrinsicOp::REDUCE_MAX: return _translate_vector_reduce(current, b, xir::IntrinsicOp::REDUCE_MAX, inst->operand(0u));
-            case xir::IntrinsicOp::OUTER_PRODUCT: break;
+            case xir::IntrinsicOp::OUTER_PRODUCT: return _translate_outer_product(current, b, inst);
             case xir::IntrinsicOp::MATRIX_COMP_NEG: {
                 auto m = inst->operand(0u);
                 LUISA_ASSERT(m->type() != nullptr && m->type()->is_matrix(),
@@ -3147,11 +3194,11 @@ private:
         llvm_func->setCallingConv(llvm::CallingConv::Fast);
 
         // inline functions that have too many arguments
-        static constexpr auto max_argument_count = 16u;
-        if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
-            llvm_func->arg_size() > max_argument_count) {
-            llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
-        }
+        // static constexpr auto max_argument_count = 16u;
+        // if (f->derived_function_tag() != xir::DerivedFunctionTag::KERNEL &&
+        //     llvm_func->arg_size() > max_argument_count) {
+        //     llvm_func->addFnAttr(llvm::Attribute::AlwaysInline);
+        // }
         // create current translation context
         CurrentFunction current{.func = llvm_func};
         // map arguments
