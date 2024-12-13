@@ -25,7 +25,11 @@
 
 #else// Linux or other Unix-like systems
 
-#error Not implemented
+#ifdef LUISA_ARCH_X86_64
+#include "fallback_builtin/fallback_device_api_wrappers.linux.x86_64.inl"
+#else
+#error Unsupported architecture
+#endif
 
 #endif
 

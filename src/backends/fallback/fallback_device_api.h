@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB
 namespace luisa::compute::fallback::api {

@@ -16,6 +16,7 @@ if __name__ == "__main__":
     with open(dst_path, "r", newline="\n") as f:
         content = "".join(line for line in f.readlines()
                           if not line.strip().startswith("@llvm.used") and
+                          not line.strip().startswith("@llvm.compiler.used") and
                           not line.strip().startswith("; ModuleID") and
                           not line.strip().startswith("source_filename"))
         content = content.replace("\n\n\n", "\n\n")
