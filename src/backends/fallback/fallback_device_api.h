@@ -82,7 +82,6 @@ struct alignas(16u) PackedTextureView {
 static_assert(sizeof(TextureView) == 16 && sizeof(PackedTextureView) == 16);
 
 struct alignas(16) Texture;
-struct alignas(16) Accel;
 
 struct alignas(16) BindlessSlot {
     const void *buffer;
@@ -108,7 +107,7 @@ struct alignas(16) AccelInstance {
 static_assert(sizeof(AccelInstance) == 64u);
 
 struct alignas(16) AccelView {
-    const Accel *accel;
+    void *embree_scene;
     AccelInstance *instances;
 };
 
@@ -146,8 +145,8 @@ void luisa_fallback_texture3d_write_int(void *texture_data, uint64_t texture_dat
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_read(const Texture *handle, uint x, uint y, uint z) noexcept;
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_read_level(const Texture *handle, uint x, uint y, uint z, uint level) noexcept;
 
-[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
-[[nodiscard]] bool luisa_fallback_accel_trace_any(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
+[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
+[[nodiscard]] bool luisa_fallback_accel_trace_any(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
 }
 
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB

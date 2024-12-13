@@ -4,49 +4,28 @@
 
 #pragma once
 
-#include "thread_pool.h"
 #include <luisa/runtime/command_list.h>
+#include "fallback_command_queue.h"
 
 namespace luisa::compute::fallback {
 
-class LLVMEvent;
-
-/**
- * @brief Stream of LLVM
- * 
- */
-class FallbackStream final : public MutableCommandVisitor {
+class FallbackStream final {
 
 private:
-    ThreadPool _pool;
+    FallbackCommandQueue _queue;
+
+#define LUISA_FALLBACK_STREAM_ENQUEUE_COMMAND_DECL(COMMAND_TYPE) \
+    void _enqueue(luisa::unique_ptr<COMMAND_TYPE> cmd) noexcept;
+    LUISA_MAP(LUISA_FALLBACK_STREAM_ENQUEUE_COMMAND_DECL, LUISA_COMPUTE_RUNTIME_COMMANDS)
+#undef LUISA_FALLBACK_STREAM_ENQUEUE_COMMAND_DECL
 
 public:
-    FallbackStream() noexcept;
-    [[nodiscard]] auto pool() noexcept { return &_pool; }
-    void synchronize() noexcept { _pool.synchronize(); }
+    explicit FallbackStream(size_t queue_size = 16u) noexcept;
+    ~FallbackStream() noexcept = default;
+    [[nodiscard]] auto queue() noexcept { return &_queue; }
+    void synchronize() noexcept { _queue.synchronize(); }
     void dispatch(CommandList &&cmd_list) noexcept;
     void dispatch(luisa::move_only_function<void()> &&f) noexcept;
-    void signal(LLVMEvent *event) noexcept;
-    void wait(LLVMEvent *event) noexcept;
-
-public:
-    void visit(BufferUploadCommand *command) noexcept override;
-    void visit(BufferDownloadCommand *command) noexcept override;
-    void visit(BufferCopyCommand *command) noexcept override;
-    void visit(BufferToTextureCopyCommand *command) noexcept override;
-    void visit(ShaderDispatchCommand *command) noexcept override;
-    void visit(TextureUploadCommand *command) noexcept override;
-    void visit(TextureDownloadCommand *command) noexcept override;
-    void visit(TextureCopyCommand *command) noexcept override;
-    void visit(TextureToBufferCopyCommand *command) noexcept override;
-    void visit(AccelBuildCommand *command) noexcept override;
-    void visit(MeshBuildCommand *command) noexcept override;
-    void visit(BindlessArrayUpdateCommand *command) noexcept override;
-    void visit(CurveBuildCommand *command) noexcept override;
-    void visit(ProceduralPrimitiveBuildCommand *command) noexcept override;
-    void visit(MotionInstanceBuildCommand *command) noexcept override;
-    void visit(CustomCommand *command) noexcept override;
-    ~FallbackStream() noexcept override = default;
 };
 
 }// namespace luisa::compute::fallback

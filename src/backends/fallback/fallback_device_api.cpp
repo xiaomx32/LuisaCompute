@@ -316,7 +316,7 @@ template<typename T>
     return luisa_fallback_bindless_texture3d_read_level(handle, x, y, z, 0u);
 }
 
-[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
+[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
     rtcInitIntersectContext(&ctx);
@@ -341,11 +341,11 @@ template<typename T>
     rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
     rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
     rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
-    auto accel = reinterpret_cast<const FallbackAccel *>(handle);
+    auto scene = static_cast<RTCScene>(handle);
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-    rtcIntersect1(accel->scene(), &ctx, &rh);
+    rtcIntersect1(scene, &ctx, &rh);
 #else
-    rtcIntersect1(accel->scene(), &rh, &args);
+    rtcIntersect1(scene, &rh, &args);
 #endif
     SurfaceHit hit{};
     hit.inst = rh.hit.instID[0];
@@ -355,7 +355,7 @@ template<typename T>
     return hit;
 }
 
-[[nodiscard]] bool luisa_fallback_accel_trace_any(const Accel *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
+[[nodiscard]] bool luisa_fallback_accel_trace_any(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
 
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
@@ -378,11 +378,11 @@ template<typename T>
     ray.time = time;
     ray.flags = 0;
 
-    auto accel = reinterpret_cast<const FallbackAccel *>(handle);
+    auto scene = static_cast<RTCScene>(handle);
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-    rtcOccluded1(accel->scene(), &ctx, &ray);
+    rtcOccluded1(scene, &ctx, &ray);
 #else
-    rtcOccluded1(accel->scene(), &ray, &args);
+    rtcOccluded1(scene, &ray, &args);
 #endif
     return ray.tfar < 0.f;
 }

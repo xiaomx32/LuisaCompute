@@ -436,7 +436,7 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_bindless_texture3d_size(const
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_closest_motion(const AccelView *handle, const Ray *ray, float time, uint mask, SurfaceHit *out) noexcept {
-    *out = luisa_fallback_accel_trace_closest(handle->accel,
+    *out = luisa_fallback_accel_trace_closest(handle->embree_scene,
                                               ray->origin[0], ray->origin[1], ray->origin[2],
                                               ray->t_min,
                                               ray->direction[0], ray->direction[1], ray->direction[2],
@@ -445,7 +445,7 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_closest_motion(co
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_any_motion(const AccelView *handle, const Ray *ray, float time, uint mask, bool *out) noexcept {
-    *out = luisa_fallback_accel_trace_any(handle->accel,
+    *out = luisa_fallback_accel_trace_any(handle->embree_scene,
 	                                      ray->origin[0], ray->origin[1], ray->origin[2],
                                           ray->t_min,
                                           ray->direction[0], ray->direction[1], ray->direction[2],

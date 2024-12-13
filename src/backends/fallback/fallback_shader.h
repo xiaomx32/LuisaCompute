@@ -20,14 +20,10 @@ class ExecutionEngine;
 namespace llvm::orc {
 class LLJIT;
 }// namespace llvm::orc
-namespace luisa
-{
-    class ThreadPool;
-}
 
 namespace luisa::compute::fallback {
 
-using luisa::compute::detail::FunctionBuilder;
+class FallbackCommandQueue;
 
 class FallbackShader {
 
@@ -39,26 +35,25 @@ private:
     luisa::unordered_map<uint, size_t> _argument_offsets;
     kernel_entry_t *_kernel_entry{nullptr};
     size_t _argument_buffer_size{};
-    //luisa::vector<CpuCallback> _callbacks;
     size_t _shared_memory_size{};
     unique_ptr<llvm::Module> _module{};
     luisa::vector<ShaderDispatchCommand::Argument> _bound_arguments;
 
     uint3 _block_size;
-    mutable std::unique_ptr<::llvm::orc::LLJIT> _jit;
+    std::unique_ptr<::llvm::orc::LLJIT> _jit;
     std::unique_ptr<::llvm::TargetMachine> _target_machine;
 
+private:
+    void _build_bound_arguments(luisa::span<const Function::Binding> bindings) noexcept;
 
-    void build_bound_arguments(Function kernel);
 public:
-
-    void dispatch(ThreadPool& pool, const ShaderDispatchCommand *command) const noexcept;
+    void dispatch(ThreadPool &pool, const ShaderDispatchCommand *command) const noexcept;
+    void dispatch(FallbackCommandQueue *queue, luisa::unique_ptr<ShaderDispatchCommand> command) noexcept;
     FallbackShader(const ShaderOption &option, Function kernel) noexcept;
     ~FallbackShader() noexcept;
 
     [[nodiscard]] auto argument_buffer_size() const noexcept { return _argument_buffer_size; }
     [[nodiscard]] auto shared_memory_size() const noexcept { return _shared_memory_size; }
-    [[nodiscard]] size_t argument_offset(uint uid) const noexcept;
     [[nodiscard]] auto native_handle() const noexcept { return _kernel_entry; }
 };
 

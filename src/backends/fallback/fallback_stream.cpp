@@ -3,6 +3,8 @@
 //
 
 #include <algorithm>
+#include <luisa/core/logging.h>
+
 #include "fallback_stream.h"
 #include "fallback_accel.h"
 #include "fallback_bindless_array.h"
@@ -10,164 +12,131 @@
 #include "fallback_texture.h"
 #include "fallback_shader.h"
 #include "fallback_buffer.h"
-#include "luisa/core/logging.h"
 
 namespace luisa::compute::fallback {
 
-using std::max;
-
-void FallbackStream::dispatch(CommandList &&cmd_list) noexcept {
-
-    auto cmds = cmd_list.steal_commands();
-
-    for (auto &&cmd : cmds) {
-        for (;;) {
-            auto n = _pool.task_count();
-            if (n < _pool.size() * 4u) { break; }
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(50us);
-        }
-        cmd->accept(*this);
-    }
-    _pool.barrier();
-}
-
-void FallbackStream::signal(LLVMEvent *event) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-    //    event->signal(_pool.async([] {}));
-}
-
-void FallbackStream::wait(LLVMEvent *event) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-    //    _pool.async([future = event->future()] { future.wait(); });
-    //    _pool.barrier();
-}
-
-void FallbackStream::visit(BufferUploadCommand *command) noexcept {
-    auto temp_buffer = luisa::allocate_with_allocator<std::byte>(command->size());
-    std::memcpy(temp_buffer, command->data(), command->size());
-    auto dst = reinterpret_cast<FallbackBuffer *>(command->handle())->view(command->offset(), command->size());
-    _pool.async([src = temp_buffer, dst] {
+void FallbackStream::_enqueue(luisa::unique_ptr<BufferUploadCommand> cmd) noexcept {
+    auto temp_buffer = luisa::allocate_with_allocator<std::byte>(cmd->size());
+    std::memcpy(temp_buffer, cmd->data(), cmd->size());
+    auto dst = reinterpret_cast<FallbackBuffer *>(cmd->handle())->view(cmd->offset(), cmd->size());
+    queue()->enqueue([src = temp_buffer, dst] {
         std::memcpy(dst.ptr, src, dst.size);
         luisa::deallocate_with_allocator(src);
     });
-    _pool.barrier();
 }
 
-void FallbackStream::visit(BufferDownloadCommand *command) noexcept {
-    auto src = reinterpret_cast<FallbackBuffer *>(command->handle())->view(command->offset(), command->size());
-    _pool.async([dst = command->data(), src] { std::memcpy(dst, src.ptr, src.size); });
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<BufferDownloadCommand> cmd) noexcept {
+    auto src = reinterpret_cast<FallbackBuffer *>(cmd->handle())->view(cmd->offset(), cmd->size());
+    queue()->enqueue([dst = cmd->data(), src] { std::memcpy(dst, src.ptr, src.size); });
 }
 
-void FallbackStream::visit(BufferCopyCommand *command) noexcept {
-    auto src = reinterpret_cast<FallbackBuffer *>(command->src_handle())->view(command->src_offset(), command->size());
-    auto dst = reinterpret_cast<FallbackBuffer *>(command->dst_handle())->view(command->dst_offset(), command->size());
-    _pool.async([src, dst = dst.ptr] { std::memcpy(dst, src.ptr, src.size); });
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<BufferCopyCommand> cmd) noexcept {
+    auto src = reinterpret_cast<FallbackBuffer *>(cmd->src_handle())->view(cmd->src_offset(), cmd->size());
+    auto dst = reinterpret_cast<FallbackBuffer *>(cmd->dst_handle())->view(cmd->dst_offset(), cmd->size());
+    queue()->enqueue([src, dst = dst.ptr] { std::memcpy(dst, src.ptr, src.size); });
 }
 
-void FallbackStream::visit(BufferToTextureCopyCommand *command) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-    //    _pool.async([cmd = *command] {
-    //        auto src = reinterpret_cast<const void *>(cmd.buffer() + cmd.buffer_offset());
-    //        auto tex = reinterpret_cast<FallbackTexture *>(cmd.texture())->view(cmd.level());
-    //        tex.copy_from(src);
-    //    });
+void FallbackStream::_enqueue(luisa::unique_ptr<BufferToTextureCopyCommand> cmd) noexcept {
+    auto buffer = reinterpret_cast<FallbackBuffer *>(cmd->buffer());
+    auto texture = reinterpret_cast<FallbackTexture *>(cmd->texture());
+    auto src = buffer->view_with_offset(cmd->buffer_offset());
+    auto dst = texture->view(cmd->level());
+    queue()->enqueue([src, dst] { dst.copy_from(src.ptr); });
 }
 
-void FallbackStream::visit(ShaderDispatchCommand *command) noexcept {
-    auto shader = reinterpret_cast<const FallbackShader *>(command->handle());
-    shader->dispatch(_pool, command);
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<ShaderDispatchCommand> cmd) noexcept {
+    auto shader = reinterpret_cast<FallbackShader *>(cmd->handle());
+    shader->dispatch(queue(), std::move(cmd));
 }
 
-void FallbackStream::visit(TextureUploadCommand *command) noexcept {
-    auto tex = reinterpret_cast<FallbackTexture *>(command->handle())->view(command->level());
+void FallbackStream::_enqueue(luisa::unique_ptr<TextureUploadCommand> cmd) noexcept {
+    auto tex = reinterpret_cast<FallbackTexture *>(cmd->handle())->view(cmd->level());
     auto byte_size = pixel_storage_size(tex.storage(), tex.size3d());
     auto temp_buffer = luisa::allocate_with_allocator<std::byte>(byte_size);
-    std::memcpy(temp_buffer, command->data(), byte_size);
-    _pool.async([tex, temp_buffer] {
+    std::memcpy(temp_buffer, cmd->data(), byte_size);
+    queue()->enqueue([tex, temp_buffer] {
         auto byte_size = pixel_storage_size(tex.storage(), tex.size3d());
         std::memcpy(const_cast<std::byte *>(tex.data()), temp_buffer, byte_size);
         luisa::deallocate_with_allocator(temp_buffer);
     });
-    _pool.barrier();
 }
 
-void FallbackStream::visit(TextureDownloadCommand *command) noexcept {
-    auto tex = reinterpret_cast<FallbackTexture *>(command->handle())->view(command->level());
-    _pool.async([=, dst = command->data()] { tex.copy_to(dst); });
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<TextureDownloadCommand> cmd) noexcept {
+    auto tex = reinterpret_cast<FallbackTexture *>(cmd->handle())->view(cmd->level());
+    queue()->enqueue([=, dst = cmd->data()] { tex.copy_to(dst); });
 }
 
-void FallbackStream::visit(TextureCopyCommand *command) noexcept {
-    auto src_tex = reinterpret_cast<FallbackTexture *>(command->src_handle())->view(command->src_level());
-    auto dst_tex = reinterpret_cast<FallbackTexture *>(command->dst_handle())->view(command->dst_level());
-    _pool.async([=] { dst_tex.copy_from(src_tex); });
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<TextureCopyCommand> cmd) noexcept {
+    auto src_tex = reinterpret_cast<FallbackTexture *>(cmd->src_handle())->view(cmd->src_level());
+    auto dst_tex = reinterpret_cast<FallbackTexture *>(cmd->dst_handle())->view(cmd->dst_level());
+    queue()->enqueue([=] { dst_tex.copy_from(src_tex); });
 }
 
-void FallbackStream::visit(TextureToBufferCopyCommand *command) noexcept {
-    auto src = reinterpret_cast<FallbackTexture *>(command->texture())->view(command->level());
-    auto dst = reinterpret_cast<FallbackBuffer *>(command->buffer())->view_with_offset(command->buffer_offset());
-    _pool.async([src, dst = dst.ptr] { src.copy_to(dst); });
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<TextureToBufferCopyCommand> cmd) noexcept {
+    auto src = reinterpret_cast<FallbackTexture *>(cmd->texture())->view(cmd->level());
+    auto dst = reinterpret_cast<FallbackBuffer *>(cmd->buffer())->view_with_offset(cmd->buffer_offset());
+    queue()->enqueue([src, dst = dst.ptr] { src.copy_to(dst); });
 }
 
-void FallbackStream::visit(AccelBuildCommand *command) noexcept {
-    auto accel = reinterpret_cast<FallbackAccel *>(command->handle());
-    accel->build(_pool, command->instance_count(), command->steal_modifications());
-    _pool.barrier();
-}
-
-void FallbackStream::visit(MeshBuildCommand *command) noexcept {
-    auto v_b = reinterpret_cast<FallbackBuffer *>(command->vertex_buffer())->data();
-    auto v_b_o = command->vertex_buffer_offset();
-    auto v_s = command->vertex_stride();
-    auto v_b_s = command->vertex_buffer_size();
-    auto v_b_c = v_b_s / v_s;
-    auto t_b = reinterpret_cast<FallbackBuffer *>(command->triangle_buffer())->data();
-    auto t_b_o = command->triangle_buffer_offset();
-    auto t_b_s = command->triangle_buffer_size();
-    auto t_b_c = t_b_s / 12u;
-    _pool.async([=, mesh = reinterpret_cast<FallbackMesh *>(command->handle())] {
-        mesh->commit(reinterpret_cast<uint64_t>(v_b), v_b_o, v_s, v_b_c,
-                     reinterpret_cast<uint64_t>(t_b), t_b_o, t_b_c);
+void FallbackStream::_enqueue(luisa::unique_ptr<AccelBuildCommand> cmd) noexcept {
+    queue()->enqueue([cmd = std::move(cmd)]() mutable noexcept {
+        auto accel = reinterpret_cast<FallbackAccel *>(cmd->handle());
+        accel->build(std::move(cmd));
     });
-    _pool.barrier();
 }
 
-void FallbackStream::visit(BindlessArrayUpdateCommand *command) noexcept {
-    reinterpret_cast<FallbackBindlessArray *>(command->handle())->update(_pool, command->steal_modifications());
-    _pool.barrier();
+void FallbackStream::_enqueue(luisa::unique_ptr<MeshBuildCommand> cmd) noexcept {
+    queue()->enqueue([cmd = std::move(cmd)]() mutable noexcept {
+        auto mesh = reinterpret_cast<FallbackMesh *>(cmd->handle());
+        mesh->build(std::move(cmd));
+    });
+}
+
+void FallbackStream::_enqueue(luisa::unique_ptr<CurveBuildCommand> cmd) noexcept {
+    LUISA_NOT_IMPLEMENTED();
+}
+
+void FallbackStream::_enqueue(luisa::unique_ptr<ProceduralPrimitiveBuildCommand> cmd) noexcept {
+    LUISA_NOT_IMPLEMENTED();
+}
+
+void FallbackStream::_enqueue(luisa::unique_ptr<MotionInstanceBuildCommand> cmd) noexcept {
+    LUISA_NOT_IMPLEMENTED();
+}
+
+void FallbackStream::_enqueue(luisa::unique_ptr<BindlessArrayUpdateCommand> cmd) noexcept {
+    queue()->enqueue([cmd = std::move(cmd)]() mutable noexcept {
+        auto bindless = reinterpret_cast<FallbackBindlessArray *>(cmd->handle());
+        bindless->update(std::move(cmd));
+    });
+}
+
+void FallbackStream::_enqueue(luisa::unique_ptr<CustomCommand> cmd) noexcept {
+    LUISA_NOT_IMPLEMENTED();
+}
+
+void FallbackStream::dispatch(CommandList &&cmd_list) noexcept {
+    auto cmds = cmd_list.steal_commands();
+    for (auto &&cmd : cmds) {
+#define LUISA_FALLBACK_STREAM_CAST_AND_ENQUEUE_COMMAND_CASE(COMMAND_TYPE) \
+    case Command::Tag::E##COMMAND_TYPE: {                                 \
+        auto derived_cmd = static_cast<COMMAND_TYPE *>(cmd.release());    \
+        _enqueue(luisa::unique_ptr<COMMAND_TYPE>{derived_cmd});           \
+        break;                                                            \
+    }
+        switch (cmd->tag()) {
+            LUISA_MAP(LUISA_FALLBACK_STREAM_CAST_AND_ENQUEUE_COMMAND_CASE,
+                      LUISA_COMPUTE_RUNTIME_COMMANDS)
+        }
+#undef LUISA_FALLBACK_STREAM_CAST_AND_ENQUEUE_COMMAND_CASE
+    }
 }
 
 void FallbackStream::dispatch(luisa::move_only_function<void()> &&f) noexcept {
-    using F = std::remove_cvref_t<decltype(f)>;
-    _pool.async([p = luisa::new_with_allocator<F>(std::move(f))] {
-        (*p)();
-        luisa::delete_with_allocator(p);
-    });
-    _pool.barrier();
+    queue()->enqueue(std::move(f));
 }
 
-FallbackStream::FallbackStream() noexcept = default;
-
-void FallbackStream::visit(CurveBuildCommand *command) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-}
-
-void FallbackStream::visit(ProceduralPrimitiveBuildCommand *command) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-}
-
-void FallbackStream::visit(MotionInstanceBuildCommand *command) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-}
-
-void FallbackStream::visit(CustomCommand *command) noexcept {
-    LUISA_NOT_IMPLEMENTED();
-}
+FallbackStream::FallbackStream(size_t in_flight_limit) noexcept
+    : _queue{in_flight_limit, 0u} {}
 
 }// namespace luisa::compute::fallback

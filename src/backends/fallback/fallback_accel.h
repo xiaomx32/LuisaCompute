@@ -18,6 +18,7 @@ class ThreadPool;
 
 namespace luisa::compute::fallback {
 
+class FallbackCommandQueue;
 class FallbackMesh;
 
 class alignas(16) FallbackAccel {
@@ -34,27 +35,20 @@ public:
     static_assert(sizeof(Instance) == 64u);
 
     struct alignas(16) View {
-        const FallbackAccel *accel;
+        RTCScene scene;
         Instance *instances;
     };
 
 private:
-    const RTCDevice _device;
     RTCScene _handle;
-    mutable luisa::vector<Instance> _instances;
-
-private:
-    [[nodiscard]] static std::array<float, 12> _compress(float4x4 m) noexcept;
-    [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
+    luisa::vector<Instance> _instances;
 
 public:
-    [[nodiscard]] auto device() const noexcept { return _device; }
-    [[nodiscard]] RTCScene scene() const noexcept { return _handle; }
-    FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
+    [[nodiscard]] RTCScene handle() const noexcept { return _handle; }
+    FallbackAccel(RTCDevice device, const AccelOption &option) noexcept;
     ~FallbackAccel() noexcept;
-    void build(ThreadPool &pool, size_t instance_count,
-               luisa::vector<AccelBuildCommand::Modification> &&mods) noexcept;
-    [[nodiscard]] auto view() const noexcept { return View{this, _instances.data()}; }
+    void build(luisa::unique_ptr<AccelBuildCommand> cmd) noexcept;
+    [[nodiscard]] auto view() noexcept { return View{_handle, _instances.data()}; }
 };
 
 using FallbackAccelView = FallbackAccel::View;

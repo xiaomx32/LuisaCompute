@@ -51,7 +51,7 @@ private:
 public:
     explicit FallbackBindlessArray(size_t capacity) noexcept;
     [[nodiscard]] auto &slot(unsigned int idx) const noexcept { return _slots[idx]; }
-    void update(ThreadPool &pool, luisa::vector<BindlessArrayUpdateCommand::Modification> &&modifications) noexcept;
+    void update(luisa::unique_ptr<BindlessArrayUpdateCommand> cmd) noexcept;
     [[nodiscard]] auto view() noexcept { return View{_slots.data(), _slots.size()}; }
 };
 

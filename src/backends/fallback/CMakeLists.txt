@@ -7,6 +7,7 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_device.cpp
             fallback_device_api.cpp
             fallback_device_api_ir_module.cpp
+            fallback_command_queue.cpp
             #llvm_codegen.cpp
             #llvm_codegen_value.cpp
             #llvm_codegen_builtin.cpp
@@ -16,7 +17,6 @@ if (LLVM_FOUND AND embree_FOUND)
             #llvm_codegen_stmt.cpp
             #llvm_event.cpp
             #llvm_shader.cpp
-            thread_pool.cpp
             #dirty_range.cpp
             fallback_bindless_array.cpp
             fallback_stream.cpp
