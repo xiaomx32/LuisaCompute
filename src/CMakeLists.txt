@@ -55,7 +55,6 @@ add_library(compute INTERFACE)
 
 target_link_libraries(compute INTERFACE
         luisa-compute-core
-        luisa-compute-vstl
         luisa-compute-ast
         luisa-compute-xir
         luisa-compute-dsl

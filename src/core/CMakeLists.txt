@@ -27,6 +27,7 @@ target_link_libraries(luisa-compute-core
         ${CMAKE_DL_LIBS}
         $<$<PLATFORM_ID:Windows>:dbghelp>
         PRIVATE
+        EASTL-object
         luisa-compute-ext-marl
         luisa-compute-ext-yyjson)
 

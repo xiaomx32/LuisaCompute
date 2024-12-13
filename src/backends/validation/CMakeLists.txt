@@ -25,9 +25,7 @@ set(LUISA_COMPUTE_VALIDATION_SOURCES
 
 add_library(luisa-compute-validation-layer MODULE ${LUISA_COMPUTE_VALIDATION_SOURCES})
 target_link_libraries(luisa-compute-validation-layer PRIVATE
-        luisa-compute-runtime
-        luisa-compute-gui
-        luisa-compute-vstl)
+        luisa-compute-runtime luisa-compute-gui)
 target_precompile_headers(luisa-compute-validation-layer PRIVATE pch.h)
 add_dependencies(luisa-compute-backends luisa-compute-validation-layer)
 set_target_properties(luisa-compute-validation-layer PROPERTIES
