@@ -20,7 +20,7 @@ private:
 #undef LUISA_FALLBACK_STREAM_ENQUEUE_COMMAND_DECL
 
 public:
-    explicit FallbackStream(size_t queue_size = 16u) noexcept;
+    explicit FallbackStream(size_t queue_size = 8u) noexcept;
     ~FallbackStream() noexcept = default;
     [[nodiscard]] auto queue() noexcept { return &_queue; }
     void synchronize() noexcept { _queue.synchronize(); }
