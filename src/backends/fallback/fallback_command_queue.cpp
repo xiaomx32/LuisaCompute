@@ -2,6 +2,8 @@
 
 namespace luisa::compute::fallback {
 
+#ifndef LUISA_COMPUTE_ENABLE_TBB
+
 class FallbackCommandQueueParallelContext {
 
 private:
@@ -57,6 +59,24 @@ public:
     }
 };
 
+inline void FallbackCommandQueue::_ensure_parallel_workers_started() noexcept {
+    if (_parallel_context == nullptr) {
+        _parallel_context = luisa::make_unique<FallbackCommandQueueParallelContext>();
+        for (auto &w : _parallel_workers) {
+            w = std::thread{[this] { _run_parallel_worker_loop(); }};
+        }
+    }
+}
+
+void FallbackCommandQueue::_run_parallel_worker_loop() noexcept {
+    auto ctx = _parallel_context.get();
+    while (ctx->wait_for_work()) {
+        while (ctx->process_one()) {}
+    }
+}
+
+#endif
+
 inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
     // wait and fetch tasks
     for (;;) {
@@ -74,10 +94,12 @@ inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
         // count the finish of a task
         _total_finish_count.fetch_add(1u);
     }
+#ifndef LUISA_COMPUTE_ENABLE_TBB
     if (_parallel_context) {
         _parallel_context->notify_stop();
         for (auto &w : _parallel_workers) { w.join(); }
     }
+#endif
 }
 
 inline void FallbackCommandQueue::_wait_for_task_queue_available() const noexcept {
@@ -98,28 +120,14 @@ inline void FallbackCommandQueue::_enqueue_task_no_wait(luisa::move_only_functio
     _cv.notify_one();
 }
 
-inline void FallbackCommandQueue::_ensure_parallel_workers_started() noexcept {
-    if (_parallel_context == nullptr) {
-        _parallel_context = luisa::make_unique<FallbackCommandQueueParallelContext>();
-        for (auto &w : _parallel_workers) {
-            w = std::thread{[this] { _run_parallel_worker_loop(); }};
-        }
-    }
-}
-
-void FallbackCommandQueue::_run_parallel_worker_loop() noexcept {
-    auto ctx = _parallel_context.get();
-    while (ctx->wait_for_work()) {
-        while (ctx->process_one()) {}
-    }
-}
-
-FallbackCommandQueue::FallbackCommandQueue(size_t in_flight_limit, size_t num_threads) noexcept
+FallbackCommandQueue::FallbackCommandQueue(size_t in_flight_limit, size_t num_threads [[maybe_unused]]) noexcept
     : _in_flight_limit{in_flight_limit} {
+#ifndef LUISA_COMPUTE_ENABLE_TBB
     if (num_threads == 0u) {
         num_threads = std::max<size_t>(std::thread::hardware_concurrency(), 1u);
     }
     _parallel_workers.resize(num_threads - 1u);
+#endif
     _dispatcher = std::thread{[this] { _run_dispatch_loop(); }};
 }
 
@@ -148,8 +156,12 @@ void FallbackCommandQueue::enqueue(luisa::move_only_function<void()> &&task) noe
 
 void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept {
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
+#ifdef LUISA_COMPUTE_ENABLE_TBB
+        tbb::parallel_for(0u, n, task);
+#else
         _ensure_parallel_workers_started();
         _parallel_context->dispatch(std::move(task), n);
+#endif
     });
 }
 
