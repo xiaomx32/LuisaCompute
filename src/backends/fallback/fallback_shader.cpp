@@ -1,7 +1,7 @@
 //
 // Created by swfly on 2024/11/21.
 //
-
+#include <fstream>
 #include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/core/stl.h>
@@ -18,6 +18,7 @@
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include "fallback_codegen.h"
 #include "fallback_texture.h"
@@ -230,7 +231,41 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     //		llvm_module->print(file_stream, nullptr, true, true);
     //		file_stream.close();
     //	}
-    llvm_module->print(llvm::errs(), nullptr, false, true);
+    LUISA_INFO("Printing optimized LLVM module...");
+    llvm_module->print(llvm::outs(), nullptr, false, true);
+
+    // print x64 assembly of llvm_module
+    {
+        auto asm_name = "kernel_" + std::to_string(kernel.hash()) + ".s";
+        {
+            std::error_code EC;
+            llvm::raw_fd_ostream dest(asm_name, EC, llvm::sys::fs::OF_None);
+            llvm::legacy::PassManager pass;
+
+            if (EC) {
+                LUISA_ERROR_WITH_LOCATION("Could not open file: {}", EC.message());
+            }
+
+            if (_target_machine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::AssemblyFile)) {
+                LUISA_ERROR_WITH_LOCATION("TheTargetMachine can't emit a file of this type");
+            }
+            pass.run(*llvm_module);
+            dest.flush();
+        }
+
+        std::ifstream asm_file(asm_name);
+        if (asm_file.is_open()) {
+            std::stringstream buffer;
+            buffer << asm_file.rdbuf();
+            LUISA_INFO("Kernel Assembly:\n{}", buffer.str());
+            asm_file.close();
+            if (std::remove(asm_name.c_str()) != 0) {
+                LUISA_WARNING_WITH_LOCATION("Failed to delete assembly file: {}", asm_name);
+            }
+        } else {
+            LUISA_ERROR_WITH_LOCATION("Failed to open assembly file: {}", asm_name);
+        }
+    }
 
     // compile to machine code
     auto m = llvm::orc::ThreadSafeModule(std::move(llvm_module), std::move(llvm_ctx));

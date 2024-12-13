@@ -1,6 +1,14 @@
 find_package(LLVM CONFIG)
 find_package(embree CONFIG)
 
+if(NOT embree_FOUND)
+    message(WARNING "Embree not found. Fallback backend will not be built.")
+endif()
+
+if (NOT LLVM_FOUND)
+    message(WARNING "LLVM not found. Fallback backend will not be built.")
+endif()
+
 if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
     set(LC_BACKEND_FALLBACK_SRC
