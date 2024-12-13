@@ -2,8 +2,6 @@
 // Created by Mike on 2024/12/10.
 //
 
-#pragma once
-
 #include <luisa/core/intrin.h>
 #include "fallback_device_api_ir_module.h"
 
