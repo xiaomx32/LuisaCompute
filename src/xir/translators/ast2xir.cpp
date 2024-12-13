@@ -722,6 +722,7 @@ private:
             case CallOp::TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD);
             case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL);
             case CallOp::SHADER_EXECUTION_REORDER: return resource_call(IntrinsicOp::SHADER_EXECUTION_REORDER);
+            case CallOp::CLOCK: return pure_call(IntrinsicOp::CLOCK);
         }
         LUISA_NOT_IMPLEMENTED();
     }

@@ -63,8 +63,8 @@ int main(int argc, char *argv[]) {
         });
     Image<float> display = device.create_image<float>(swap_chain.backend_storage(), make_uint2(resolution));
 
-    auto index = [](UInt3 xyz) noexcept {
-        auto p = clamp(xyz, static_cast<uint3>(0), static_cast<uint3>(n_grid - 1));
+    auto index = [](Int3 xyz) noexcept {
+        auto p = clamp(xyz, 0, n_grid - 1);
         return p.x + p.y * n_grid + p.z * n_grid * n_grid;
     };
     auto outer_product = [](Float3 a, Float3 b) noexcept {

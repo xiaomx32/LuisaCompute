@@ -1406,164 +1406,6 @@ private:
         return b.CreateAlignedStore(llvm_value, llvm_ptr, llvm::MaybeAlign{alignment});
     }
 
-    [[nodiscard]] llvm::Value *_translate_bindless_tex2d(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Instruction *inst, bool level) noexcept {
-
-        LUISA_NOT_IMPLEMENTED();
-
-        auto coord = inst->operand(1u);
-
-        const char *function_name = level ? "bindless.tex2d.level" : "bindless.tex2d";
-
-        // Get LLVM values for the arguments
-        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
-        auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
-        auto llvm_uv = _lookup_value(current, b, inst->operand(2u));
-
-        auto outType = _translate_type(inst->type(), true);
-        // Allocate space for the result locally
-        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
-
-        // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_uv, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_uv, b.getInt32(1), "");
-
-        // Define the function type: void(void*, uint, uint, void*)
-        llvm::FunctionType *func_type;
-        if (level) {
-            //void* bindless, uint slot, float level, float x, float y, void* out
-            func_type = llvm::FunctionType::get(
-                b.getVoidTy(),
-                {b.getPtrTy(),  // void* bindless
-                 b.getInt32Ty(),// uint slot
-                 b.getFloatTy(),// float level
-                 b.getFloatTy(),// float x
-                 b.getFloatTy(),// float y
-                 b.getPtrTy()}, // void* result
-                false);
-        } else {
-            //void* bindless, uint slot, float x, float y, void* out
-            func_type = llvm::FunctionType::get(
-                b.getVoidTy(),
-                {b.getPtrTy(),  // void* bindless
-                 b.getInt32Ty(),// uint slot
-                 b.getFloatTy(),// float x
-                 b.getFloatTy(),// float y
-                 b.getPtrTy()}, // void* result
-                false);
-        }
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
-
-        // Call the function
-        if (level) {
-            b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, _lookup_value(current, b, inst->operand(3u)), result_alloca});
-        } else {
-            b.CreateCall(func, {llvm_bindless, llvm_slot, coord_x, coord_y, result_alloca});
-        }
-
-        // Return the loaded result
-        return b.CreateLoad(outType, result_alloca, "");
-    }
-
-    [[nodiscard]] llvm::Value *_translate_bindless_texture_size(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Instruction *inst, bool dimension2) noexcept {
-
-        LUISA_NOT_IMPLEMENTED();
-
-        const char *function_name = dimension2 ? "bindless.tex2d.size" : "bindless.tex3d.size";
-
-        // Get LLVM values for the arguments
-        auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
-        auto llvm_slot = _lookup_value(current, b, inst->operand(1u));
-
-        auto outType = _translate_type(inst->type(), true);
-        // Allocate space for the result locally
-        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
-
-        // Define the function type: void(void*, uint, uint, void*)
-        llvm::FunctionType *func_type;
-        //void* bindless, uint slot, float level, float x, float y, void* out
-        func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),// void* bindless
-             b.getInt32Ty(),
-             b.getPtrTy()},// void* result
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction(function_name, func_type);
-
-        b.CreateCall(func, {llvm_bindless, llvm_slot, result_alloca});
-
-        // Return the loaded result
-        return b.CreateLoad(outType, result_alloca, "");
-    }
-
-    [[nodiscard]] llvm::Value *_translate_volume_read(
-        CurrentFunction &current,
-        IRBuilder &b,
-        const xir::Instruction *inst) noexcept {
-
-        auto view_struct = inst->operand(0u);
-        auto coord = inst->operand(1u);
-        LUISA_ASSERT(view_struct->type() == Type::of<Volume<float>>() ||
-                         view_struct->type() == Type::of<Volume<uint>>(),
-                     "Invalid volume view type.");
-
-        static const char *function_names[] =
-            {
-                "texture.read.3d.float",
-                "texture.read.3d.uint"};
-        unsigned int functionIdx = 0u;
-        if (view_struct->type() == Type::of<Image<uint>>())
-            functionIdx = 1u;
-
-        // Get LLVM values for the arguments
-        auto llvm_view_struct = _lookup_value(current, b, view_struct);
-        auto llvm_coord = _lookup_value(current, b, coord);
-
-        auto texture_struct_alloca = b.CreateAlloca(llvm_view_struct->getType(), nullptr, "");
-        b.CreateStore(llvm_view_struct, texture_struct_alloca);
-
-        auto outType = llvm::VectorType::get(_translate_type(view_struct->type()->element(), false),
-                                             4u, false);
-        // Allocate space for the result locally
-        auto result_alloca = b.CreateAlloca(outType, nullptr, "");
-        result_alloca->setAlignment(llvm::Align(_get_type_alignment(inst->type())));
-
-        // Extract x and y from uint2 coordinate
-        auto coord_x = b.CreateExtractElement(llvm_coord, b.getInt32(0), "");
-        auto coord_y = b.CreateExtractElement(llvm_coord, b.getInt32(1), "");
-        auto coord_z = b.CreateExtractElement(llvm_coord, b.getInt32(2), "");
-
-        // Define the function type: void(void*, uint, uint, void*)
-        auto func_type = llvm::FunctionType::get(
-            b.getVoidTy(),
-            {b.getPtrTy(),  // void* texture_ptr
-             b.getInt32Ty(),// uint x
-             b.getInt32Ty(),// uint y
-             b.getInt32Ty(),// uint z
-             b.getPtrTy()}, // void* result
-            false);
-
-        // Get the function pointer from the symbol map
-        auto func = _llvm_module->getOrInsertFunction(function_names[functionIdx], func_type);
-
-        // Call the function
-        b.CreateCall(func, {texture_struct_alloca, coord_x, coord_y, coord_z, result_alloca});
-
-        // Return the loaded result
-        return b.CreateLoad(outType, result_alloca, "");
-    }
-
     [[nodiscard]] llvm::Value *_translate_aggregate(CurrentFunction &current,
                                                     IRBuilder &b, const xir::IntrinsicInst *inst) {
         auto type = inst->type();
@@ -2674,6 +2516,11 @@ private:
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
             case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
+            case xir::IntrinsicOp::CLOCK: {
+                auto call = b.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
+                auto llvm_result_type = _translate_type(inst->type(), true);
+                return b.CreateZExtOrTrunc(call, llvm_result_type);
+            }
         }
         LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();

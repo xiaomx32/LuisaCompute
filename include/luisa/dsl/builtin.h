@@ -60,6 +60,11 @@ inline void unreachable(luisa::string_view msg) noexcept {
     detail::FunctionBuilder::current()->call(CallOp::UNREACHABLE, {message});
 }
 
+inline ULong device_clock() noexcept {
+    return def<ulong>(detail::FunctionBuilder::current()->call(
+        Type::of<ulong>(), CallOp::CLOCK, {}));
+}
+
 /// Call assert in device code
 inline void device_assert(Expr<bool> pred) noexcept {
     detail::FunctionBuilder::current()->call(
