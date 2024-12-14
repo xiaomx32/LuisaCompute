@@ -10,13 +10,13 @@ if (LUISA_COMPUTE_ENABLE_GUI)
             ../ext/imgui/backends/imgui_impl_glfw.cpp)
 
     set(LUISA_IMGUI_HEADERS
-            imgui/imconfig.h
-            imgui/imgui.h
-            imgui/imgui_internal.h
-            imgui/imstb_rectpack.h
-            imgui/imstb_textedit.h
-            imgui/imstb_truetype.h
-            imgui/backends/imgui_impl_glfw.h)
+            ../ext/imgui/imconfig.h
+            ../ext/imgui/imgui.h
+            ../ext/imgui/imgui_internal.h
+            ../ext/imgui/imstb_rectpack.h
+            ../ext/imgui/imstb_textedit.h
+            ../ext/imgui/imstb_truetype.h
+            ../ext/imgui/backends/imgui_impl_glfw.h)
 
     set(LUISA_COMPUTE_GUI_SOURCES
             framerate.cpp
@@ -30,8 +30,13 @@ if (LUISA_COMPUTE_ENABLE_GUI)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../ext/imgui/backends>)
     target_link_libraries(luisa-compute-gui PUBLIC luisa-compute-runtime luisa-compute-dsl)
     target_compile_definitions(luisa-compute-gui
-            PRIVATE LC_GUI_EXPORT_DLL "IMGUI_API=__declspec(dllexport)" "IMGUI_IMPL_API=__declspec(dllexport)"
+            PRIVATE LC_GUI_EXPORT_DLL
             PUBLIC LUISA_ENABLE_GUI=1 GLFW_INCLUDE_NONE)
+    if (WIN32)
+        target_compile_definitions(luisa-compute-gui PRIVATE
+                "IMGUI_API=__declspec(dllexport)"
+                "IMGUI_IMPL_API=__declspec(dllexport)")
+    endif ()
     set_target_properties(luisa-compute-gui PROPERTIES
             UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
             OUTPUT_NAME lc-gui)
