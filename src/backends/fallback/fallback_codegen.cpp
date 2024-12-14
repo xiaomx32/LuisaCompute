@@ -397,6 +397,7 @@ private:
             } else {
                 LUISA_ASSERT(ptr_type->is_array() || ptr_type->is_vector() || ptr_type->is_matrix(), "Invalid pointer type.");
                 auto llvm_index = _lookup_value(current, b, index);
+                llvm_index = b.CreateZExtOrTrunc(llvm_index, llvm::Type::getInt64Ty(_llvm_context));
                 auto llvm_ptr_type = _translate_type(ptr_type, false);
                 auto llvm_zero = b.getInt64(0);
                 llvm_ptr = b.CreateInBoundsGEP(llvm_ptr_type, llvm_ptr, {llvm_zero, llvm_index});
@@ -1331,6 +1332,7 @@ private:
         auto llvm_buffer = _lookup_value(current, b, buffer);          // Get the buffer view
         auto llvm_buffer_addr = b.CreateExtractValue(llvm_buffer, {0});// Get the buffer address
         auto llvm_slot = _lookup_value(current, b, slot);              // Get the slot index
+        llvm_slot = b.CreateZExtOrTrunc(llvm_slot, b.getInt64Ty());
         auto slot_type = byte_address ? b.getInt8Ty() : _translate_type(buffer->type()->element(), false);
         return b.CreateInBoundsGEP(
             slot_type,       // Element type
@@ -1532,6 +1534,7 @@ private:
         auto llvm_bindless = _lookup_value(current, b, bindless);
         auto llvm_bindless_slots = b.CreateExtractValue(llvm_bindless, {0});
         auto llvm_slot_index = _lookup_value(current, b, slot_index);
+        llvm_slot_index = b.CreateZExtOrTrunc(llvm_slot_index, b.getInt64Ty());
         auto llvm_slot_ptr = b.CreateInBoundsGEP(llvm_slot_type, llvm_bindless_slots, {llvm_slot_index});
         return b.CreateAlignedLoad(llvm_slot_type, llvm_slot_ptr, llvm::MaybeAlign{16}, "bindless.slot");
     }
@@ -1547,6 +1550,7 @@ private:
         auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
         auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
         auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        llvm_offset = b.CreateZExtOrTrunc(llvm_offset, b.getInt64Ty());
         auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(result_type, false);
         auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
         auto alignment = _get_type_alignment(result_type);
@@ -1565,6 +1569,7 @@ private:
         auto llvm_slot = _load_bindless_array_slot(current, b, llvm_slot_type, bindless, slot_index);
         auto llvm_buffer_ptr = b.CreateExtractValue(llvm_slot, {0});
         auto llvm_offset = _lookup_value(current, b, index_or_offset);
+        llvm_offset = b.CreateZExtOrTrunc(llvm_offset, b.getInt64Ty());
         auto llvm_value = _lookup_value(current, b, value);
         auto llvm_addressing_type = byte_address ? b.getInt8Ty() : _translate_type(value->type(), false);
         auto llvm_target_address = b.CreateInBoundsGEP(llvm_addressing_type, llvm_buffer_ptr, {llvm_offset});
