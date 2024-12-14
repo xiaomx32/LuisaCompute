@@ -58,7 +58,7 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     : DeviceInterface{std::move(ctx)} {
 
     // embree
-    _rtc_device = rtcNewDevice(nullptr);
+    _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=4");
     rtcSetDeviceErrorFunction(
         _rtc_device,
         [](void *, RTCError code, const char *message) {
