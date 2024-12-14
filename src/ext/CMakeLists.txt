@@ -80,9 +80,8 @@ target_include_directories(magic_enum INTERFACE $<BUILD_INTERFACE:${CMAKE_CURREN
 target_link_libraries(luisa-compute-ext INTERFACE magic_enum)
 luisa_compute_install_extension(magic_enum INCLUDE magic_enum/include/magic_enum)
 
+# glfw
 if (LUISA_COMPUTE_ENABLE_GUI)
-
-    # glfw
     if (UNIX AND NOT APPLE)
         set(GLFW_BUILD_WAYLAND ${LUISA_COMPUTE_ENABLE_WAYLAND} CACHE BOOL "" FORCE)
     endif ()
@@ -90,63 +89,11 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-    set(GLFW_LIBRARY_TYPE OBJECT CACHE STRING "" FORCE)
+    set(GLFW_LIBRARY_TYPE SHARED CACHE STRING "" FORCE)
     add_subdirectory(glfw)
-
-    add_library(luisa-compute-ext-glfw ALIAS glfw)
-    target_compile_definitions(glfw PUBLIC _GLFW_BUILD_DLL)
-
-    add_library(luisa-compute-ext-glfw-interface INTERFACE)
-    target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE)
-    target_include_directories(luisa-compute-ext-glfw-interface INTERFACE
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/glfw/include>)
-    target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-glfw-interface)
-    luisa_compute_install_extension(luisa-compute-ext-glfw-interface INCLUDE glfw/include/GLFW)
-
-    # imgui
-    set(LUISA_IMGUI_SOURCES
-            imgui/imgui.cpp
-            imgui/imgui_demo.cpp
-            imgui/imgui_draw.cpp
-            imgui/imgui_tables.cpp
-            imgui/imgui_widgets.cpp
-            imgui/backends/imgui_impl_glfw.cpp)
-    set(LUISA_IMGUI_HEADERS
-            imgui/imconfig.h
-            imgui/imgui.h
-            imgui/imgui_internal.h
-            imgui/imstb_rectpack.h
-            imgui/imstb_textedit.h
-            imgui/imstb_truetype.h
-            imgui/backends/imgui_impl_glfw.h)
-
-    # imgui interface
-    add_library(luisa-compute-ext-imgui-interface INTERFACE)
-    target_include_directories(luisa-compute-ext-imgui-interface INTERFACE
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/imgui>
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends>)
-    set_target_properties(luisa-compute-ext-imgui-interface PROPERTIES
-            PUBLIC_HEADER "${LUISA_IMGUI_HEADERS}")
-
-    # imgui object
-    add_library(luisa-compute-ext-imgui OBJECT
-            ${LUISA_IMGUI_SOURCES}
-            ${LUISA_IMGUI_HEADERS})
-    set_target_properties(luisa-compute-ext-imgui PROPERTIES
-            UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
-            POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(luisa-compute-ext-imgui PUBLIC
-            luisa-compute-ext-glfw-interface
-            luisa-compute-ext-imgui-interface)
-    if (WIN32)
-        target_compile_definitions(luisa-compute-ext-imgui PRIVATE
-                "IMGUI_API=__declspec(dllexport)"
-                "IMGUI_IMPL_API=__declspec(dllexport)")
-    endif ()
-
-    luisa_compute_install_extension(luisa-compute-ext-imgui-interface)
-    target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-imgui-interface)
-
+    set_target_properties(glfw PROPERTIES OUTPUT_NAME lc-ext-glfw)
+    target_link_libraries(luisa-compute-ext INTERFACE glfw)
+    luisa_compute_install_extension(glfw)
 endif ()
 
 add_subdirectory(EASTL)
