@@ -94,9 +94,10 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     add_subdirectory(glfw)
 
     add_library(luisa-compute-ext-glfw ALIAS glfw)
+    target_compile_definitions(glfw PUBLIC _GLFW_BUILD_DLL)
 
     add_library(luisa-compute-ext-glfw-interface INTERFACE)
-    target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE GLFW_DLL)
+    target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE)
     target_include_directories(luisa-compute-ext-glfw-interface INTERFACE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/glfw/include>)
     target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-glfw-interface)
