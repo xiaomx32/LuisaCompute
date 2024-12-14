@@ -117,7 +117,7 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     auto map_symbol = [jit = _jit.get(), &symbol_map]<typename T>(const char *name, T *f) noexcept {
         static_assert(std::is_function_v<T>);
         auto addr = llvm::orc::ExecutorAddr::fromPtr(f);
-        auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Exported};
+        auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Callable};
         symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
     };
 
