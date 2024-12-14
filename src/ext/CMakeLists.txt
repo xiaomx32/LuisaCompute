@@ -94,7 +94,6 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     add_subdirectory(glfw)
 
     add_library(luisa-compute-ext-glfw ALIAS glfw)
-    target_compile_definitions(glfw PUBLIC GLFW_DLL)
 
     add_library(luisa-compute-ext-glfw-interface INTERFACE)
     target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE GLFW_DLL)
