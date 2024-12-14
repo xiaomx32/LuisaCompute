@@ -93,15 +93,15 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     set(GLFW_LIBRARY_TYPE OBJECT CACHE STRING "" FORCE)
     add_subdirectory(glfw)
 
+    add_library(luisa-compute-ext-glfw ALIAS glfw)
+    target_compile_definitions(glfw PUBLIC GLFW_DLL)
+
     add_library(luisa-compute-ext-glfw-interface INTERFACE)
     target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE GLFW_DLL)
     target_include_directories(luisa-compute-ext-glfw-interface INTERFACE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/glfw/include>)
     target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-glfw-interface)
     luisa_compute_install_extension(luisa-compute-ext-glfw-interface INCLUDE glfw/include/GLFW)
-
-    add_library(luisa-compute-ext-glfw ALIAS glfw)
-    target_link_libraries(glfw PUBLIC luisa-compute-ext-glfw-interface)
 
     # imgui
     set(LUISA_IMGUI_SOURCES
