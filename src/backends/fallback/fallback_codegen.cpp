@@ -1912,6 +1912,8 @@ private:
             switch (inst->type()->tag()) {
                 case Type::Tag::INT32: return luisa::format("luisa.atomic.{}.int", op_name);
                 case Type::Tag::UINT32: return luisa::format("luisa.atomic.{}.uint", op_name);
+                case Type::Tag::INT64: return luisa::format("luisa.atomic.{}.long", op_name);
+                case Type::Tag::UINT64: return luisa::format("luisa.atomic.{}.ulong", op_name);
                 case Type::Tag::FLOAT32: return luisa::format("luisa.atomic.{}.float", op_name);
                 default: break;
             }

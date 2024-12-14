@@ -30,9 +30,9 @@ luisa::compute::fallback::FallbackSwapchain::~FallbackSwapchain() noexcept {
 }
 
 void luisa::compute::fallback::FallbackSwapchain::present(FallbackStream *stream, FallbackTexture *frame) {
-    stream->synchronize();
     stream->queue()->enqueue([handle = this->_handle, frame] {
         auto view = frame->view(0);
         luisa_compute_cpu_swapchain_present(handle, view.data(), view.size_bytes());
     });
+    stream->synchronize();
 }
