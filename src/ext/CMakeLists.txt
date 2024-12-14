@@ -92,14 +92,16 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
     set(GLFW_LIBRARY_TYPE OBJECT CACHE STRING "" FORCE)
     add_subdirectory(glfw)
-    add_library(luisa-compute-ext-glfw ALIAS glfw)
 
     add_library(luisa-compute-ext-glfw-interface INTERFACE)
-    target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE)
+    target_compile_definitions(luisa-compute-ext-glfw-interface INTERFACE GLFW_INCLUDE_NONE GLFW_DLL)
     target_include_directories(luisa-compute-ext-glfw-interface INTERFACE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/glfw/include>)
     target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-glfw-interface)
     luisa_compute_install_extension(luisa-compute-ext-glfw-interface INCLUDE glfw/include/GLFW)
+
+    add_library(luisa-compute-ext-glfw ALIAS glfw)
+    target_link_libraries(glfw PUBLIC luisa-compute-ext-glfw-interface)
 
     # imgui
     set(LUISA_IMGUI_SOURCES
@@ -133,7 +135,7 @@ if (LUISA_COMPUTE_ENABLE_GUI)
     set_target_properties(luisa-compute-ext-imgui PROPERTIES
             UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
             POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(luisa-compute-ext-imgui PRIVATE
+    target_link_libraries(luisa-compute-ext-imgui PUBLIC
             luisa-compute-ext-glfw-interface
             luisa-compute-ext-imgui-interface)
     if (WIN32)

@@ -219,8 +219,11 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
 #endif
     Clock clk;
     clk.tic();
-    auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
+    auto MPM = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O1);
     MPM.run(*llvm_module, MAM);
+    auto MPM2 = PB.buildPerModuleDefaultPipeline(::llvm::OptimizationLevel::O3);
+    MPM2.run(*llvm_module, MAM);
+
     LUISA_INFO("Optimized LLVM module in {} ms.", clk.toc());
     if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
