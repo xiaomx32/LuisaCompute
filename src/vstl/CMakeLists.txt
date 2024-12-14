@@ -12,7 +12,9 @@ target_precompile_headers(luisa-compute-vstl PRIVATE pch.h)
 
 target_link_libraries(luisa-compute-vstl PUBLIC luisa-compute-core PRIVATE luisa-compute-ext-lmdb)
 target_compile_definitions(luisa-compute-vstl PRIVATE LC_VSTL_EXPORT_DLL=1)
-set_target_properties(luisa-compute-vstl PROPERTIES UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD})
+set_target_properties(luisa-compute-vstl PROPERTIES
+        UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
+        POSITION_INDEPENDENT_CODE ON)
 
 if (WIN32)
     target_link_libraries(luisa-compute-vstl PUBLIC Shlwapi)

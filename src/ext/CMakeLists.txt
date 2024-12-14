@@ -131,7 +131,8 @@ if (LUISA_COMPUTE_ENABLE_GUI)
             ${LUISA_IMGUI_SOURCES}
             ${LUISA_IMGUI_HEADERS})
     set_target_properties(luisa-compute-ext-imgui PROPERTIES
-            UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD})
+            UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
+            POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(luisa-compute-ext-imgui PRIVATE
             luisa-compute-ext-glfw-interface
             luisa-compute-ext-imgui-interface)
