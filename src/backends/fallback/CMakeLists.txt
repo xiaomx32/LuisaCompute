@@ -1,13 +1,13 @@
 find_package(LLVM CONFIG)
 find_package(embree CONFIG)
 
-if(NOT embree_FOUND)
+if (NOT embree_FOUND)
     message(WARNING "Embree not found. Fallback backend will not be built.")
-endif()
+endif ()
 
 if (NOT LLVM_FOUND)
     message(WARNING "LLVM not found. Fallback backend will not be built.")
-endif()
+endif ()
 
 if (LLVM_FOUND AND embree_FOUND)
     set(LUISA_COMPUTE_ENABLE_FALLBACK ON)
@@ -54,6 +54,18 @@ if (LLVM_FOUND AND embree_FOUND)
     #set_target_properties(luisa-compute-backend-fallback PROPERTIES UNITY_BUILD ON)
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")
     llvm_map_components_to_libnames(LLVM_LIBS core executionengine support orcjit nativecodegen irreader passes analysis coroutines)
+    if (UNIX AND NOT APPLE)
+        # check if the libraries exist
+        try_compile(LLVM_LIBS_EXIST
+                SOURCE_FROM_CONTENT "try_link_llvm.cpp" "int main() {}"
+                LINK_LIBRARIES ${LLVM_LIBS})
+        if (NOT LLVM_LIB_EXIST)
+            message(WARNING "LLVM libraries not found (compile: ${LLVM_LIBS_EXIST}). Trying to link with LLVM shared libraries.")
+            find_library(LLVM_DYLIB LLVM REQUIRED)
+            message(STATUS "LLVM libraries found at ${LLVM_DYLIB}")
+            set(LLVM_LIBS ${LLVM_DYLIB})
+        endif ()
+    endif ()
     target_include_directories(luisa-compute-backend-fallback PRIVATE ${LLVM_INCLUDE_DIRS})
     target_link_libraries(luisa-compute-backend-fallback PRIVATE
             embree ${LLVM_LIBS}
