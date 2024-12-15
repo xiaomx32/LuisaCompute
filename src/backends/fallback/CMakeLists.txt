@@ -60,7 +60,7 @@ if (LLVM_FOUND AND embree_FOUND)
                 SOURCE_FROM_CONTENT "try_link_llvm.cpp" "int main() {}"
                 LINK_LIBRARIES ${LLVM_LIBS})
         if (NOT LLVM_LIB_EXIST)
-            message(WARNING "LLVM libraries not found (compile: ${LLVM_LIBS_EXIST}). Trying to link with LLVM shared libraries.")
+            message(WARNING "LLVM libraries not found. Trying to link with LLVM shared libraries.")
             find_library(LLVM_DYLIB LLVM REQUIRED)
             message(STATUS "LLVM libraries found at ${LLVM_DYLIB}")
             set(LLVM_LIBS ${LLVM_DYLIB})
