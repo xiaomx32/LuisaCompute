@@ -130,6 +130,9 @@ void FallbackStream::dispatch(CommandList &&cmd_list) noexcept {
         }
 #undef LUISA_FALLBACK_STREAM_CAST_AND_ENQUEUE_COMMAND_CASE
     }
+    dispatch([callbacks = cmd_list.steal_callbacks()] {
+        for (auto &&cb : callbacks) { cb(); }
+    });
 }
 
 void FallbackStream::dispatch(luisa::move_only_function<void()> &&f) noexcept {
