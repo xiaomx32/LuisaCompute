@@ -64,13 +64,15 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     ::llvm::orc::LLJITBuilder jit_builder;
     if (auto host = ::llvm::orc::JITTargetMachineBuilder::detectHost()) {
         ::llvm::TargetOptions options;
-        options.AllowFPOpFusion = ::llvm::FPOpFusion::Fast;
-        options.UnsafeFPMath = true;
-        options.NoInfsFPMath = true;
-        options.NoNaNsFPMath = true;
+        if (option.enable_fast_math) {
+            options.UnsafeFPMath = true;
+            options.NoInfsFPMath = true;
+            options.NoNaNsFPMath = true;
+            options.NoSignedZerosFPMath = true;
+            options.ApproxFuncFPMath = true;
+        }
         options.NoTrappingFPMath = true;
-        options.NoSignedZerosFPMath = true;
-        options.ApproxFuncFPMath = true;
+        options.AllowFPOpFusion = ::llvm::FPOpFusion::Fast;
         options.EnableIPRA = false;// true causes crash
         options.StackSymbolOrdering = true;
         options.TrapUnreachable = false;
@@ -193,6 +195,17 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
     llvm_module->setTargetTriple(_target_machine->getTargetTriple().str());
+
+    // add fast-math flags to instructions
+    for (auto &&f : *llvm_module) {
+        for (auto &&bb : f) {
+            for (auto &&inst : bb) {
+                if (llvm::isa<llvm::FPMathOperator>(inst)) {
+                    inst.setFast(option.enable_fast_math);
+                }
+            }
+        }
+    }
 
     // optimize with the new pass manager
     ::llvm::LoopAnalysisManager LAM;
