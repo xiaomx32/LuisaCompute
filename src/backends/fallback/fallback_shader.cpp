@@ -245,11 +245,11 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     //		llvm_module->print(file_stream, nullptr, true, true);
     //		file_stream.close();
     //	}
-    LUISA_INFO("Printing optimized LLVM module...");
-    llvm_module->print(llvm::outs(), nullptr, false, true);
+    // LUISA_INFO("Printing optimized LLVM module...");
+    // llvm_module->print(llvm::outs(), nullptr, false, true);
 
     // print x64 assembly of llvm_module
-    {
+    if constexpr (false) {
         auto asm_name = "kernel_" + std::to_string(kernel.hash()) + ".s";
         {
             std::error_code EC;
