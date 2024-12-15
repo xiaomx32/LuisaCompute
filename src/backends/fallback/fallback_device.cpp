@@ -64,7 +64,7 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
 #endif
 
     // embree
-    _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=4");
+    _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=1");
     rtcSetDeviceErrorFunction(
         _rtc_device,
         [](void *, RTCError code, const char *message) {
