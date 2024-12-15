@@ -2,6 +2,13 @@
 // Created by Mike Smith on 2022/5/23.
 //
 
+#include <luisa/core/intrin.h>
+
+#ifdef LUISA_ARCH_X86_64
+#include <xmmintrin.h>
+#include <pmmintrin.h>
+#endif
+
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
@@ -21,14 +28,8 @@
 #include "fallback_buffer.h"
 #include "fallback_swapchain.h"
 
-//#include "llvm_event.h"
-//#include "llvm_shader.h"
-//#include "llvm_codegen.h"
-
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
-
-//#include "fallback_texture_sampling_wrapper.ll";
 
 namespace luisa::compute::fallback {
 
@@ -56,6 +57,11 @@ static void loadLLVMModuleFromString(::llvm::orc::LLJIT &jit, const char *ir_str
 
 FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     : DeviceInterface{std::move(ctx)} {
+
+#ifdef LUISA_ARCH_X86_64
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
 
     // embree
     _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=4");
