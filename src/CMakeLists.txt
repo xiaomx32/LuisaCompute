@@ -63,7 +63,6 @@ target_link_libraries(compute INTERFACE
         luisa-compute-api
         luisa-compute-backends
         luisa-compute-ir
-        luisa-compute-ir-v2
         luisa-compute-clangcxx)
 
 if (LUISA_COMPUTE_ENABLE_CUDA_EXT_LCUB)

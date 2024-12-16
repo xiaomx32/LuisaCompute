@@ -111,11 +111,17 @@ if (LUISA_COMPUTE_ENABLE_FALLBACK)
     find_package(embree CONFIG)
     if (NOT LLVM_FOUND AND WIN32)
         include(${CMAKE_SOURCE_DIR}/scripts/download_and_patch_llvm.cmake)
-        
-    endif()
+    endif ()
     if (NOT LLVM_FOUND OR LLVM_VERSION VERSION_LESS 16 OR
             NOT embree_FOUND OR embree_VERSION VERSION_LESS 3)
         report_feature_not_available(FALLBACK "fallback backend")
+    elseif (WIN32)
+        # LLVMDebugInfoPDB has a hard-coded path to diaguids.lib
+        # Let's find it and remove it!
+        get_target_property(LLVMDebugInfoPDB_LINK_LIBRARIES LLVMDebugInfoPDB INTERFACE_LINK_LIBRARIES)
+        list(FILTER LLVMDebugInfoPDB_LINK_LIBRARIES EXCLUDE REGEX "C:/Program Files.*/diaguids\\.lib")
+        message(STATUS "Patched LLVMDebugInfoPDB INTERFACE_LINK_LIBRARIES: ${LLVMDebugInfoPDB_LINK_LIBRARIES}")
+        set_target_properties(LLVMDebugInfoPDB PROPERTIES INTERFACE_LINK_LIBRARIES "${LLVMDebugInfoPDB_LINK_LIBRARIES}")
     endif ()
 endif ()
 
