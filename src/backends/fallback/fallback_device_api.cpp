@@ -316,7 +316,8 @@ template<typename T>
     return luisa_fallback_bindless_texture3d_read_level(handle, x, y, z, 0u);
 }
 
-[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
+void luisa_fallback_accel_trace_closest(void *handle, EmbreeRayHit *ray_hit) noexcept {
+    // prepare context
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
     rtcInitIntersectContext(&ctx);
@@ -325,38 +326,18 @@ template<typename T>
     rtcInitRayQueryContext(&ctx);
     RTCIntersectArguments args{.context = &ctx};
 #endif
-    RTCRayHit rh{};
-    rh.ray.org_x = ox;
-    rh.ray.org_y = oy;
-    rh.ray.org_z = oz;
-    rh.ray.dir_x = dx;
-    rh.ray.dir_y = dy;
-    rh.ray.dir_z = dz;
-    rh.ray.tnear = t_min;
-    rh.ray.tfar = t_max;
-    rh.ray.mask = mask;
-    rh.ray.time = time;
-    rh.ray.flags = 0;
-
-    rh.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-    rh.hit.primID = RTC_INVALID_GEOMETRY_ID;
-    rh.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+    // invoke embree
     auto scene = static_cast<RTCScene>(handle);
+    auto rh = reinterpret_cast<RTCRayHit *>(ray_hit);
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-    rtcIntersect1(scene, &ctx, &rh);
+    rtcIntersect1(scene, &ctx, rh);
 #else
-    rtcIntersect1(scene, &rh, &args);
+    rtcIntersect1(scene, rh, &args);
 #endif
-    SurfaceHit hit{};
-    hit.inst = rh.hit.instID[0];
-    hit.prim = rh.hit.primID;
-    hit.bary = {rh.hit.u, rh.hit.v};
-    hit.committed_ray_t = rh.ray.tfar;
-    return hit;
 }
 
-[[nodiscard]] bool luisa_fallback_accel_trace_any(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept {
-
+void luisa_fallback_accel_trace_any(void *handle, EmbreeRay *ray) noexcept {
+    // prepare context
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
     RTCIntersectContext ctx{};
     rtcInitIntersectContext(&ctx);
@@ -365,26 +346,14 @@ template<typename T>
     rtcInitRayQueryContext(&ctx);
     RTCOccludedArguments args{.context = &ctx};
 #endif
-    RTCRay ray{};
-    ray.org_x = ox;
-    ray.org_y = oy;
-    ray.org_z = oz;
-    ray.dir_x = dx;
-    ray.dir_y = dy;
-    ray.dir_z = dz;
-    ray.tnear = t_min;
-    ray.tfar = t_max;
-    ray.mask = mask;
-    ray.time = time;
-    ray.flags = 0;
-
+    // invoke embree
     auto scene = static_cast<RTCScene>(handle);
+    auto r = reinterpret_cast<RTCRay *>(ray);
 #if LUISA_COMPUTE_EMBREE_VERSION == 3
-    rtcOccluded1(scene, &ctx, &ray);
+    rtcOccluded1(scene, &ctx, r);
 #else
-    rtcOccluded1(scene, &ray, &args);
+    rtcOccluded1(scene, r, &args);
 #endif
-    return ray.tfar < 0.f;
 }
 
 }// namespace luisa::compute::fallback::api

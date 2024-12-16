@@ -435,22 +435,63 @@ LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_bindless_texture3d_size(const
     return luisa_fallback_wrapper_bindless_texture3d_size_level(handle, slot_index, 0u, out);
 }
 
+/* Ray structure for a single ray */
+struct alignas(16) EmbreeRay {
+    llvm_float4 org_tnear;          // Ray origin and near t value
+    llvm_float4 dir_time;           // Ray direction and far t value
+
+    struct {
+        float tfar;
+        uint mask;
+        uint id;
+        uint flags;
+    } extra;
+};
+
+/* Hit structure for a single ray */
+struct alignas(16) EmbreeHit {
+    float Ng_x;          // x coordinate of geometry normal
+    float Ng_y;          // y coordinate of geometry normal
+    float Ng_z;          // z coordinate of geometry normal
+    float u;             // barycentric u coordinate of hit
+    float v;             // barycentric v coordinate of hit
+    uint primID; // primitive ID
+    uint geomID; // geometry ID
+    uint instID[1]; // instance ID
+};
+
+/* Combined ray/hit structure for a single ray */
+struct alignas(16) EmbreeRayHit {
+    EmbreeRay ray;
+    EmbreeHit hit;
+};
+
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_closest_motion(const AccelView *handle, const Ray *ray, float time, uint mask, SurfaceHit *out) noexcept {
-    *out = luisa_fallback_accel_trace_closest(handle->embree_scene,
-                                              ray->origin[0], ray->origin[1], ray->origin[2],
-                                              ray->t_min,
-                                              ray->direction[0], ray->direction[1], ray->direction[2],
-                                              ray->t_max,
-                                              mask, time);
+    EmbreeRayHit ray_hit;
+    auto org_tnear = reinterpret_cast<const llvm_float4 *>(&ray->origin);
+    auto dir_tfar = reinterpret_cast<const llvm_float4 *>(&ray->direction);
+    ray_hit.ray.org_tnear = *org_tnear;
+    ray_hit.ray.dir_time = {dir_tfar->x, dir_tfar->y, dir_tfar->z, time};
+    ray_hit.ray.extra = {ray->t_max, mask, 0u, 0u};
+    ray_hit.hit.primID = -1;
+    ray_hit.hit.geomID = -1;
+    ray_hit.hit.instID[0] = -1;
+    luisa_fallback_accel_trace_closest(handle->embree_scene, &ray_hit);
+    *out = {.inst = ray_hit.hit.instID[0],
+            .prim = ray_hit.hit.primID,
+            .bary = {ray_hit.hit.u, ray_hit.hit.v},
+            .committed_ray_t = ray_hit.ray.extra.tfar};
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_any_motion(const AccelView *handle, const Ray *ray, float time, uint mask, bool *out) noexcept {
-    *out = luisa_fallback_accel_trace_any(handle->embree_scene,
-	                                      ray->origin[0], ray->origin[1], ray->origin[2],
-                                          ray->t_min,
-                                          ray->direction[0], ray->direction[1], ray->direction[2],
-                                          ray->t_max,
-                                          mask, time);
+    EmbreeRay ray_;
+    auto org_tnear = reinterpret_cast<const llvm_float4 *>(&ray->origin);
+    auto dir_tfar = reinterpret_cast<const llvm_float4 *>(&ray->direction);
+    ray_.org_tnear = *org_tnear;
+    ray_.dir_time = {dir_tfar->x, dir_tfar->y, dir_tfar->z, time};
+    ray_.extra = {ray->t_max, mask, 0u, 0u};
+    luisa_fallback_accel_trace_any(handle->embree_scene, &ray_);
+    *out = ray_.extra.tfar < 0.f;
 }
 
 LUISA_FALLBACK_WRAPPER void luisa_fallback_wrapper_accel_trace_closest(const AccelView *handle, const Ray *ray, uint mask, SurfaceHit *out) noexcept {

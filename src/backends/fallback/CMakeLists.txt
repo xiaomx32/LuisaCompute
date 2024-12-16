@@ -16,16 +16,6 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_device_api.cpp
             fallback_device_api_ir_module.cpp
             fallback_command_queue.cpp
-            #llvm_codegen.cpp
-            #llvm_codegen_value.cpp
-            #llvm_codegen_builtin.cpp
-            #llvm_codegen_type.cpp
-            #llvm_codegen_expr.cpp
-            #llvm_codegen_func.cpp
-            #llvm_codegen_stmt.cpp
-            #llvm_event.cpp
-            #llvm_shader.cpp
-            #dirty_range.cpp
             fallback_bindless_array.cpp
             fallback_stream.cpp
             fallback_texture.cpp
@@ -38,10 +28,10 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_swapchain.cpp
     )
 
-    #exclude codegen from unity build since it's too big
-    set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
-
     luisa_compute_add_backend(fallback SOURCES ${LC_BACKEND_FALLBACK_SRC})
+
+    # exclude codegen from unity build since it's too big
+    set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
 
     # maybe we can use tbb?
     find_package(TBB CONFIG)

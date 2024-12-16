@@ -96,22 +96,6 @@ struct alignas(16) BindlessArrayView {
     size_t size;
 };
 
-struct alignas(16) AccelInstance {
-    float affine[12];
-    uint8_t mask;
-    bool opaque;
-    bool dirty;
-    uint user_id;
-    void *geometry;
-};
-
-static_assert(sizeof(AccelInstance) == 64u);
-
-struct alignas(16) AccelView {
-    void *embree_scene;
-    AccelInstance *instances;
-};
-
 /* implementations */
 
 [[nodiscard]] int4 luisa_fallback_texture2d_read_int(void *texture_data, uint64_t texture_data_extra, uint x, uint y) noexcept;
@@ -146,8 +130,29 @@ void luisa_fallback_texture3d_write_int(void *texture_data, uint64_t texture_dat
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_read(const Texture *handle, uint x, uint y, uint z) noexcept;
 [[nodiscard]] float4 luisa_fallback_bindless_texture3d_read_level(const Texture *handle, uint x, uint y, uint z, uint level) noexcept;
 
-[[nodiscard]] SurfaceHit luisa_fallback_accel_trace_closest(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
-[[nodiscard]] bool luisa_fallback_accel_trace_any(void *handle, float ox, float oy, float oz, float t_min, float dx, float dy, float dz, float t_max, uint mask, float time) noexcept;
+struct alignas(16) EmbreeRay;
+struct alignas(16) EmbreeHit;
+struct alignas(16) EmbreeRayHit;
+
+struct alignas(16) AccelInstance {
+    float affine[12];
+    uint8_t mask;
+    bool opaque;
+    bool dirty;
+    uint user_id;
+    void *geometry;
+};
+
+static_assert(sizeof(AccelInstance) == 64u);
+
+struct alignas(16) AccelView {
+    void *embree_scene;
+    AccelInstance *instances;
+};
+
+void luisa_fallback_accel_trace_closest(void *handle, EmbreeRayHit *ray_hit) noexcept;
+void luisa_fallback_accel_trace_any(void *handle, EmbreeRay *ray) noexcept;
+
 }
 
 #ifndef LUISA_COMPUTE_FALLBACK_DEVICE_LIB
