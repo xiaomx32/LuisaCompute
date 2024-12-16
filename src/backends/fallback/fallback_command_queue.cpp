@@ -30,13 +30,14 @@ struct AkrThreadPool {
 
                     std::unique_lock lock{_task_mutex};
                     // std::printf("thread %zu waiting for work,  work is empty?= %d\n", tid, !_parallel_for.has_value());
-                    while (true) {
-                        if (_has_work.wait_for(lock,
-                                               std::chrono::milliseconds(1),
-                                               [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); })) {
-                            break;
-                        }
-                    }
+                    // while (true) {
+                    //     if (_has_work.wait_for(lock,
+                    //                            std::chrono::milliseconds(1),
+                    //                            [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); })) {
+                    //         break;
+                    //     }
+                    // }
+                    _has_work.wait(lock, [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); });
                     if (_stopped.load(std::memory_order_relaxed)) { return; }
                     auto &&[count, block_size, task] = *_parallel_for;
                     lock.unlock();
@@ -50,9 +51,9 @@ struct AkrThreadPool {
                     // std::printf("thread %zu finish working on %u items\n", tid, count);
                     _barrier.arrive_and_wait();
                     if (tid == 0) {
-                        lock.lock();
+                        // lock.lock();
                         _work_done.notify_all();
-                        _parallel_for.reset();
+                       
                     }
                     _barrier.arrive_and_wait();
                 }
@@ -67,6 +68,7 @@ struct AkrThreadPool {
         // std::printf("notify all\n");
         _has_work.notify_all();
         _work_done.wait(lock, [this] { return _item_count.load(std::memory_order_relaxed) >= _parallel_for->count; });
+         _parallel_for.reset();
         // std::printf("work done\n");
     }
     ~AkrThreadPool() {
