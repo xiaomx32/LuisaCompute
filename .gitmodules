@@ -34,4 +34,4 @@
 	url = https://github.com/ibireme/yyjson.git
 [submodule "src/ext/nanothread"]
 	path = src/ext/nanothread
-	url = https://github.com/mitsuba-renderer/nanothread.git
+	url = https://github.com/LuisaGroup/nanothread.git
