@@ -13,11 +13,13 @@ class FallbackStream;
 
 class FallbackSwapchain {
 private:
+    FallbackStream *_bound_stream;
     void *_handle;
     luisa::uint2 size;
 
 public:
-    explicit FallbackSwapchain(const luisa::compute::SwapchainOption &option);
+    FallbackSwapchain(FallbackStream *bound_stream,
+                      const SwapchainOption &option) noexcept;
     ~FallbackSwapchain() noexcept;
     void present(FallbackStream *stream, FallbackTexture *frame);
 };
