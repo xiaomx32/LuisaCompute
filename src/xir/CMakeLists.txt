@@ -41,6 +41,9 @@ set(LUISA_COMPUTE_XIR_SOURCES
         translators/json2xir.cpp
         translators/xir2json.cpp
         translators/xir2text.cpp
+
+        # passes
+        passes/outline.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})
