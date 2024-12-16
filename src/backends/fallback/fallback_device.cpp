@@ -187,7 +187,8 @@ void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const Devic
 }
 
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
-    auto sc = luisa::new_with_allocator<FallbackSwapchain>(option);
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    auto sc = luisa::new_with_allocator<FallbackSwapchain>(stream, option);
     return SwapchainCreationInfo{
         ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
                              .native_handle = nullptr},
