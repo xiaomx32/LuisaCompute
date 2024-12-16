@@ -12,7 +12,7 @@ namespace luisa::compute::fallback {
 
 struct AkrThreadPool {
     luisa::vector<luisa::unique_ptr<std::thread>> _threads;
-    std::mutex _mutex;
+    std::mutex _task_mutex, _submit_mutex;
     std::condition_variable _has_work, _work_done;
     std::barrier<> _barrier;
     std::atomic_uint32_t _item_count = 0u;
@@ -27,7 +27,7 @@ struct AkrThreadPool {
         for (size_t tid = 0; tid < n_threads; tid++) {
             _threads.emplace_back(std::move(luisa::make_unique<std::thread>([this, tid] {
                 while (!_stopped.load(std::memory_order_relaxed)) {
-                    std::unique_lock lock{_mutex};
+                    std::unique_lock lock{_task_mutex};
                     _has_work.wait(lock, [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); });
                     if (_stopped.load(std::memory_order_relaxed)) { return; }
                     auto &&[count, block_size, task] = *_parallel_for;
@@ -51,13 +51,21 @@ struct AkrThreadPool {
         }
     }
     void parallel_for(uint count, luisa::move_only_function<void(uint)> &&task) {
-        std::unique_lock lock{_mutex};
+        std::scoped_lock _lk{_submit_mutex};
+        std::unique_lock lock{_task_mutex};
         _parallel_for = ParallelFor{count, 1u, std::move(task)};
         _item_count.store(0, std::memory_order_seq_cst);
         // std::printf("notify all\n");
         _has_work.notify_all();
-        _work_done.wait(lock);//, [this] { return _item_count.load(std::memory_order_seq_cst) == _parallel_for->count; });
+        _work_done.wait(lock, [this] { return _item_count.load(std::memory_order_relaxed) >= _parallel_for->count; });
         // std::printf("work done\n");
+    }
+    ~AkrThreadPool() {
+        _stopped.store(true, std::memory_order_relaxed);
+        _has_work.notify_all();
+        for (auto &&thread : _threads) {
+            thread->join();
+        }
     }
 };
 
