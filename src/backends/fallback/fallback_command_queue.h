@@ -27,7 +27,7 @@ private:
     size_t _in_flight_limit{0u};
     std::atomic_size_t _total_enqueue_count{0u};
     std::atomic_size_t _total_finish_count{0u};
-    ::Pool *_worker_pool{nullptr};
+    NanothreadPool *_worker_pool{nullptr};
     size_t _worker_count{0u};
 
 private:

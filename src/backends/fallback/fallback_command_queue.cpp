@@ -26,7 +26,7 @@ inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
         _total_finish_count.fetch_add(1u);
     }
     if (_worker_pool != nullptr) {
-        pool_destroy(_worker_pool);
+        nanothread_pool_destroy(_worker_pool);
     }
 }
 
@@ -82,12 +82,12 @@ void FallbackCommandQueue::enqueue(luisa::move_only_function<void()> &&task) noe
 void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept {
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
         if (_worker_pool == nullptr) {
-            _worker_pool = pool_create(_worker_count);
+            _worker_pool = nanothread_pool_create(_worker_count);
         }
-        drjit::blocked_range<int> range{0, static_cast<int>(n)};
-        drjit::parallel_for(range, [&task](drjit::blocked_range<int> r) {
+        drjit::blocked_range<uint> range{0, n};
+        drjit::parallel_for(range, [&task](drjit::blocked_range<uint> r) noexcept {
             for (auto i : r) {
-                task(static_cast<uint>(i));
+                task(i);
             } }, _worker_pool);
     });
 }
