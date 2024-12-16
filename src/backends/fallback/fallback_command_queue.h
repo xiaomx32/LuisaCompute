@@ -4,12 +4,13 @@
 #include <thread>
 #include <condition_variable>
 
-#include <nanothread/nanothread.h>
-
 #include <luisa/core/basic_types.h>
 #include <luisa/core/stl/queue.h>
 #include <luisa/core/stl/functional.h>
-#include <luisa/core/stl/memory.h>
+
+#ifndef LUISA_COMPUTE_ENABLE_TBB
+struct NanothreadPool;
+#endif
 
 namespace luisa::compute::fallback {
 
@@ -27,8 +28,11 @@ private:
     size_t _in_flight_limit{0u};
     std::atomic_size_t _total_enqueue_count{0u};
     std::atomic_size_t _total_finish_count{0u};
-    NanothreadPool *_worker_pool{nullptr};
     size_t _worker_count{0u};
+
+#ifndef LUISA_COMPUTE_ENABLE_TBB
+    NanothreadPool *_worker_pool{nullptr};
+#endif
 
 private:
     void _run_dispatch_loop() noexcept;

@@ -25,9 +25,11 @@ inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
         // count the finish of a task
         _total_finish_count.fetch_add(1u);
     }
+#ifndef LUISA_COMPUTE_ENABLE_TBB
     if (_worker_pool != nullptr) {
         nanothread_pool_destroy(_worker_pool);
     }
+#endif
 }
 
 inline void FallbackCommandQueue::_wait_for_task_queue_available() const noexcept {
@@ -81,6 +83,7 @@ void FallbackCommandQueue::enqueue(luisa::move_only_function<void()> &&task) noe
 
 void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept {
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
+#ifndef LUISA_COMPUTE_ENABLE_TBB
         if (_worker_pool == nullptr) {
             _worker_pool = nanothread_pool_create(_worker_count);
         }
@@ -89,6 +92,9 @@ void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<vo
             for (auto i : r) {
                 task(i);
             } }, _worker_pool);
+#else
+        tbb::parallel_for(0u, n, task);
+#endif
     });
 }
 
