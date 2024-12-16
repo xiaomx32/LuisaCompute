@@ -15,7 +15,7 @@ struct NanothreadPool;
 namespace luisa::compute::fallback {
 
 class FallbackCommandQueueParallelContext;
-
+struct AkrThreadPool;
 class FallbackCommandQueue {
 
 private:
@@ -31,7 +31,8 @@ private:
     size_t _worker_count{0u};
 
 #ifndef LUISA_COMPUTE_ENABLE_TBB
-    NanothreadPool *_worker_pool{nullptr};
+    // NanothreadPool *_worker_pool{nullptr};
+    AkrThreadPool *_worker_pool{nullptr};
 #endif
 
 private:
