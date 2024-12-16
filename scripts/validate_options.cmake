@@ -109,6 +109,10 @@ endif ()
 if (LUISA_COMPUTE_ENABLE_FALLBACK)
     find_package(LLVM CONFIG)
     find_package(embree CONFIG)
+    if (NOT LLVM_FOUND AND WIN32)
+        include(${CMAKE_SOURCE_DIR}/scripts/download_and_patch_llvm.cmake)
+        
+    endif()
     if (NOT LLVM_FOUND OR LLVM_VERSION VERSION_LESS 16 OR
             NOT embree_FOUND OR embree_VERSION VERSION_LESS 3)
         report_feature_not_available(FALLBACK "fallback backend")
