@@ -3,16 +3,17 @@ import subprocess
 import platform
 import re
 
-if __name__ == "__main__":
+
+def generate_and_embed(system_name: str, machine_name: str):
     builtin_dir = os.path.dirname(os.path.realpath(__file__))
-    system_name = platform.system().lower()
-    machine_name = platform.machine().lower()
     file_name = "fallback_device_api_wrappers"
     src_path = os.path.join(builtin_dir, f"{file_name}.cpp")
     dst_path = os.path.join(builtin_dir, f"{file_name}.{system_name}.{machine_name}.ll")
     subprocess.run(["clang++", "-c", "-emit-llvm", "-std=c++20", "-ffast-math", "-O3",
                     "-S", src_path, "-o", dst_path, "-fomit-frame-pointer",
-                    "-fno-stack-protector", "-fno-rtti", "-fno-exceptions"])
+                    "-fno-stack-protector", "-fno-rtti", "-fno-exceptions",
+                    f"--target={machine_name}-unknown-{system_name}",
+                    "-nostdinc", "-nostdlib", "-nostdinc++", "-nostdlib++"])
     with open(dst_path, "r", newline="\n") as f:
         content = "".join(line for line in f.readlines()
                           if not line.strip().startswith("@llvm.used") and
@@ -54,3 +55,10 @@ if __name__ == "__main__":
         wrapped = ["    " + ", ".join(data[i: i + 16]) for i in range(0, len(data), 16)]
         f.write(",\n".join(wrapped).encode("utf-8"))
         f.write("\n};\n".encode("utf-8"))
+
+
+if __name__ == "__main__":
+    for system in ["linux", "windows", "darwin"]:
+        for machine in ["x86_64", "arm64"]:
+            generate_and_embed(system, machine)
+

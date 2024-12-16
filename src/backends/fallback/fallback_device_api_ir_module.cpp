@@ -7,26 +7,32 @@
 
 #if defined(LUISA_PLATFORM_WINDOWS)
 
-#ifdef LUISA_ARCH_X86_64
-#include "fallback_builtin/fallback_device_api_wrappers.windows.amd64.inl"
+#if defined(LUISA_ARCH_X86_64)
+#include "fallback_builtin/fallback_device_api_wrappers.windows.x86_64.inl"
+#elif defined(LUISA_ARCH_ARM64)
+#include "fallback_builtin/fallback_device_api_wrappers.windows.arm64.inl"
 #else
-#error Unsupported architecture
+#error Unsupported architecture on Windows
 #endif
 
 #elif defined(LUISA_PLATFORM_APPLE)
 
-#ifdef LUISA_ARCH_X86_64
-#error Unsupported architecture
-#else
+#if defined(LUISA_ARCH_X86_64)
+#include "fallback_builtin/fallback_device_api_wrappers.darwin.x86_64.inl"
+#elif defined(LUISA_ARCH_ARM64)
 #include "fallback_builtin/fallback_device_api_wrappers.darwin.arm64.inl"
+#else
+#error Unsupported architecture on Windows
 #endif
 
-#else// Linux or other Unix-like systems
+#elif defined(LUISA_PLATFORM_UNIX)
 
-#ifdef LUISA_ARCH_X86_64
+#if defined(LUISA_ARCH_X86_64)
 #include "fallback_builtin/fallback_device_api_wrappers.linux.x86_64.inl"
+#elif defined(LUISA_ARCH_ARM64)
+#include "fallback_builtin/fallback_device_api_wrappers.linux.arm64.inl"
 #else
-#error Unsupported architecture
+#error Unsupported architecture on Windows
 #endif
 
 #endif
