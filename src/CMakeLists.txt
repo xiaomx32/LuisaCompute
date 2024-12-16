@@ -48,7 +48,6 @@ add_subdirectory(osl)
 add_subdirectory(gui)
 add_subdirectory(backends)
 add_subdirectory(api)
-add_subdirectory(ir_v2)
 add_subdirectory(clangcxx)
 
 add_library(compute INTERFACE)
