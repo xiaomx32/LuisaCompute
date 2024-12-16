@@ -33,14 +33,6 @@ if (LLVM_FOUND AND embree_FOUND)
     # exclude codegen from unity build since it's too big
     set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
 
-    # maybe we can use tbb?
-    find_package(TBB CONFIG)
-    if (TBB_FOUND)
-        message(STATUS "Use TBB for the fallback backend.")
-        target_link_libraries(luisa-compute-backend-fallback PRIVATE TBB::tbb)
-        target_compile_definitions(luisa-compute-backend-fallback PRIVATE LUISA_COMPUTE_ENABLE_TBB)
-    endif ()
-
     #set_target_properties(luisa-compute-backend-fallback PROPERTIES UNITY_BUILD ON)
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")
     llvm_map_components_to_libnames(LLVM_LIBS core executionengine support orcjit nativecodegen irreader passes analysis coroutines)

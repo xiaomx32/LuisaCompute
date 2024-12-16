@@ -163,6 +163,27 @@ add_library(luisa-compute-ext-yyjson OBJECT yyjson/src/yyjson.c yyjson/src/yyjso
 target_link_libraries(luisa-compute-ext-yyjson PUBLIC luisa-compute-ext-yyjson-interface)
 target_compile_definitions(luisa-compute-ext-yyjson PRIVATE YYJSON_EXPORTS=1)
 
+# nanothread
+add_library(luisa-compute-ext-nanothread-interface INTERFACE)
+target_include_directories(luisa-compute-ext-nanothread-interface INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nanothread/include>)
+target_link_libraries(luisa-compute-ext INTERFACE luisa-compute-ext-nanothread-interface)
+luisa_compute_install_extension(luisa-compute-ext-nanothread-interface INCLUDE nanothread/include/nanothread)
+add_library(luisa-compute-ext-nanothread OBJECT
+        nanothread/src/queue.cpp
+        nanothread/src/queue.h
+        nanothread/src/nanothread.cpp)
+target_link_libraries(luisa-compute-ext-nanothread PRIVATE luisa-compute-ext-nanothread-interface)
+target_compile_definitions(luisa-compute-ext-nanothread PUBLIC NANOTHREAD_BUILD=1)
+set_target_properties(luisa-compute-ext-nanothread PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD})
+
+if (UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    find_library(LIBATOMIC NAMES libatomic.so libatomic.so.1 REQUIRED)
+    target_link_libraries(luisa-compute-ext-nanothread PRIVATE ${LIBATOMIC})
+endif()
+
 # marl
 add_library(luisa-compute-ext-marl-interface INTERFACE)
 target_include_directories(luisa-compute-ext-marl-interface INTERFACE

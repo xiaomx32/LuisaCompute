@@ -29,7 +29,8 @@ target_link_libraries(luisa-compute-core
         PRIVATE
         EASTL-object
         luisa-compute-ext-marl
-        luisa-compute-ext-yyjson)
+        luisa-compute-ext-yyjson
+        luisa-compute-ext-nanothread)
 
 set_target_properties(luisa-compute-core PROPERTIES
         UNITY_BUILD ${LUISA_COMPUTE_ENABLE_UNITY_BUILD}
