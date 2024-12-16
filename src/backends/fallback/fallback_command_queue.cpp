@@ -27,8 +27,16 @@ struct AkrThreadPool {
         for (size_t tid = 0; tid < n_threads; tid++) {
             _threads.emplace_back(std::move(luisa::make_unique<std::thread>([this, tid] {
                 while (!_stopped.load(std::memory_order_relaxed)) {
+
                     std::unique_lock lock{_task_mutex};
-                    _has_work.wait(lock, [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); });
+                    // std::printf("thread %zu waiting for work,  work is empty?= %d\n", tid, !_parallel_for.has_value());
+                    while (true) {
+                        if (_has_work.wait_for(lock,
+                                               std::chrono::milliseconds(1),
+                                               [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); })) {
+                            break;
+                        }
+                    }
                     if (_stopped.load(std::memory_order_relaxed)) { return; }
                     auto &&[count, block_size, task] = *_parallel_for;
                     lock.unlock();
@@ -42,6 +50,7 @@ struct AkrThreadPool {
                     // std::printf("thread %zu finish working on %u items\n", tid, count);
                     _barrier.arrive_and_wait();
                     if (tid == 0) {
+                        lock.lock();
                         _work_done.notify_all();
                         _parallel_for.reset();
                     }
