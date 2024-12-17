@@ -3,39 +3,57 @@
 //
 
 #include "fallback_bindless_array.h"
-#include "thread_pool.h"
-#include "luisa/runtime/rtx/triangle.h"
-#include "luisa/rust/api_types.hpp"
+#include "fallback_buffer.h"
 
-namespace luisa::compute::fallback
-{
-    FallbackBindlessArray::FallbackBindlessArray(size_t capacity) noexcept
-        : _slots(capacity), _tracker{capacity}
-    {
-    }
+namespace luisa::compute::fallback {
 
+FallbackBindlessArray::FallbackBindlessArray(size_t capacity) noexcept
+    : _slots(capacity) {}
 
-    void FallbackBindlessArray::update(ThreadPool& pool, luisa::span<const BindlessArrayUpdateCommand::Modification> modifications) noexcept
-    {
-        using Mod = BindlessArrayUpdateCommand::Modification;
-        pool.async([this,mods = luisa::vector<Mod>{modifications.cbegin(), modifications.cend()}]
-        {
-            for (auto m: mods)
-            {
-                _slots[m.slot].buffer = reinterpret_cast<void*>(m.buffer.handle);
+void FallbackBindlessArray::update(luisa::unique_ptr<BindlessArrayUpdateCommand> cmd) noexcept {
+    for (auto m : cmd->modifications()) {
+        auto &slot = _slots[m.slot];
+        switch (m.buffer.op) {
+            case BindlessArrayUpdateCommand::Modification::Operation::EMPLACE: {
+                auto view = reinterpret_cast<FallbackBuffer *>(m.buffer.handle)->view_with_offset(m.buffer.offset_bytes);
+                slot.buffer = view.ptr;
+                slot.set_buffer_size(view.size);
+                break;
             }
-        });
-        _tracker.commit();
+            case BindlessArrayUpdateCommand::Modification::Operation::REMOVE: {
+                slot.buffer = nullptr;
+                slot.set_buffer_size(0);
+                break;
+            }
+            default: break;
+        }
+        switch (m.tex2d.op) {
+            case BindlessArrayUpdateCommand::Modification::Operation::EMPLACE: {
+                slot.tex2d = reinterpret_cast<FallbackTexture *>(m.tex2d.handle);
+                slot.set_sampler_2d(m.tex2d.sampler);
+                break;
+            }
+            case BindlessArrayUpdateCommand::Modification::Operation::REMOVE: {
+                slot.tex2d = nullptr;
+                slot.set_sampler_2d(0);
+                break;
+            }
+            default: break;
+        }
+        switch (m.tex3d.op) {
+            case BindlessArrayUpdateCommand::Modification::Operation::EMPLACE: {
+                slot.tex3d = reinterpret_cast<FallbackTexture *>(m.tex3d.handle);
+                slot.set_sampler_3d(m.tex3d.sampler);
+                break;
+            }
+            case BindlessArrayUpdateCommand::Modification::Operation::REMOVE: {
+                slot.tex3d = nullptr;
+                slot.set_sampler_3d(0);
+                break;
+            }
+            default: break;
+        }
     }
-
-    bool FallbackBindlessArray::uses_resource(uint64_t handle) const noexcept
-    {
-        return _tracker.contains(handle);
-    }
-} // namespace luisa::compute::Fallback
-void bindless_buffer_read(void* bindless, unsigned slot, unsigned elem, unsigned stride, void* buffer)
-{
-    auto a = reinterpret_cast<luisa::compute::fallback::FallbackBindlessArray *>(bindless);
-    auto ptr = reinterpret_cast<const std::byte*>(a->slot(slot).buffer);
-    memcpy(buffer, ptr + elem*stride, stride);
 }
+
+}// namespace luisa::compute::fallback

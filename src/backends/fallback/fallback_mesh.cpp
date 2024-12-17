@@ -2,55 +2,38 @@
 // Created by Mike Smith on 2022/2/11.
 //
 
+#include <luisa/core/logging.h>
+
+#include "fallback_buffer.h"
 #include "fallback_mesh.h"
 
 namespace luisa::compute::fallback {
 
-FallbackMesh::FallbackMesh(
-    RTCDevice device, AccelUsageHint hint) noexcept
+FallbackMesh::FallbackMesh(RTCDevice device, const AccelOption &option) noexcept
     : _handle{rtcNewScene(device)},
-      _geometry{rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE)}, _hint{hint}
-{
+      _geometry{rtcNewGeometry(device, RTC_GEOMETRY_TYPE_TRIANGLE)} {
+    luisa_fallback_accel_set_flags(_handle, option);
+    rtcAttachGeometry(_handle, _geometry);
+    rtcReleaseGeometry(_geometry);// already moved into the scene
 }
 
 FallbackMesh::~FallbackMesh() noexcept {
     rtcReleaseScene(_handle);
-    rtcReleaseGeometry(_geometry);
 }
 
-void FallbackMesh::commit(uint64_t v_buffer, size_t v_offset, size_t v_stride, size_t v_count,
-                          uint64_t t_buffer, size_t t_offset, size_t t_count) noexcept {
-    _v_buffer = v_buffer;
-    _v_offset = v_offset;
-    _v_stride = v_stride;
-    _v_count = v_count;
-    _t_buffer = t_buffer;
-    _t_offset = t_offset;
-    _t_count = t_count;
-
-    if (!_buffers_already_set.exchange(true)) [[unlikely]] {
-        rtcSetSharedGeometryBuffer(
-            _geometry, RTC_BUFFER_TYPE_VERTEX, 0u, RTC_FORMAT_FLOAT3,
-            reinterpret_cast<const void *>(_v_buffer),
-            _v_offset, _v_stride, _v_count);
-        rtcSetSharedGeometryBuffer(
-            _geometry, RTC_BUFFER_TYPE_INDEX, 0u, RTC_FORMAT_UINT3,
-            reinterpret_cast<const void *>(_t_buffer),
-            _t_offset, sizeof(Triangle), _t_count);
-        switch (_hint) {
-            case AccelUsageHint::FAST_TRACE:
-                rtcSetGeometryBuildQuality(_geometry, RTC_BUILD_QUALITY_HIGH);
-                break;
-            case AccelUsageHint::FAST_BUILD:
-                rtcSetGeometryBuildQuality(_geometry, RTC_BUILD_QUALITY_REFIT);
-                break;
-        }
-        rtcAttachGeometry(_handle, _geometry);
-        rtcSetSceneBuildQuality(_handle, RTC_BUILD_QUALITY_HIGH);
-        rtcSetSceneFlags(_handle, RTC_SCENE_FLAG_COMPACT);
-    }
+void FallbackMesh::build(luisa::unique_ptr<MeshBuildCommand> cmd) noexcept {
+    auto v_buffer = reinterpret_cast<FallbackBuffer *>(cmd->vertex_buffer())->data();
+    auto t_buffer = reinterpret_cast<FallbackBuffer *>(cmd->triangle_buffer())->data();
+    LUISA_DEBUG_ASSERT(cmd->vertex_buffer_size() % cmd->vertex_stride() == 0u, "Invalid vertex buffer size.");
+    LUISA_DEBUG_ASSERT(cmd->triangle_buffer_size() % sizeof(Triangle) == 0u, "Invalid triangle buffer size.");
+    auto v_count = cmd->vertex_buffer_size() / cmd->vertex_stride();
+    auto t_count = cmd->triangle_buffer_size() / sizeof(Triangle);
+    rtcSetSharedGeometryBuffer(_geometry, RTC_BUFFER_TYPE_VERTEX, 0u, RTC_FORMAT_FLOAT3,
+                               v_buffer, cmd->vertex_buffer_offset(), cmd->vertex_stride(), v_count);
+    rtcSetSharedGeometryBuffer(_geometry, RTC_BUFFER_TYPE_INDEX, 0u, RTC_FORMAT_UINT3,
+                               t_buffer, cmd->triangle_buffer_offset(), sizeof(Triangle), t_count);
     rtcCommitGeometry(_geometry);
     rtcCommitScene(_handle);
 }
 
-}// namespace luisa::compute::llvm
+}// namespace luisa::compute::fallback

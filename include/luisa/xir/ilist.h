@@ -146,6 +146,7 @@ public:
         assert(!is_head_sentinel() && "Inserting before a head sentinel.");
         node->_prev = _prev;
         node->_next = static_cast<T *>(this);
+        _prev->_next = node;
         _prev = node;
     }
     virtual void insert_after_self(T *node) noexcept {
@@ -153,6 +154,7 @@ public:
         assert(!is_tail_sentinel() && "Inserting after a tail sentinel.");
         node->_next = _next;
         node->_prev = static_cast<T *>(this);
+        _next->_prev = node;
         _next = node;
     }
 };

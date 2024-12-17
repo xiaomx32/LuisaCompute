@@ -2,6 +2,13 @@
 // Created by Mike Smith on 2022/5/23.
 //
 
+#include <luisa/core/intrin.h>
+
+#ifdef LUISA_ARCH_X86_64
+#include <xmmintrin.h>
+#include <pmmintrin.h>
+#endif
+
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
@@ -10,6 +17,7 @@
 
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
+#include <luisa/core/clock.h>
 #include "fallback_stream.h"
 #include "fallback_device.h"
 #include "fallback_texture.h"
@@ -17,15 +25,11 @@
 #include "fallback_accel.h"
 #include "fallback_bindless_array.h"
 #include "fallback_shader.h"
-
-//#include "llvm_event.h"
-//#include "llvm_shader.h"
-//#include "llvm_codegen.h"
+#include "fallback_buffer.h"
+#include "fallback_swapchain.h"
 
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/SourceMgr.h>
-
-//#include "fallback_texture_sampling_wrapper.ll";
 
 namespace luisa::compute::fallback {
 
@@ -51,13 +55,25 @@ static void loadLLVMModuleFromString(::llvm::orc::LLJIT &jit, const char *ir_str
     }
 }
 
-extern "C" int my_function(int x, int y) {
-    printf("my_function called with arguments: %d, %d\n", x, y);
-    return x + y;
-}
 FallbackDevice::FallbackDevice(Context &&ctx) noexcept
-    : DeviceInterface{std::move(ctx)},
-      _rtc_device{rtcNewDevice(nullptr)} {
+    : DeviceInterface{std::move(ctx)} {
+
+#ifdef LUISA_ARCH_X86_64
+    _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+
+    // embree
+    _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=1");
+    rtcSetDeviceErrorFunction(
+        _rtc_device,
+        [](void *, RTCError code, const char *message) {
+            LUISA_WARNING_WITH_LOCATION("Embree error (code = {}): {}",
+                                        luisa::to_underlying(code), message);
+        },
+        nullptr);
+
+    // llvm
     static std::once_flag flag;
     std::call_once(flag, [] {
         ::llvm::InitializeNativeTarget();
@@ -65,12 +81,16 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     });
 }
 
+FallbackDevice::~FallbackDevice() noexcept {
+    rtcReleaseDevice(_rtc_device);
+}
+
 void *FallbackDevice::native_handle() const noexcept {
     return reinterpret_cast<void *>(reinterpret_cast<uint64_t>(this));
 }
 
 void FallbackDevice::destroy_buffer(uint64_t handle) noexcept {
-    luisa::deallocate_with_allocator(reinterpret_cast<std::byte *>(handle));
+    luisa::deallocate_with_allocator(reinterpret_cast<FallbackBuffer *>(handle));
 }
 
 void FallbackDevice::destroy_texture(uint64_t handle) noexcept {
@@ -106,16 +126,17 @@ void FallbackDevice::destroy_accel(uint64_t handle) noexcept {
 }
 
 void FallbackDevice::destroy_swap_chain(uint64_t handle) noexcept {
-    LUISA_ERROR_WITH_LOCATION("Not implemented.");
+    auto b = reinterpret_cast<FallbackSwapchain *>(handle);
+    luisa::deallocate_with_allocator(b);
 }
 
-void FallbackDevice::present_display_in_stream(
-    uint64_t stream_handle, uint64_t swap_chain_handle, uint64_t image_handle) noexcept {
-    LUISA_ERROR_WITH_LOCATION("Not implemented.");
-}
-
-FallbackDevice::~FallbackDevice() noexcept {
-    rtcReleaseDevice(_rtc_device);
+void FallbackDevice::present_display_in_stream(uint64_t stream_handle,
+                                               uint64_t swap_chain_handle,
+                                               uint64_t image_handle) noexcept {
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    auto chain = reinterpret_cast<FallbackSwapchain *>(swap_chain_handle);
+    auto image = reinterpret_cast<FallbackTexture *>(image_handle);
+    chain->present(stream, image);
 }
 
 uint FallbackDevice::compute_warp_size() const noexcept {
@@ -126,11 +147,15 @@ BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t ele
 
     BufferCreationInfo info{};
 
-    info.element_stride = element->size();
+    if (element == Type::of<void>()) {
+        info.element_stride = 1u;
+    } else {
+        info.element_stride = element->size();
+    }
     info.total_size_bytes = info.element_stride * elem_count;
-    info.handle = reinterpret_cast<uint64_t>(
-        luisa::allocate_with_allocator<std::byte>(info.total_size_bytes));
-    info.native_handle = reinterpret_cast<void *>(info.handle);
+    auto buffer = luisa::new_with_allocator<FallbackBuffer>(info.total_size_bytes);
+    info.handle = reinterpret_cast<uint64_t>(buffer);
+    info.native_handle = reinterpret_cast<void *>(buffer->data());
     return info;
 }
 
@@ -158,18 +183,28 @@ void FallbackDevice::dispatch(uint64_t stream_handle, CommandList &&list) noexce
 }
 
 void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const DeviceInterface::StreamLogCallback &callback) noexcept {
-    DeviceInterface::set_stream_log_callback(stream_handle, callback);
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    stream->queue()->set_log_callback(callback);
 }
 
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
-    return SwapchainCreationInfo();
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    auto sc = luisa::new_with_allocator<FallbackSwapchain>(stream, option);
+    return SwapchainCreationInfo{
+        ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
+                             .native_handle = nullptr},
+        (option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)};
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
-    return ShaderCreationInfo{
-        ResourceCreationInfo{
-            .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackShader>(option, kernel))}};
-    return ShaderCreationInfo();
+    Clock clk;
+    auto shader = luisa::new_with_allocator<FallbackShader>(option, kernel);
+    LUISA_VERBOSE("Shader compilation took {} ms.", clk.toc());
+    ShaderCreationInfo info{};
+    info.handle = reinterpret_cast<uint64_t>(shader);
+    info.native_handle = reinterpret_cast<void *>(shader->native_handle());
+    info.block_size = kernel.block_size();
+    return info;
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, const ir::KernelModule *kernel) noexcept {
@@ -185,15 +220,15 @@ ShaderCreationInfo FallbackDevice::load_shader(luisa::string_view name, luisa::s
 }
 
 Usage FallbackDevice::shader_argument_usage(uint64_t handle, size_t index) noexcept {
-    return Usage::READ;
+    LUISA_NOT_IMPLEMENTED();
 }
 
 void FallbackDevice::signal_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept {
-    reinterpret_cast<FallbackStream *>(stream_handle)->signal(reinterpret_cast<LLVMEvent *>(handle));
+    LUISA_NOT_IMPLEMENTED();
 }
 
 void FallbackDevice::wait_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept {
-    reinterpret_cast<FallbackStream *>(stream_handle)->wait(reinterpret_cast<LLVMEvent *>(handle));
+    LUISA_NOT_IMPLEMENTED();
 }
 
 bool FallbackDevice::is_event_completed(uint64_t handle, uint64_t fence_value) const noexcept {
@@ -201,13 +236,13 @@ bool FallbackDevice::is_event_completed(uint64_t handle, uint64_t fence_value) c
 }
 
 void FallbackDevice::synchronize_event(uint64_t handle, uint64_t fence_value) noexcept {
-    //reinterpret_cast<LLVMEvent *>(handle)->wait();
+    LUISA_NOT_IMPLEMENTED();
 }
 
 ResourceCreationInfo FallbackDevice::create_mesh(const AccelOption &option) noexcept {
-    return {
-        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackMesh>(_rtc_device, option.hint)),
-        .native_handle = nullptr};
+    auto mesh = luisa::new_with_allocator<FallbackMesh>(_rtc_device, option);
+    return {.handle = reinterpret_cast<uint64_t>(mesh),
+            .native_handle = mesh->handle()};
 }
 
 ResourceCreationInfo FallbackDevice::create_procedural_primitive(const AccelOption &option) noexcept {
@@ -234,9 +269,9 @@ void FallbackDevice::destroy_motion_instance(uint64_t handle) noexcept {
 }
 
 ResourceCreationInfo FallbackDevice::create_accel(const AccelOption &option) noexcept {
-    return ResourceCreationInfo{
-        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackAccel>(_rtc_device, option.hint)),
-        .native_handle = nullptr};
+    auto accel = luisa::new_with_allocator<FallbackAccel>(_rtc_device, option);
+    return ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(accel),
+                                .native_handle = accel->handle()};
 }
 
 string FallbackDevice::query(luisa::string_view property) noexcept {
@@ -309,4 +344,9 @@ LUISA_EXPORT_API luisa::compute::DeviceInterface *create(luisa::compute::Context
 
 LUISA_EXPORT_API void destroy(luisa::compute::DeviceInterface *device) noexcept {
     luisa::delete_with_allocator(device);
+}
+
+LUISA_EXPORT_API void backend_device_names(luisa::vector<luisa::string> &names) noexcept {
+    names.clear();
+    names.emplace_back(luisa::cpu_name());
 }

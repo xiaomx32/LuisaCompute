@@ -198,7 +198,7 @@ inline HDRColorA *HDRColorALerp(HDRColorA *pOut, const HDRColorA *pC1, const HDR
     return pOut;
 }
 
-#pragma pack(push, 1)
+// #pragma pack(push, 1)
 // BC1/DXT1 compression (4 bits per texel)
 struct D3DX_BC1 {
     uint16_t rgb[2];// 565 colors

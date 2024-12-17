@@ -67,92 +67,6 @@ void FallbackTextureView::copy_from(FallbackTextureView dst) const noexcept {
 
 namespace detail {
 
-[[nodiscard]] inline auto decode_texture_view(int64_t t0, int64_t t1) noexcept {
-    return luisa::bit_cast<FallbackTextureView>(std::array{t0, t1});
-}
-
-// from tinyexr: https://github.com/syoyo/tinyexr/blob/master/tinyexr.h
-float16_t float_to_half(float f) noexcept {
-#if defined(LUISA_ARCH_ARM64)
-    return static_cast<float16_t>(f);
-#elif defined(LUISA_ARCH_X86_64)
-    auto ss = _mm_set_ss(f);
-    auto ph = _mm_cvtps_ph(ss, 0);
-    return static_cast<float16_t>(_mm_cvtsi128_si32(ph));
-#else
-    auto bits = luisa::bit_cast<uint>(f);
-    auto fp32_sign = bits >> 31u;
-    auto fp32_exponent = (bits >> 23u) & 0xffu;
-    auto fp32_mantissa = bits & ((1u << 23u) - 1u);
-    auto make_fp16 = [](uint sign, uint exponent, uint mantissa) noexcept {
-        return static_cast<float16_t>((sign << 15u) | (exponent << 10u) | mantissa);
-    };
-    // Signed zero/denormal (which will underflow)
-    if (fp32_exponent == 0u) { return make_fp16(fp32_sign, 0u, 0u); }
-    // Inf or NaN (all exponent bits set)
-    if (fp32_exponent == 255u) {
-        return make_fp16(
-            fp32_sign, 31u,
-            // NaN->qNaN and Inf->Inf
-            fp32_mantissa ? 0x200u : 0u);
-    }
-    // Exponent unbias the single, then bias the halfp
-    auto newexp = static_cast<int>(fp32_exponent - 127u + 15u);
-    // Overflow, return signed infinity
-    if (newexp >= 31) { return make_fp16(fp32_sign, 31u, 0u); }
-    // Underflow
-    if (newexp <= 0) {
-        if ((14 - newexp) > 24) { return 0u; }
-        // Mantissa might be non-zero
-        unsigned int mant = fp32_mantissa | 0x800000u;// Hidden 1 bit
-        auto fp16 = make_fp16(fp32_sign, 0u, mant >> (14u - newexp));
-        if ((mant >> (13u - newexp)) & 1u) { fp16++; }// Check for rounding
-        return fp16;
-    }
-    auto fp16 = make_fp16(fp32_sign, newexp, fp32_mantissa >> 13u);
-    if (fp32_mantissa & 0x1000u) { fp16++; }// Check for rounding
-    return fp16;
-#endif
-}
-
-float half_to_float(float16_t half) noexcept {
-#if defined(LUISA_ARCH_ARM64)
-    return static_cast<float>(half);
-#elif defined(LUISA_ARCH_X86_64)
-    auto si = _mm_cvtsi32_si128(half);
-    auto ps = _mm_cvtph_ps(si);
-    return _mm_cvtss_f32(ps);
-#else
-    static_assert(std::endian::native == std::endian::little,
-                  "Only little endian is supported");
-    auto h = static_cast<uint>(half);
-    union FP32 {
-        unsigned int u;
-        float f;
-        struct {// FIXME: assuming little endian here
-            unsigned int Mantissa : 23;
-            unsigned int Exponent : 8;
-            unsigned int Sign : 1;
-        } s;
-    };
-    constexpr auto magic = FP32{113u << 23u};
-    constexpr auto shifted_exp = 0x7c00u << 13u;// exponent mask after shift
-    auto o = FP32{(h & 0x7fffu) << 13u};        // exponent/mantissa bits
-    auto exp_ = shifted_exp & o.u;              // just the exponent
-    o.u += (127u - 15u) << 23u;                 // exponent adjust
-
-    // handle exponent special cases
-    if (exp_ == shifted_exp) {     // Inf/NaN?
-        o.u += (128u - 16u) << 23u;// extra exp adjust
-    } else if (exp_ == 0u) {       // Zero/Denormal?
-        o.u += 1u << 23u;          // extra exp adjust
-        o.f -= magic.f;            // renormalize
-    }
-    o.u |= (h & 0x8000u) << 16u;// sign bit
-    return o.f;
-#endif
-}
-
 // MIP-Map EWA filtering LUT from PBRT-v4
 static constexpr const std::array ewa_filter_weight_lut{
     0.8646647330f, 0.8490400310f, 0.8336595300f, 0.8185192940f, 0.8036156300f, 0.78894478100f, 0.7745032310f, 0.7602872850f,
@@ -175,10 +89,9 @@ static constexpr const std::array ewa_filter_weight_lut{
 }// namespace detail
 
 FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uint levels) noexcept
-    : _storage{storage}, _mip_levels{levels}, _dimension{dim}
-    {
+    : _storage{storage}, _mip_levels{levels}, _dimension{dim} {
     if (_dimension == 2u) {
-        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_align(storage))) - 1u;
+        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         if (storage == PixelStorage::BC6 || storage == PixelStorage::BC7) {
             _pixel_stride_shift = 0u;
         }
@@ -196,6 +109,7 @@ FallbackTexture::FallbackTexture(PixelStorage storage, uint dim, uint3 size, uin
         auto size_pixels = _mip_offsets[levels - 1u] + s.x * s.y;
         _data = luisa::allocate_with_allocator<std::byte>(static_cast<size_t>(size_pixels) << _pixel_stride_shift);
     } else {
+        _pixel_stride_shift = std::bit_width(static_cast<uint>(pixel_storage_size(storage, make_uint3(1u)))) - 1u;
         _size[0] = size.x;
         _size[1] = size.y;
         _size[2] = size.z;
@@ -216,132 +130,123 @@ FallbackTexture::~FallbackTexture() noexcept { luisa::deallocate_with_allocator(
 FallbackTextureView FallbackTexture::view(uint level) const noexcept {
     auto size = luisa::max(make_uint3(_size[0], _size[1], _size[2]) >> level, 1u);
     return FallbackTextureView{_data + (static_cast<size_t>(_mip_offsets[level]) << _pixel_stride_shift),
-                           _dimension, size.x, size.y, size.z, _storage, _pixel_stride_shift};
+                               _dimension, size.x, size.y, size.z, _storage, _pixel_stride_shift};
 }
 
-//float4 FallbackTexture::read2d(uint level, uint2 uv) const noexcept {
-//    return view(level).read2d<float>(uv);
-//}
+// template<typename T>
+// [[nodiscard]] inline auto texture_coord_point(Sampler::Address address, T uv, T s) noexcept {
+//     switch (address) {
+//         case Sampler::Address::EDGE: return luisa::clamp(uv, 0.0f, one_minus_epsilon) * s;
+//         case Sampler::Address::REPEAT: return luisa::fract(uv) * s;
+//         case Sampler::Address::MIRROR: {
+//             uv = luisa::fmod(luisa::abs(uv), T{2.0f});
+//             uv = select(2.f - uv, uv, uv < T{1.f});
+//             return luisa::min(uv, one_minus_epsilon) * s;
+//         }
+//         case Sampler::Address::ZERO: return luisa::select(uv * s, T{65536.f}, uv < 0.f || uv >= 1.f);
+//     }
+//     return T{65536.f};
+// }
 //
-//float4 FallbackTexture::read3d(uint level, uint3 uvw) const noexcept {
-//    return view(level).read3d<float>(uvw);
-//}
-
-template<typename T>
-[[nodiscard]] inline auto texture_coord_point(Sampler::Address address, T uv, T s) noexcept {
-    switch (address) {
-        case Sampler::Address::EDGE: return luisa::clamp(uv, 0.0f, one_minus_epsilon) * s;
-        case Sampler::Address::REPEAT: return luisa::fract(uv) * s;
-        case Sampler::Address::MIRROR: {
-            uv = luisa::fmod(luisa::abs(uv), T{2.0f});
-            uv = select(2.f - uv, uv, uv < T{1.f});
-            return luisa::min(uv, one_minus_epsilon) * s;
-        }
-        case Sampler::Address::ZERO: return luisa::select(uv * s, T{65536.f}, uv < 0.f || uv >= 1.f);
-    }
-    return T{65536.f};
-}
-
-
-[[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float3 uv, float3 size) noexcept {
-    auto s = make_float3(size);
-    auto inv_s = 1.f / s;
-    auto c_min = texture_coord_point(address, uv - .5f * inv_s, s);
-    auto c_max = texture_coord_point(address, uv + .5f * inv_s, s);
-    return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
-}
-
-[[nodiscard]] inline auto texture_sample_linear(FallbackTextureView view, Sampler::Address address, float3 uvw) noexcept {
-    auto size = make_float3(view.size3d());
-    auto [st_min, st_max] = texture_coord_linear(address, uvw, size);
-    auto t = luisa::fract(st_max);
-    auto c0 = make_uint3(st_min);
-    auto c1 = make_uint3(st_max);
-    auto v000 = view.read3d<float>(make_uint3(c0.x, c0.y, c0.z));
-    auto v001 = view.read3d<float>(make_uint3(c1.x, c0.y, c0.z));
-    auto v010 = view.read3d<float>(make_uint3(c0.x, c1.y, c0.z));
-    auto v011 = view.read3d<float>(make_uint3(c1.x, c1.y, c0.z));
-    auto v100 = view.read3d<float>(make_uint3(c0.x, c0.y, c1.z));
-    auto v101 = view.read3d<float>(make_uint3(c1.x, c0.y, c1.z));
-    auto v110 = view.read3d<float>(make_uint3(c0.x, c1.y, c1.z));
-    auto v111 = view.read3d<float>(make_uint3(c1.x, c1.y, c1.z));
-    return luisa::lerp(
-        luisa::lerp(luisa::lerp(v000, v001, t.x),
-                    luisa::lerp(v010, v011, t.x), t.y),
-        luisa::lerp(luisa::lerp(v100, v101, t.x),
-                    luisa::lerp(v110, v111, t.x), t.y),
-        t.z);
-}
-
-[[nodiscard]] inline auto texture_sample_point(FallbackTextureView view, Sampler::Address address, float2 uv) noexcept {
-    auto size = make_float2(view.size2d());
-    auto c = make_uint2(texture_coord_point(address, uv, size));
-    return view.read2d<float>(c);
-}
-
-[[nodiscard]] inline auto texture_sample_point(FallbackTextureView view, Sampler::Address address, float3 uvw) noexcept {
-    auto size = make_float3(view.size3d());
-    auto c = make_uint3(texture_coord_point(address, uvw, size));
-    return view.read3d<float>(c);
-}
-
-// from PBRT-v4
-[[nodiscard]] inline auto texture_sample_ewa(FallbackTextureView view, Sampler::Address address,
-                                             float2 uv, float2 dst0, float2 dst1) noexcept {
-    auto size = make_float2(view.size2d());
-    auto st = uv * size - .5f;
-    dst0 = dst0 * size;
-    dst1 = dst1 * size;
-
-    constexpr auto sqr = [](float x) noexcept { return x * x; };
-    constexpr auto safe_sqrt = [](float x) noexcept { return luisa::select(std::sqrt(x), 0.f, x <= 0.f); };
-
-    // Find ellipse coefficients that bound EWA filter region
-    auto A = sqr(dst0.y) + sqr(dst1.y) + 1.f;
-    auto B = -2.f * (dst0.x * dst0.y + dst1.x * dst1.y);
-    auto C = sqr(dst0.x) + sqr(dst1.x) + 1.f;
-    auto inv_f = 1.f / (A * C - sqr(B) * 0.25f);
-    A *= inv_f;
-    B *= inv_f;
-    C *= inv_f;
-
-    // Compute the ellipse's $(s,t)$ bounding box in texture space
-    auto det = -sqr(B) + 4.f * A * C;
-    auto inv_det = 1.f / det;
-    auto sqrt_u = safe_sqrt(det * C);
-    auto sqrt_v = safe_sqrt(A * det);
-    auto s_min = static_cast<int>(std::ceil(st.x - 2.f * inv_det * sqrt_u));
-    auto s_max = static_cast<int>(std::floor(st.x + 2.f * inv_det * sqrt_u));
-    auto t_min = static_cast<int>(std::ceil(st.y - 2.f * inv_det * sqrt_v));
-    auto t_max = static_cast<int>(std::floor(st.y + 2.f * inv_det * sqrt_v));
-
-    // Scan over ellipse bound and evaluate quadratic equation to filter image
-    auto sum = make_float4();
-    auto sum_w = 0.f;
-    auto inv_size = 1.f / size;
-    for (auto t = t_min; t <= t_max; t++) {
-        for (auto s = s_min; s <= s_max; s++) {
-            auto ss = static_cast<float>(s) - st.x;
-            auto tt = static_cast<float>(t) - st.y;
-            // Compute squared radius and filter texel if it is inside the ellipse
-            if (auto rr = A * sqr(ss) + B * ss * tt + C * sqr(tt); rr < 1.f) {
-                constexpr auto lut_size = static_cast<float>(detail::ewa_filter_weight_lut.size());
-                auto index = std::clamp(rr * lut_size, 0.f, lut_size - 1.f);
-                auto weight = detail::ewa_filter_weight_lut[static_cast<int>(index)];
-                auto p = texture_coord_point(address, uv + make_float2(ss, tt) * inv_size, size);
-                sum += weight * view.read2d<float>(make_uint2(p));
-                sum_w += weight;
-            }
-        }
-    }
-    return select(sum / sum_w, make_float4(0.f), sum_w <= 0.f);
-}
-
-[[nodiscard]] inline auto texture_sample_ewa(FallbackTextureView view, Sampler::Address address,
-                                             float3 uvw, float3 ddx, float3 ddy) noexcept {
-    // FIXME: anisotropic filtering
-    return texture_sample_linear(view, address, uvw);
-}
+// [[nodiscard]] inline auto texture_coord_linear(Sampler::Address address, float3 uv, float3 size) noexcept {
+//     auto s = make_float3(size);
+//     auto inv_s = 1.f / s;
+//     auto c_min = texture_coord_point(address, uv - .5f * inv_s, s);
+//     auto c_max = texture_coord_point(address, uv + .5f * inv_s, s);
+//     return std::make_pair(luisa::min(c_min, c_max), luisa::max(c_min, c_max));
+// }
+//
+// [[nodiscard]] inline auto texture_sample_linear(FallbackTextureView view, Sampler::Address address, float3 uvw) noexcept {
+//     auto size = make_float3(view.size3d());
+//     auto [st_min, st_max] = texture_coord_linear(address, uvw, size);
+//     auto t = luisa::fract(st_max);
+//     auto c0 = make_uint3(st_min);
+//     auto c1 = make_uint3(st_max);
+//     auto v000 = view.read3d<float>(make_uint3(c0.x, c0.y, c0.z));
+//     auto v001 = view.read3d<float>(make_uint3(c1.x, c0.y, c0.z));
+//     auto v010 = view.read3d<float>(make_uint3(c0.x, c1.y, c0.z));
+//     auto v011 = view.read3d<float>(make_uint3(c1.x, c1.y, c0.z));
+//     auto v100 = view.read3d<float>(make_uint3(c0.x, c0.y, c1.z));
+//     auto v101 = view.read3d<float>(make_uint3(c1.x, c0.y, c1.z));
+//     auto v110 = view.read3d<float>(make_uint3(c0.x, c1.y, c1.z));
+//     auto v111 = view.read3d<float>(make_uint3(c1.x, c1.y, c1.z));
+//     return luisa::lerp(
+//         luisa::lerp(luisa::lerp(v000, v001, t.x),
+//                     luisa::lerp(v010, v011, t.x), t.y),
+//         luisa::lerp(luisa::lerp(v100, v101, t.x),
+//                     luisa::lerp(v110, v111, t.x), t.y),
+//         t.z);
+// }
+//
+// [[nodiscard]] inline auto texture_sample_point(FallbackTextureView view, Sampler::Address address, float2 uv) noexcept {
+//     auto size = make_float2(view.size2d());
+//     auto c = make_uint2(texture_coord_point(address, uv, size));
+//     return view.read2d<float>(c);
+// }
+//
+// [[nodiscard]] inline auto texture_sample_point(FallbackTextureView view, Sampler::Address address, float3 uvw) noexcept {
+//     auto size = make_float3(view.size3d());
+//     auto c = make_uint3(texture_coord_point(address, uvw, size));
+//     return view.read3d<float>(c);
+// }
+//
+// // from PBRT-v4
+// [[nodiscard]] inline auto texture_sample_ewa(FallbackTextureView view, Sampler::Address address,
+//                                              float2 uv, float2 dst0, float2 dst1) noexcept {
+//     auto size = make_float2(view.size2d());
+//     auto st = uv * size - .5f;
+//     dst0 = dst0 * size;
+//     dst1 = dst1 * size;
+//
+//     constexpr auto sqr = [](float x) noexcept { return x * x; };
+//     constexpr auto safe_sqrt = [](float x) noexcept { return luisa::select(std::sqrt(x), 0.f, x <= 0.f); };
+//
+//     // Find ellipse coefficients that bound EWA filter region
+//     auto A = sqr(dst0.y) + sqr(dst1.y) + 1.f;
+//     auto B = -2.f * (dst0.x * dst0.y + dst1.x * dst1.y);
+//     auto C = sqr(dst0.x) + sqr(dst1.x) + 1.f;
+//     auto inv_f = 1.f / (A * C - sqr(B) * 0.25f);
+//     A *= inv_f;
+//     B *= inv_f;
+//     C *= inv_f;
+//
+//     // Compute the ellipse's $(s,t)$ bounding box in texture space
+//     auto det = -sqr(B) + 4.f * A * C;
+//     auto inv_det = 1.f / det;
+//     auto sqrt_u = safe_sqrt(det * C);
+//     auto sqrt_v = safe_sqrt(A * det);
+//     auto s_min = static_cast<int>(std::ceil(st.x - 2.f * inv_det * sqrt_u));
+//     auto s_max = static_cast<int>(std::floor(st.x + 2.f * inv_det * sqrt_u));
+//     auto t_min = static_cast<int>(std::ceil(st.y - 2.f * inv_det * sqrt_v));
+//     auto t_max = static_cast<int>(std::floor(st.y + 2.f * inv_det * sqrt_v));
+//
+//     // Scan over ellipse bound and evaluate quadratic equation to filter image
+//     auto sum = make_float4();
+//     auto sum_w = 0.f;
+//     auto inv_size = 1.f / size;
+//     for (auto t = t_min; t <= t_max; t++) {
+//         for (auto s = s_min; s <= s_max; s++) {
+//             auto ss = static_cast<float>(s) - st.x;
+//             auto tt = static_cast<float>(t) - st.y;
+//             // Compute squared radius and filter texel if it is inside the ellipse
+//             if (auto rr = A * sqr(ss) + B * ss * tt + C * sqr(tt); rr < 1.f) {
+//                 constexpr auto lut_size = static_cast<float>(detail::ewa_filter_weight_lut.size());
+//                 auto index = std::clamp(rr * lut_size, 0.f, lut_size - 1.f);
+//                 auto weight = detail::ewa_filter_weight_lut[static_cast<int>(index)];
+//                 auto p = texture_coord_point(address, uv + make_float2(ss, tt) * inv_size, size);
+//                 sum += weight * view.read2d<float>(make_uint2(p));
+//                 sum_w += weight;
+//             }
+//         }
+//     }
+//     return select(sum / sum_w, make_float4(0.f), sum_w <= 0.f);
+// }
+//
+// [[nodiscard]] inline auto texture_sample_ewa(FallbackTextureView view, Sampler::Address address,
+//                                              float3 uvw, float3 ddx, float3 ddy) noexcept {
+//     // FIXME: anisotropic filtering
+//     return texture_sample_linear(view, address, uvw);
+// }
 
 //float4 FallbackTexture::sample2d(Sampler sampler, float2 uv) const noexcept {
 //    return sampler.filter() == Sampler::Filter::POINT ?
@@ -450,73 +355,5 @@ template<typename T>
 //    auto v1 = texture_sample_ewa(view(level_uint + 1u), sampler.address(), uvw, dpdx, dpdy);
 //    return luisa::lerp(v0, v1, luisa::fract(level));
 //}
-
-void texture_write_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write2d<int>(
-        detail::decode_uint2(c0), detail::decode_int4(v0, v1));
-}
-
-void texture_write_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write3d<int>(
-        detail::decode_uint3(c0, c1), detail::decode_int4(v0, v1));
-}
-
-void texture_write_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write2d<uint>(
-        detail::decode_uint2(c0),
-        detail::decode_uint4(v0, v1));
-}
-
-void texture_write_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write3d<uint>(
-        detail::decode_uint3(c0, c1), detail::decode_uint4(v0, v1));
-}
-
-void texture_write_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write2d<float>(
-        detail::decode_uint2(c0), detail::decode_float4(v0, v1));
-}
-
-void texture_write_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1, int64_t v0, int64_t v1) noexcept {
-    detail::decode_texture_view(t0, t1).write3d<float>(
-        detail::decode_uint3(c0, c1), detail::decode_float4(v0, v1));
-}
-
-float32x4_t texture_read_2d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_int4(
-        detail::decode_texture_view(t0, t1).read2d<int>(
-            detail::decode_uint2(c0)));
-}
-
-float32x4_t texture_read_3d_int(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_int4(
-        detail::decode_texture_view(t0, t1).read3d<int>(
-            detail::decode_uint3(c0, c1)));
-}
-
-float32x4_t texture_read_2d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_uint4(
-        detail::decode_texture_view(t0, t1).read2d<uint>(
-            detail::decode_uint2(c0)));
-}
-
-float32x4_t texture_read_3d_uint(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_uint4(
-        detail::decode_texture_view(t0, t1).read3d<uint>(
-            detail::decode_uint3(c0, c1)));
-}
-
-float32x4_t texture_read_2d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_float4(
-        detail::decode_texture_view(t0, t1).read2d<float>(
-            detail::decode_uint2(c0)));
-}
-
-float32x4_t texture_read_3d_float(int64_t t0, int64_t t1, int64_t c0, int64_t c1) noexcept {
-    return detail::encode_float4(
-        detail::decode_texture_view(t0, t1).read3d<float>(
-            detail::decode_uint3(c0, c1)));
-}
-
 
 }// namespace luisa::compute::fallback

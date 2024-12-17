@@ -575,7 +575,7 @@ private:
             case CallOp::BINDLESS_BUFFER_WRITE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_WRITE);
             case CallOp::BINDLESS_BYTE_BUFFER_READ: return resource_call(IntrinsicOp::BINDLESS_BYTE_BUFFER_READ);
             case CallOp::BINDLESS_BUFFER_SIZE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_SIZE);
-            case CallOp::BINDLESS_BUFFER_TYPE: return resource_call(IntrinsicOp::BINDLESS_BUFFER_TYPE);
+            case CallOp::BINDLESS_BUFFER_TYPE: LUISA_ERROR_WITH_LOCATION("Removed bindless_buffer_type operation.");
             case CallOp::BINDLESS_BUFFER_ADDRESS: return resource_call(IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS);
             case CallOp::MAKE_BOOL2: return make_vector_call(Type::of<bool>(), 2);
             case CallOp::MAKE_BOOL3: return make_vector_call(Type::of<bool>(), 3);
@@ -664,7 +664,7 @@ private:
             case CallOp::RAY_TRACING_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID);
             case CallOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return resource_call(IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK);
             case CallOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM);
-            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY);
+            case CallOp::RAY_TRACING_SET_INSTANCE_VISIBILITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK);
             case CallOp::RAY_TRACING_SET_INSTANCE_OPACITY: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY);
             case CallOp::RAY_TRACING_SET_INSTANCE_USER_ID: return resource_call(IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID);
             case CallOp::RAY_TRACING_TRACE_CLOSEST: return resource_call(IntrinsicOp::RAY_TRACING_TRACE_CLOSEST);
@@ -722,6 +722,7 @@ private:
             case CallOp::TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD);
             case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL);
             case CallOp::SHADER_EXECUTION_REORDER: return resource_call(IntrinsicOp::SHADER_EXECUTION_REORDER);
+            case CallOp::CLOCK: return pure_call(IntrinsicOp::CLOCK);
         }
         LUISA_NOT_IMPLEMENTED();
     }
@@ -993,6 +994,7 @@ private:
                     if (assign->lhs() != assign->rhs()) {
                         auto variable = _translate_expression(b, assign->lhs(), false);
                         auto value = _translate_expression(b, assign->rhs(), true);
+                        value = _type_cast_if_necessary(b, variable->type(), value);
                         _commented(b.store(variable, value));
                     }
                     break;
@@ -1032,8 +1034,7 @@ private:
         // convert the arguments
         for (auto ast_arg : _current.ast->arguments()) {
             auto arg = _current.f->create_argument(ast_arg.type(), ast_arg.is_reference());
-            if (auto ast_usage = _current.ast->variable_usage(ast_arg.uid());
-                arg->is_value() && (ast_usage == Usage::WRITE || ast_usage == Usage::READ_WRITE)) {
+            if (arg->is_value()) {
                 // AST allows update of the argument, so we need to copy it to a local variable
                 auto local = b.alloca_local(arg->type());
                 local->add_comment("Local copy of argument");

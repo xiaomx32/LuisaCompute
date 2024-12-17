@@ -11,7 +11,6 @@
 #include <luisa/runtime/rtx/hit.h>
 
 #include "fallback_embree.h"
-#include "llvm_abi.h"
 
 namespace luisa {
 class ThreadPool;
@@ -19,59 +18,39 @@ class ThreadPool;
 
 namespace luisa::compute::fallback {
 
+class FallbackCommandQueue;
 class FallbackMesh;
 
-class FallbackAccel {
+class alignas(16) FallbackAccel {
 
 public:
     struct alignas(16) Instance {
         float affine[12];
-        bool visible;
+        uint8_t mask;
+        bool opaque;
         bool dirty;
-        uint pad;
+        uint user_id;
         RTCGeometry geometry;
     };
     static_assert(sizeof(Instance) == 64u);
 
-    struct alignas(16) Handle {
-        const FallbackAccel *accel;
+    struct alignas(16) View {
+        RTCScene scene;
         Instance *instances;
     };
 
 private:
-    const RTCDevice _device;
     RTCScene _handle;
-    mutable luisa::vector<Instance> _instances;
-
-private:
-    [[nodiscard]] static std::array<float, 12> _compress(float4x4 m) noexcept;
-    [[nodiscard]] static float4x4 _decompress(std::array<float, 12> m) noexcept;
+    luisa::vector<Instance> _instances;
 
 public:
-    [[nodiscard]] RTCScene scene()const noexcept {return _handle;}
-    FallbackAccel(RTCDevice device, AccelUsageHint hint) noexcept;
+    [[nodiscard]] RTCScene handle() const noexcept { return _handle; }
+    FallbackAccel(RTCDevice device, const AccelOption &option) noexcept;
     ~FallbackAccel() noexcept;
-    void build(ThreadPool &pool, size_t instance_count,
-               luisa::span<const AccelBuildCommand::Modification> mods) noexcept;
-    [[nodiscard]] auto handle() const noexcept { return Handle{this, _instances.data()}; }
+    void build(luisa::unique_ptr<AccelBuildCommand> cmd) noexcept;
+    [[nodiscard]] auto view() noexcept { return View{_handle, _instances.data()}; }
 };
 
-[[nodiscard]] void accel_trace_closest(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask, SurfaceHit* hit) noexcept;
-[[nodiscard]] bool accel_trace_any(const FallbackAccel *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, uint mask) noexcept;
-
-struct alignas(16) FallbackAccelInstance {
-    float affine[12];
-    bool visible;
-    bool dirty;
-    uint pad;
-    uint geom0;
-    uint geom1;
-};
+using FallbackAccelView = FallbackAccel::View;
 
 }// namespace luisa::compute::fallback
-
-LUISA_STRUCT(luisa::compute::fallback::FallbackAccelInstance,
-             affine, visible, dirty, pad, geom0, geom1) {};
-
-void intersect_closest_wrapper(void *accel, float ox, float oy, float oz, float dx, float dy, float dz, float tmin, float tmax, unsigned mask, void *hit);
-

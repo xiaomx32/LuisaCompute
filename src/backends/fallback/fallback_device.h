@@ -20,15 +20,11 @@ namespace luisa::compute::fallback {
 class FallbackDevice : public DeviceInterface {
 
 private:
-    RTCDevice _rtc_device;
-    mutable std::mutex _jit_mutex;
+    RTCDevice _rtc_device{nullptr};
 
 public:
     explicit FallbackDevice(Context &&ctx) noexcept;
     ~FallbackDevice() noexcept override;
-    //[[nodiscard]] ::llvm::TargetMachine *target_machine() const noexcept { return _target_machine.get(); }
-    //[[nodiscard]] ::llvm::orc::LLJIT *jit() const noexcept { return _jit.get(); }
-    [[nodiscard]] auto &jit_mutex() const noexcept { return _jit_mutex; }
     void *native_handle() const noexcept override;
     void destroy_buffer(uint64_t handle) noexcept override;
     void destroy_texture(uint64_t handle) noexcept override;
