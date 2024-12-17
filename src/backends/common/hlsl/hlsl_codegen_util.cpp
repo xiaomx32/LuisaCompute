@@ -1065,12 +1065,12 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             str << "GroupMemoryBarrierWithGroupSync()"sv;
             return;
         case CallOp::RASTER_DISCARD:
-            LUISA_ASSERT(opt->funcType == CodegenStackData::FuncType::Pixel, "Raster-Discard can only be used in pixel shader");
+            LUISA_ASSERT(opt->isPixelShader, "Raster-Discard can only be used in pixel shader");
             str << "discard";
             return;
         case CallOp::DDX: {
             if (opt->isRaster) {
-                LUISA_ASSERT(opt->funcType == CodegenStackData::FuncType::Pixel, "ddx can only be used in pixel shader");
+                LUISA_ASSERT(opt->isPixelShader, "ddx can only be used in pixel shader");
                 str << "ddx"sv;
             } else {
                 str << "_ddx"sv;
@@ -1078,7 +1078,7 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
         } break;
         case CallOp::DDY: {
             if (opt->isRaster) {
-                LUISA_ASSERT(opt->funcType == CodegenStackData::FuncType::Pixel, "ddy can only be used in pixel shader");
+                LUISA_ASSERT(opt->isPixelShader, "ddy can only be used in pixel shader");
                 str << "ddy"sv;
             } else {
                 str << "_ddy"sv;
@@ -1584,20 +1584,7 @@ void main(uint3 thdId:SV_GroupThreadId,uint3 dspId:SV_DispatchThreadID,uint3 grp
     callable(callable, func);
 }
 void CodegenUtility::CodegenVertex(Function vert, vstd::StringBuilder &result, bool cBufferNonEmpty) {
-    vstd::unordered_set<void const *> callableMap;
-    auto gen = [&](auto &callable, Function func) -> void {
-        for (auto &&i : func.custom_callables()) {
-            if (callableMap.emplace(i.get()).second) {
-                Function f(i.get());
-                callable(callable, f);
-            }
-        }
-    };
-    auto callable = [&](auto &callable, Function func) -> void {
-        gen(callable, func);
-        CodegenFunction(func, result, cBufferNonEmpty);
-    };
-    gen(callable, vert);
+    CodegenFunction(vert, result, cBufferNonEmpty);
     auto args = vert.arguments();
     vstd::StringBuilder retName;
     auto retType = vert.return_type();
@@ -1634,20 +1621,7 @@ void CodegenUtility::CodegenVertex(Function vert, vstd::StringBuilder &result, b
 void CodegenUtility::CodegenPixel(Function pixel, vstd::StringBuilder &result, bool cBufferNonEmpty) {
     opt->isPixelShader = true;
     auto resetPixelShaderKey = vstd::scope_exit([&] { opt->isPixelShader = false; });
-    vstd::unordered_set<void const *> callableMap;
-    auto gen = [&](auto &callable, Function func) -> void {
-        for (auto &&i : func.custom_callables()) {
-            if (callableMap.emplace(i.get()).second) {
-                Function f(i.get());
-                callable(callable, f);
-            }
-        }
-    };
-    auto callable = [&](auto &callable, Function func) -> void {
-        gen(callable, func);
-        CodegenFunction(func, result, cBufferNonEmpty);
-    };
-    gen(callable, pixel);
+    CodegenFunction(pixel, result, cBufferNonEmpty);
     vstd::StringBuilder retName;
     auto retType = pixel.return_type();
     GetTypeName(*retType, retName, Usage::READ);

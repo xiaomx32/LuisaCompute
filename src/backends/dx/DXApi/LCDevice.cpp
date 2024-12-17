@@ -14,6 +14,7 @@
 #include <Resource/BottomAccel.h>
 #include <Resource/TopAccel.h>
 #include <DXApi/LCSwapChain.h>
+#include <DXApi/dx_hdr_ext.hpp>
 #include "ext.h"
 #include "../../common/hlsl/hlsl_codegen.h"
 #include <luisa/ast/function_builder.h>
@@ -96,6 +97,14 @@ LCDevice::LCDevice(Context &&ctx, DeviceConfig const *settings)
         },
         [](DeviceExtension *ext) {
             delete static_cast<DxDirectMLExt *>(ext);
+        });
+    exts.try_emplace(
+        DXHDRExt::name,
+        [](LCDevice *device) -> DeviceExtension * {
+            return new DXHDRExtImpl(device);
+        },
+        [](DeviceExtension *ext) {
+            delete static_cast<DXHDRExtImpl *>(ext);
         });
 #ifdef LCDX_ENABLE_CUDA
     exts.try_emplace(
@@ -305,7 +314,7 @@ ShaderCreationInfo LCDevice::create_shader(const ShaderOption &option, Function 
         mask |= (1 << 1);
     }
     // use default control flow
-    constexpr uint compiler_version = 202403u; // dxc version at march 2024
+    constexpr uint compiler_version = 202403u;// dxc version at march 2024
     mask |= (1 << 2);
     mask |= compiler_version << 3u;
     auto code = hlsl::CodegenUtility{}.Codegen(kernel, option.native_include, mask, false);
@@ -465,7 +474,7 @@ SwapchainCreationInfo LCDevice::create_swapchain(const SwapchainOption &option, 
         reinterpret_cast<HWND>(option.window),
         option.size.x,
         option.size.y,
-        option.wants_hdr,
+        option.wants_hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM,
         option.wants_vsync,
         option.back_buffer_count);
     info.handle = resource_to_handle(res);
