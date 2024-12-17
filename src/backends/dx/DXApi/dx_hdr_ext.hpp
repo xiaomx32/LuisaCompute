@@ -1,5 +1,5 @@
 #pragma once
-#include <luisa/backends/ext/dx_hdr_ext.h>
+#include <luisa/backends/ext/dx_hdr_ext_interface.h>
 #include <DXApi/LCDevice.h>
 namespace lc::dx {
 class DXHDRExtImpl : public luisa::compute::DXHDRExt {
@@ -10,7 +10,7 @@ public:
     SwapchainCreationInfo create_swapchain(
         const DXSwapchainOption &option,
         uint64_t stream_handle) noexcept override;
-    void set_hdr_meta_data(
+    Meta set_hdr_meta_data(
         uint64_t swapchain_handle,
         float max_output_nits = 1000.0f,
         float min_output_nits = 0.001f,

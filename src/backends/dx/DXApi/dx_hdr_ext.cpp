@@ -41,7 +41,8 @@ DXHDRExt::DisplayCurve EnsureSwapChainColorSpace(
     }
     return result;
 }
-void SetHDRMetaData(
+DXHDRExt::DisplayChromaticities SetHDRMetaData(
+    DXGI_COLOR_SPACE_TYPE &colorSpace,
     LCSwapChain *swapchain,
     bool hdr_support,
     float MaxOutputNits /*=1000.0f*/,
@@ -50,13 +51,13 @@ void SetHDRMetaData(
     float MaxFALL /*=500.0f*/,
     const DXHDRExt::DisplayChromaticities *Chroma) {
     if (!swapchain) {
-        return;
+        return {};
     }
 
     // Clean the hdr metadata if the display doesn't support HDR
     if (!hdr_support) {
         ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
-        return;
+        return {};
     }
 
     static const DXHDRExt::DisplayChromaticities DisplayChromaticityList[] =
@@ -66,7 +67,6 @@ void SetHDRMetaData(
         };
 
     // Select the chromaticity based on HDR format of the DWM.
-    DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_CUSTOM;
     DXHDRExt::SwapChainBitDepth hitDepth;
     switch (swapchain->format) {
         case DXGI_FORMAT_R10G10B10A2_TYPELESS:
@@ -97,7 +97,7 @@ void SetHDRMetaData(
     } else {
         // Reset the metadata since this is not a supported HDR format.
         ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
-        return;
+        return {};
     }
 
     // Set HDR meta data
@@ -117,6 +117,7 @@ void SetHDRMetaData(
     HDR10MetaData.MaxContentLightLevel = static_cast<UINT16>(MaxCLL);
     HDR10MetaData.MaxFrameAverageLightLevel = static_cast<UINT16>(MaxFALL);
     ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &HDR10MetaData));
+    return *Chroma;
 }
 }// namespace dx_hdr_ext_detail
 DXHDRExtImpl::DXHDRExtImpl(LCDevice *lc_device) : _lc_device(lc_device) {}
@@ -146,14 +147,16 @@ SwapchainCreationInfo DXHDRExtImpl::create_swapchain(
     return info;
 }
 
-void DXHDRExtImpl::set_hdr_meta_data(
+auto DXHDRExtImpl::set_hdr_meta_data(
     uint64_t swapchain_handle,
     float max_output_nits,
     float min_output_nits,
     float max_cll,
     float max_fall,
-    const DXHDRExt::DisplayChromaticities *custom_chroma) noexcept {
-    dx_hdr_ext_detail::SetHDRMetaData(
+    const DXHDRExt::DisplayChromaticities *custom_chroma) noexcept -> Meta {
+    DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_CUSTOM;
+    auto chroma = dx_hdr_ext_detail::SetHDRMetaData(
+        color_space,
         reinterpret_cast<LCSwapChain *>(swapchain_handle),
         true,
         max_output_nits,
@@ -161,5 +164,8 @@ void DXHDRExtImpl::set_hdr_meta_data(
         max_cll,
         max_fall,
         custom_chroma);
+    return {
+        static_cast<ColorSpace>(color_space),
+        chroma};
 }
 }// namespace lc::dx
