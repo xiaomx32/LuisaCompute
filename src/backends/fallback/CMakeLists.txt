@@ -33,13 +33,15 @@ if (LLVM_FOUND AND embree_FOUND)
     # exclude codegen from unity build since it's too big
     set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
 
-    # tbb
-    find_package(TBB CONFIG)
-    if (TBB_FOUND)
-        target_compile_definitions(luisa-compute-backend-fallback PRIVATE LUISA_COMPUTE_ENABLE_TBB=1)
-        target_link_libraries(luisa-compute-backend-fallback PRIVATE TBB::tbb)
-    else ()
-        message(WARNING "TBB not found. Fallback backend will not use TBB. Performance may be affected.")
+    # use TBB for parallel_for on non-Apple Unix systems if available
+    if (UNIX AND NOT APPLE)
+        find_package(TBB CONFIG)
+        if (TBB_FOUND)
+            target_compile_definitions(luisa-compute-backend-fallback PRIVATE LUISA_COMPUTE_ENABLE_TBB=1)
+            target_link_libraries(luisa-compute-backend-fallback PRIVATE TBB::tbb)
+        else ()
+            message(WARNING "TBB not found. Fallback backend will not use TBB. Performance may be affected.")
+        endif ()
     endif ()
 
     message(STATUS "Build with fallback backend (LLVM ${LLVM_VERSION}, Embree ${embree_VERSION})")

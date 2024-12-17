@@ -1,14 +1,14 @@
+#include "fallback_command_queue.h"
+
+#ifdef LUISA_FALLBACK_USE_AKR_THREAD_POOL
+
 #include <barrier>
 #include <optional>
-
 #include <luisa/core/stl/vector.h>
 #include <luisa/vstl/unique_ptr.h>
 
-#include "fallback_command_queue.h"
-
 namespace luisa::compute::fallback {
 
-#ifdef LUISA_FALLBACK_USE_AKR_THREAD_POOL
 struct AkrThreadPool {
     luisa::vector<luisa::unique_ptr<std::thread>> _threads;
     std::mutex _task_mutex, _submit_mutex;
@@ -28,29 +28,18 @@ struct AkrThreadPool {
                 while (!_stopped.load(std::memory_order_relaxed)) {
 
                     std::unique_lock lock{_task_mutex};
-                    // std::printf("thread %zu waiting for work,  work is empty?= %d\n", tid, !_parallel_for.has_value());
-                    // while (true) {
-                    //     if (_has_work.wait_for(lock,
-                    //                            std::chrono::milliseconds(1),
-                    //                            [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); })) {
-                    //         break;
-                    //     }
-                    // }
                     _has_work.wait(lock, [this] { return _parallel_for.has_value() || _stopped.load(std::memory_order_relaxed); });
                     if (_stopped.load(std::memory_order_relaxed)) { return; }
                     auto &&[count, block_size, task] = *_parallel_for;
                     lock.unlock();
-                    // std::printf("thread %zu start working on %u items\n", tid, count);
                     while (_item_count < count) {
                         auto i = _item_count.fetch_add(block_size, std::memory_order_relaxed);
                         for (uint j = i; j < std::min<uint>(i + block_size, count); j++) {
                             task(j);
                         }
                     }
-                    // std::printf("thread %zu finish working on %u items\n", tid, count);
                     _barrier.arrive_and_wait();
                     if (tid == 0) {
-                        // lock.lock();
                         _work_done.notify_all();
                     }
                     _barrier.arrive_and_wait();
@@ -63,11 +52,9 @@ struct AkrThreadPool {
         std::unique_lock lock{_task_mutex};
         _parallel_for = ParallelFor{count, 1u, std::move(task)};
         _item_count.store(0, std::memory_order_seq_cst);
-        // std::printf("notify all\n");
         _has_work.notify_all();
         _work_done.wait(lock, [this] { return _item_count.load(std::memory_order_relaxed) >= _parallel_for->count; });
         _parallel_for.reset();
-        // std::printf("work done\n");
     }
     ~AkrThreadPool() {
         _stopped.store(true, std::memory_order_relaxed);
@@ -77,7 +64,12 @@ struct AkrThreadPool {
         }
     }
 };
+
+}// namespace luisa::compute::fallback
+
 #endif
+
+namespace luisa::compute::fallback {
 
 inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
     // wait and fetch tasks
@@ -159,14 +151,16 @@ void FallbackCommandQueue::enqueue(luisa::move_only_function<void()> &&task) noe
 void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept {
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
 #if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
-        if (!_dispatch_queue) {
+        if (_dispatch_queue == nullptr) {
             _dispatch_queue = dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0);
             dispatch_retain(_dispatch_queue);
         }
-        dispatch_apply_f(n, _dispatch_queue, &task, [](void *context, size_t idx) {
+        dispatch_apply_f(n, _dispatch_queue, &task, [](void *context, size_t idx) noexcept {
             auto task = static_cast<luisa::move_only_function<void(uint)> *>(context);
             (*task)(static_cast<uint>(idx));
         });
+#elif defined(LUISA_FALLBACK_USE_PPL)
+        concurrency::parallel_for(0u, n, task);
 #elif defined(LUISA_FALLBACK_USE_TBB)
         tbb::parallel_for(0u, n, task);
 #elif defined(LUISA_FALLBACK_USE_AKR_THREAD_POOL)

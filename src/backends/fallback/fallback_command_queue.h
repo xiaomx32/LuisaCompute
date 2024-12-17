@@ -11,6 +11,9 @@
 #if defined(LUISA_PLATFORM_APPLE)
 #define LUISA_FALLBACK_USE_DISPATCH_QUEUE
 #include <dispatch/dispatch.h>
+#elif defined(LUISA_PLATFORM_WINDOWS)
+#define LUISA_FALLBACK_USE_PPL
+#include <ppl.h>
 #elif defined(LUISA_COMPUTE_ENABLE_TBB)
 #define LUISA_FALLBACK_USE_TBB
 #include <tbb/parallel_for.h>
