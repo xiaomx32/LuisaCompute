@@ -66,6 +66,7 @@ private:
     luisa::unordered_map<const Type *, luisa::unique_ptr<LLVMStruct>> _llvm_struct_types;
     luisa::unordered_map<const xir::Constant *, llvm::Constant *> _llvm_constants;
     luisa::unordered_map<const xir::Function *, llvm::Function *> _llvm_functions;
+    FallbackCodeGenFeedback::PrintInstMap _print_inst_map;
 
 private:
     void _reset() noexcept {
@@ -2606,6 +2607,78 @@ private:
         LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
     }
 
+    [[nodiscard]] llvm::Value *_translate_print_inst(CurrentFunction &current, IRBuilder &b,
+                                                     const xir::PrintInst *inst) noexcept {
+        // create argument struct
+        llvm::SmallVector<llvm::Type *, 8> llvm_field_types;
+        llvm::SmallVector<size_t, 8> llvm_field_offsets;
+        size_t accum_size = 0u;
+        auto llvm_i8_type = b.getInt8Ty();
+        for (auto o : inst->operand_uses()) {
+            auto t = o->value()->type();
+            auto alignment = _get_type_alignment(t);
+            auto align_size = luisa::align(accum_size, alignment);
+            if (align_size > accum_size) {
+                auto llvm_pad_type = llvm::ArrayType::get(llvm_i8_type, align_size - accum_size);
+                llvm_field_types.emplace_back(llvm_pad_type);
+            }
+            llvm_field_offsets.emplace_back(llvm_field_types.size());
+            auto llvm_t = _translate_type(t, true);
+            llvm_field_types.emplace_back(llvm_t);
+            accum_size = align_size + _get_type_size(t);
+        }
+        auto total_size = luisa::align(accum_size, 16u);
+        if (total_size > accum_size) {
+            auto llvm_pad_type = llvm::ArrayType::get(llvm_i8_type, total_size - accum_size);
+            llvm_field_types.emplace_back(llvm_pad_type);
+        }
+        auto llvm_struct_type = llvm::StructType::get(_llvm_context, llvm_field_types);
+        // fill argument struct
+        auto llvm_struct_alloca = b.CreateAlloca(llvm_struct_type);
+        auto llvm_total_size = b.getInt64(total_size);
+        b.CreateLifetimeStart(llvm_struct_alloca, llvm_total_size);
+        llvm_struct_alloca->setAlignment(llvm::Align{16});
+        for (auto i = 0u; i < inst->operand_count(); i++) {
+            auto llvm_field_offset = llvm_field_offsets[i];
+            auto llvm_field_ptr = b.CreateStructGEP(llvm_struct_type, llvm_struct_alloca, llvm_field_offset);
+            auto field = inst->operand(i);
+            auto llvm_field = _lookup_value(current, b, field);
+            auto alignment = _get_type_alignment(field->type());
+            b.CreateAlignedStore(llvm_field, llvm_field_ptr, llvm::MaybeAlign{alignment});
+        }
+        // declare print function
+        auto llvm_i64_type = b.getInt64Ty();
+        auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
+        // void print(const void *ctx, size_t fmt_id, const void *args);
+        auto llvm_print_func_type = llvm::FunctionType::get(b.getVoidTy(), {llvm_ptr_type, llvm_i64_type, llvm_ptr_type}, false);
+        auto llvm_print_func = llvm::Function::Create(llvm_print_func_type, llvm::Function::ExternalLinkage, "luisa.print", _llvm_module);
+        auto llvm_print_context = _llvm_module->getOrInsertGlobal("luisa.print.context", llvm::StructType::get(_llvm_context));
+        auto fmt_id = static_cast<uint64_t>(_print_inst_map.size());
+        _print_inst_map.emplace_back(inst, llvm_print_func->getName());
+        llvm_print_func->setCallingConv(llvm::CallingConv::C);
+        llvm_print_func->setNoSync();
+        llvm_print_func->setMustProgress();
+        llvm_print_func->setWillReturn();
+        llvm_print_func->setDoesNotThrow();
+        llvm_print_func->setOnlyAccessesInaccessibleMemOrArgMem();
+        llvm_print_func->setDoesNotFreeMemory();
+        llvm_print_func->setUWTableKind(llvm::UWTableKind::None);
+        for (auto &&llvm_print_arg : llvm_print_func->args()) {
+            if (llvm_print_arg.getType()->isPointerTy()) {
+                llvm_print_arg.addAttr(llvm::Attribute::NoCapture);
+                llvm_print_arg.addAttr(llvm::Attribute::NoAlias);
+                llvm_print_arg.addAttr(llvm::Attribute::ReadOnly);
+                llvm_print_arg.addAttr(llvm::Attribute::NoUndef);
+                llvm_print_arg.addAttr(llvm::Attribute::NonNull);
+            }
+        }
+        // call print function
+        auto llvm_fmt_id = b.getInt64(fmt_id);
+        auto llvm_call = b.CreateCall(llvm_print_func, {llvm_print_context, llvm_fmt_id, llvm_struct_alloca});
+        b.CreateLifetimeEnd(llvm_struct_alloca, llvm_total_size);
+        return llvm_call;
+    }
+
     [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
         switch (inst->derived_instruction_tag()) {
             case xir::DerivedInstructionTag::SENTINEL: {
@@ -2756,8 +2829,8 @@ private:
                 return _translate_cast_inst(current, b, cast_inst->type(), cast_inst->op(), cast_inst->value());
             }
             case xir::DerivedInstructionTag::PRINT: {
-                LUISA_WARNING_WITH_LOCATION("Ignoring print instruction.");// TODO...
-                return nullptr;
+                auto print_inst = static_cast<const xir::PrintInst *>(inst);
+                return _translate_print_inst(current, b, print_inst);
             }
             case xir::DerivedInstructionTag::ASSERT: {
                 auto assert_inst = static_cast<const xir::AssertInst *>(inst);
@@ -3107,7 +3180,7 @@ public:
     explicit FallbackCodegen(llvm::LLVMContext &ctx) noexcept
         : _llvm_context{ctx} {}
 
-    void emit(llvm::Module *llvm_module, const xir::Module *module) noexcept {
+    FallbackCodeGenFeedback emit(llvm::Module *llvm_module, const xir::Module *module) noexcept {
         auto location_md = module->find_metadata<xir::LocationMD>();
         auto module_location = location_md ? location_md->file().string() : "unknown";
         llvm_module->setSourceFileName(location_md ? location_md->file().string() : "unknown");
@@ -3117,12 +3190,14 @@ public:
         _llvm_module = llvm_module;
         _translate_module(module);
         _reset();
+        return {.print_inst_map = std::exchange(_print_inst_map, {})};
     }
 };
 
-void luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, llvm::Module *llvm_module, const xir::Module *module) noexcept {
+FallbackCodeGenFeedback
+luisa_fallback_backend_codegen(llvm::LLVMContext &llvm_ctx, llvm::Module *llvm_module, const xir::Module *module) noexcept {
     FallbackCodegen codegen{llvm_ctx};
-    codegen.emit(llvm_module, module);
+    return codegen.emit(llvm_module, module);
 }
 
 }// namespace luisa::compute::fallback

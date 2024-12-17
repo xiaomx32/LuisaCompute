@@ -7,6 +7,7 @@
 #include <luisa/core/basic_types.h>
 #include <luisa/core/stl/queue.h>
 #include <luisa/core/stl/functional.h>
+#include <luisa/runtime/rhi/device_interface.h>
 
 #if defined(LUISA_PLATFORM_APPLE)
 #define LUISA_FALLBACK_USE_DISPATCH_QUEUE
@@ -41,6 +42,7 @@ private:
     std::atomic_size_t _total_enqueue_count{0u};
     std::atomic_size_t _total_finish_count{0u};
     size_t _worker_count{0u};
+    DeviceInterface::StreamLogCallback _log_callback;
 
 #if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
     dispatch_queue_t _dispatch_queue{nullptr};
@@ -59,6 +61,9 @@ public:
     void enqueue(luisa::move_only_function<void()> &&task) noexcept;
     void enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept;
     void synchronize() noexcept;
+
+    void set_log_callback(DeviceInterface::StreamLogCallback callback) noexcept { _log_callback = std::move(callback); }
+    [[nodiscard]] auto &log_callback() const noexcept { return _log_callback; }
 };
 
 }// namespace luisa::compute::fallback

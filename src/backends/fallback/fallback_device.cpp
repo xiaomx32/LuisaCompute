@@ -183,7 +183,8 @@ void FallbackDevice::dispatch(uint64_t stream_handle, CommandList &&list) noexce
 }
 
 void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const DeviceInterface::StreamLogCallback &callback) noexcept {
-    DeviceInterface::set_stream_log_callback(stream_handle, callback);
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    stream->queue()->set_log_callback(callback);
 }
 
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {

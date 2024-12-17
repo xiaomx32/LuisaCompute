@@ -2,11 +2,6 @@
 // Created by swfly on 2024/11/21.
 //
 #include <fstream>
-#include <luisa/xir/translators/ast2xir.h>
-#include <luisa/xir/translators/xir2text.h>
-#include <luisa/core/stl.h>
-#include <luisa/core/logging.h>
-#include <luisa/core/clock.h>
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -19,6 +14,15 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
+
+#include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/xir2text.h>
+#include <luisa/core/stl.h>
+#include <luisa/core/logging.h>
+#include <luisa/core/clock.h>
+#include <luisa/xir/instructions/print.h>
+
+#include "../common/shader_print_formatter.h"
 
 #include "fallback_codegen.h"
 #include "fallback_texture.h"
@@ -50,6 +54,20 @@ namespace luisa::compute::fallback {
 
 static void luisa_fallback_assert(bool condition, const char *message) noexcept {
     if (!condition) { LUISA_ERROR_WITH_LOCATION("Assertion failed: {}.", message); }
+}
+
+static thread_local const DeviceInterface::StreamLogCallback *current_device_log_callback{nullptr};
+
+static void luisa_fallback_print(const FallbackShader *shader, size_t fmt_id, const std::byte *args) noexcept {
+    static thread_local luisa::string scratch;
+    scratch.clear();
+    auto formatter = shader->print_formatter(fmt_id);
+    (*formatter)(scratch, {args, formatter->size()});
+    if (current_device_log_callback) {
+        (*current_device_log_callback)(scratch);
+    } else {
+        LUISA_INFO("[DEVICE] {}", scratch);
+    }
 }
 
 struct FallbackShaderLaunchConfig {
@@ -114,10 +132,51 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         LUISA_ERROR_WITH_LOCATION("Failed to create LLJIT.");
     }
 
+    // if (auto generator = ::llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+    //         _jit->getDataLayout().getGlobalPrefix())) {
+    //     _jit->getMainJITDylib().addGenerator(std::move(generator.get()));
+    // } else {
+    //     ::llvm::handleAllErrors(generator.takeError(), [](const ::llvm::ErrorInfoBase &err) {
+    //         LUISA_WARNING_WITH_LOCATION("DynamicLibrarySearchGenerator::GetForCurrentProcess(): {}", err.message());
+    //     });
+    //     LUISA_ERROR_WITH_LOCATION("Failed to add generator.");
+    // }
+
+    _block_size = kernel.block_size();
+    _build_bound_arguments(kernel.bound_arguments());
+
+    xir::Pool pool;
+    xir::PoolGuard guard{&pool};
+    auto xir_module = xir::ast_to_xir_translate(kernel, {});
+    xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
+    if (!option.name.empty()) { xir_module->set_location(option.name); }
+    //    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+
+    auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
+    auto builtin_module = fallback_backend_device_builtin_module();
+    llvm::SMDiagnostic parse_error;
+    auto llvm_module = llvm::parseIR(llvm::MemoryBufferRef{builtin_module, ""}, parse_error, *llvm_ctx);
+    if (!llvm_module) {
+        LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR: {}.",
+                                  luisa::string_view{parse_error.getMessage()});
+    }
+    auto codegen_feedback = luisa_fallback_backend_codegen(*llvm_ctx, llvm_module.get(), xir_module);
+    //llvm_module->print(llvm::errs(), nullptr, true, true);
+    //llvm_module->print(llvm::outs(), nullptr, true, true);
+    if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
+        LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
+    }
+    // {
+    //     llvm_module->print(llvm::errs(), nullptr, true, true);
+    //     // std::error_code EC;
+    //     // llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
+    //     // llvm_module->print(file_stream, nullptr, true, true);
+    //     // file_stream.close();
+    // }
+
     // map symbols
     llvm::orc::SymbolMap symbol_map{};
     auto map_symbol = [jit = _jit.get(), &symbol_map]<typename T>(const char *name, T *f) noexcept {
-        static_assert(std::is_function_v<T>);
         auto addr = llvm::orc::ExecutorAddr::fromPtr(f);
         auto symbol = llvm::orc::ExecutorSymbolDef{addr, llvm::JITSymbolFlags::Callable};
         symbol_map.try_emplace(jit->mangleAndIntern(name), symbol);
@@ -142,6 +201,25 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     // assert
     map_symbol("luisa.assert", &luisa_fallback_assert);
 
+    // bind print instructions
+    if (!codegen_feedback.print_inst_map.empty()) {
+        map_symbol("luisa.print.context", this);
+        _print_formatters.reserve(codegen_feedback.print_inst_map.size());
+        for (auto fmt_id = 0u; fmt_id < codegen_feedback.print_inst_map.size(); fmt_id++) {
+            auto &&[print_inst, llvm_symbol] = codegen_feedback.print_inst_map[fmt_id];
+            map_symbol(llvm_symbol.c_str(), &luisa_fallback_print);
+            LUISA_INFO("Mapping print instruction #{}: \"{}\" -> {}", fmt_id, print_inst->format(), llvm_symbol);
+            llvm::SmallVector<const Type *, 8u> arg_types;
+            for (auto o : print_inst->operand_uses()) {
+                arg_types.emplace_back(o->value()->type());
+            }
+            auto arg_pack_type = Type::structure(16u, arg_types);
+            _print_formatters.emplace_back(luisa::make_unique<ShaderPrintFormatter>(
+                print_inst->format(), arg_pack_type, false));
+        }
+    }
+
+    // define symbols
     if (auto error = _jit->getMainJITDylib().define(
             ::llvm::orc::absoluteSymbols(std::move(symbol_map)))) {
         ::llvm::handleAllErrors(std::move(error), [](const ::llvm::ErrorInfoBase &err) {
@@ -149,48 +227,6 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
         });
         LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
     }
-
-    if (auto generator = ::llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            _jit->getDataLayout().getGlobalPrefix())) {
-        _jit->getMainJITDylib().addGenerator(std::move(generator.get()));
-    } else {
-        ::llvm::handleAllErrors(generator.takeError(), [](const ::llvm::ErrorInfoBase &err) {
-            LUISA_WARNING_WITH_LOCATION("DynamicLibrarySearchGenerator::GetForCurrentProcess(): {}", err.message());
-        });
-        LUISA_ERROR_WITH_LOCATION("Failed to add generator.");
-    }
-
-    _block_size = kernel.block_size();
-    _build_bound_arguments(kernel.bound_arguments());
-
-    xir::Pool pool;
-    xir::PoolGuard guard{&pool};
-    auto xir_module = xir::ast_to_xir_translate(kernel, {});
-    xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
-    if (!option.name.empty()) { xir_module->set_location(option.name); }
-    //    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
-
-    auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
-    auto builtin_module = fallback_backend_device_builtin_module();
-    llvm::SMDiagnostic parse_error;
-    auto llvm_module = llvm::parseIR(llvm::MemoryBufferRef{builtin_module, ""}, parse_error, *llvm_ctx);
-    if (!llvm_module) {
-        LUISA_ERROR_WITH_LOCATION("Failed to generate LLVM IR: {}.",
-                                  luisa::string_view{parse_error.getMessage()});
-    }
-    luisa_fallback_backend_codegen(*llvm_ctx, llvm_module.get(), xir_module);
-    //llvm_module->print(llvm::errs(), nullptr, true, true);
-    //llvm_module->print(llvm::outs(), nullptr, true, true);
-    if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
-        LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
-    }
-    // {
-    //     llvm_module->print(llvm::errs(), nullptr, true, true);
-    //     // std::error_code EC;
-    //     // llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
-    //     // llvm_module->print(file_stream, nullptr, true, true);
-    //     // file_stream.close();
-    // }
 
     // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
@@ -436,7 +472,7 @@ void FallbackShader::dispatch(FallbackCommandQueue *queue, luisa::unique_ptr<Sha
     auto grid_size = roundup_div(dispatch_size, block_size);
     auto grid_count = grid_size.x * grid_size.y * grid_size.z;
 
-    queue->enqueue_parallel(grid_count, [dispatch_buffer = std::move(dispatch_buffer)](auto block) noexcept {
+    queue->enqueue_parallel(grid_count, [queue, dispatch_buffer = std::move(dispatch_buffer)](auto block) noexcept {
         auto config = dispatch_buffer.config();
         auto dispatch_size = config->dispatch_size;
         auto block_size = config->block_size;
@@ -451,7 +487,9 @@ void FallbackShader::dispatch(FallbackCommandQueue *queue, luisa::unique_ptr<Sha
             .block_size = {block_size[0], block_size[1], block_size[2]},
         };
         auto launch_params = dispatch_buffer.argument_buffer();
-        (config->kernel)(launch_params, &launch_config);
+        current_device_log_callback = queue->log_callback() ? &queue->log_callback() : nullptr;
+        config->kernel(launch_params, &launch_config);
+        current_device_log_callback = nullptr;
     });
 }
 
