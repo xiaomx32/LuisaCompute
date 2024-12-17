@@ -8,14 +8,20 @@
 #include <luisa/core/stl/queue.h>
 #include <luisa/core/stl/functional.h>
 
-#ifndef LUISA_COMPUTE_ENABLE_TBB
-struct NanothreadPool;
+#if defined(LUISA_PLATFORM_APPLE)
+#define LUISA_FALLBACK_USE_DISPATCH_QUEUE
+#include <dispatch/dispatch.h>
+#elif defined(LUISA_COMPUTE_ENABLE_TBB)
+#define LUISA_FALLBACK_USE_TBB
+#include <tbb/parallel_for.h>
+#else
+#define LUISA_FALLBACK_USE_AKR_THREAD_POOL
 #endif
 
 namespace luisa::compute::fallback {
 
-class FallbackCommandQueueParallelContext;
 struct AkrThreadPool;
+
 class FallbackCommandQueue {
 
 private:
@@ -30,8 +36,9 @@ private:
     std::atomic_size_t _total_finish_count{0u};
     size_t _worker_count{0u};
 
-#ifndef LUISA_COMPUTE_ENABLE_TBB
-    // NanothreadPool *_worker_pool{nullptr};
+#if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
+    dispatch_queue_t _dispatch_queue{nullptr};
+#elif defined(LUISA_FALLBACK_USE_AKR_THREAD_POOL)
     AkrThreadPool *_worker_pool{nullptr};
 #endif
 

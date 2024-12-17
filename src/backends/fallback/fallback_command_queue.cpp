@@ -1,15 +1,14 @@
-#ifdef LUISA_COMPUTE_ENABLE_TBB
-#include <tbb/parallel_for.h>
-#else
-#include <nanothread/nanothread.h>
-#endif
-#include <luisa/core/stl/vector.h>
-#include <luisa/vstl/unique_ptr.h>
-#include "fallback_command_queue.h"
 #include <barrier>
 #include <optional>
+
+#include <luisa/core/stl/vector.h>
+#include <luisa/vstl/unique_ptr.h>
+
+#include "fallback_command_queue.h"
+
 namespace luisa::compute::fallback {
 
+#ifdef LUISA_FALLBACK_USE_AKR_THREAD_POOL
 struct AkrThreadPool {
     luisa::vector<luisa::unique_ptr<std::thread>> _threads;
     std::mutex _task_mutex, _submit_mutex;
@@ -53,7 +52,6 @@ struct AkrThreadPool {
                     if (tid == 0) {
                         // lock.lock();
                         _work_done.notify_all();
-                       
                     }
                     _barrier.arrive_and_wait();
                 }
@@ -68,7 +66,7 @@ struct AkrThreadPool {
         // std::printf("notify all\n");
         _has_work.notify_all();
         _work_done.wait(lock, [this] { return _item_count.load(std::memory_order_relaxed) >= _parallel_for->count; });
-         _parallel_for.reset();
+        _parallel_for.reset();
         // std::printf("work done\n");
     }
     ~AkrThreadPool() {
@@ -79,6 +77,7 @@ struct AkrThreadPool {
         }
     }
 };
+#endif
 
 inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
     // wait and fetch tasks
@@ -97,10 +96,13 @@ inline void FallbackCommandQueue::_run_dispatch_loop() noexcept {
         // count the finish of a task
         _total_finish_count.fetch_add(1u);
     }
-#ifndef LUISA_COMPUTE_ENABLE_TBB
+#if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
+    if (_dispatch_queue != nullptr) {
+        dispatch_release(_dispatch_queue);
+    }
+#elif defined(LUISA_FALLBACK_USE_AKR_THREAD_POOL)
     if (_worker_pool != nullptr) {
-        // nanothread_pool_destroy(_worker_pool);
-        delete _worker_pool;
+        luisa::delete_with_allocator(_worker_pool);
     }
 #endif
 }
@@ -156,19 +158,22 @@ void FallbackCommandQueue::enqueue(luisa::move_only_function<void()> &&task) noe
 
 void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<void(uint)> &&task) noexcept {
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
-#ifndef LUISA_COMPUTE_ENABLE_TBB
+#if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
+        if (!_dispatch_queue) {
+            _dispatch_queue = dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0);
+            dispatch_retain(_dispatch_queue);
+        }
+        dispatch_apply_f(n, _dispatch_queue, &task, [](void *context, size_t idx) {
+            auto task = static_cast<luisa::move_only_function<void(uint)> *>(context);
+            (*task)(static_cast<uint>(idx));
+        });
+#elif defined(LUISA_FALLBACK_USE_TBB)
+        tbb::parallel_for(0u, n, task);
+#elif defined(LUISA_FALLBACK_USE_AKR_THREAD_POOL)
         if (_worker_pool == nullptr) {
-            // _worker_pool = nanothread_pool_create(_worker_count);
-            _worker_pool = new AkrThreadPool(_worker_count);
+            _worker_pool = luisa::new_with_allocator<AkrThreadPool>(_worker_count);
         }
         _worker_pool->parallel_for(n, std::move(task));
-        // drjit::blocked_range<uint> range{0, n, 16};
-        // drjit::parallel_for(range, [&task](drjit::blocked_range<uint> r) noexcept {
-        //     for (auto i : r) {
-        //         task(i);
-        //     } }, _worker_pool);
-#else
-        tbb::parallel_for(0u, n, task);
 #endif
     });
 }
