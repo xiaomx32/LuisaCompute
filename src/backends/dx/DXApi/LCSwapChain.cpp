@@ -10,10 +10,11 @@ LCSwapChain::LCSwapChain(
     HWND windowHandle,
     uint width,
     uint height,
-    bool allowHDR,
+    DXGI_FORMAT format,
     bool vsync,
     uint backBufferCount)
     : Resource(device), vsync(vsync) {
+    this->format = format;
     auto frameCount = backBufferCount + 1;
     vstd::push_back_func(
         m_renderTargets,
@@ -23,7 +24,7 @@ LCSwapChain::LCSwapChain(
     swapChainDesc.BufferCount = frameCount;
     swapChainDesc.Width = width;
     swapChainDesc.Height = height;
-    swapChainDesc.Format = allowHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.Format = format;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     if (!vsync)
@@ -39,7 +40,7 @@ LCSwapChain::LCSwapChain(
             nullptr,
             nullptr,
             &localSwap));
-        swapChain = DxPtr(static_cast<IDXGISwapChain3 *>(localSwap), true);
+        swapChain = DxPtr(static_cast<IDXGISwapChain4 *>(localSwap), true);
     }
     for (uint32_t n = 0; n < frameCount; n++) {
         ThrowIfFailed(swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n].rt)));
@@ -50,7 +51,7 @@ LCSwapChain::LCSwapChain(
 LCSwapChain::LCSwapChain(
     PixelStorage &storage,
     Device *device,
-    IDXGISwapChain3 *swapChain,
+    IDXGISwapChain4 *swapChain,
     bool vsync)
     : Resource(device),
       swapChain(swapChain, false),
