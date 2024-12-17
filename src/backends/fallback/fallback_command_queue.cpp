@@ -152,7 +152,11 @@ void FallbackCommandQueue::enqueue_parallel(uint n, luisa::move_only_function<vo
     enqueue([this, n, task = std::move(task)]() mutable noexcept {
 #if defined(LUISA_FALLBACK_USE_DISPATCH_QUEUE)
         if (_dispatch_queue == nullptr) {
+#ifdef QOS_CLASS_USER_INTERACTIVE
             _dispatch_queue = dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0);
+#else
+            _dispatch_queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
+#endif
             dispatch_retain(_dispatch_queue);
         }
         dispatch_apply_f(n, _dispatch_queue, &task, [](void *context, size_t idx) noexcept {
