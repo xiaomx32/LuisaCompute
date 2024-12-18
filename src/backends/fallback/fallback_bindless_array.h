@@ -53,6 +53,8 @@ public:
     [[nodiscard]] auto &slot(unsigned int idx) const noexcept { return _slots[idx]; }
     void update(luisa::unique_ptr<BindlessArrayUpdateCommand> cmd) noexcept;
     [[nodiscard]] auto view() noexcept { return View{_slots.data(), _slots.size()}; }
+    [[nodiscard]] auto native_handle() noexcept { return _slots.data(); }
+    [[nodiscard]] auto native_handle() const noexcept { return _slots.data(); }
 };
 
 using FallbackBindlessArrayView = FallbackBindlessArray::View;

@@ -250,19 +250,13 @@ private:
 
 public:
     FallbackTexture(PixelStorage storage, uint dim, uint3 size, uint levels) noexcept;
-
     ~FallbackTexture() noexcept;
-
     FallbackTexture(FallbackTexture &&) noexcept = delete;
-
     FallbackTexture(const FallbackTexture &) noexcept = delete;
-
     FallbackTexture &operator=(FallbackTexture &&) noexcept = delete;
-
     FallbackTexture &operator=(const FallbackTexture &) noexcept = delete;
-
     [[nodiscard]] FallbackTextureView view(uint level) const noexcept;
-
+    [[nodiscard]] auto native_handle() noexcept { return _data; }
     [[nodiscard]] auto storage() const noexcept { return _storage; }
     [[nodiscard]] auto mip_levels() const noexcept { return _mip_levels; }
 };

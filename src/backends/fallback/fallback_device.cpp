@@ -18,6 +18,7 @@
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
 #include <luisa/core/clock.h>
+
 #include "fallback_stream.h"
 #include "fallback_device.h"
 #include "fallback_texture.h"
@@ -26,34 +27,10 @@
 #include "fallback_bindless_array.h"
 #include "fallback_shader.h"
 #include "fallback_buffer.h"
+#include "fallback_event.h"
 #include "fallback_swapchain.h"
 
-#include <llvm/IRReader/IRReader.h>
-#include <llvm/Support/SourceMgr.h>
-
 namespace luisa::compute::fallback {
-
-static void loadLLVMModuleFromString(::llvm::orc::LLJIT &jit, const char *ir_string) {
-    // Create an LLVM context
-    auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
-    // Wrap the string in a MemoryBuffer
-    auto buffer = ::llvm::MemoryBuffer::getMemBuffer(ir_string, "embedded_ir");
-    // Parse the IR
-    ::llvm::SMDiagnostic err;
-    auto module = ::llvm::parseIR(buffer->getMemBufferRef(), err, *llvm_ctx);
-    if (!module) {
-        throw std::runtime_error("Failed to parse embedded LLVM IR: " + err.getMessage().str());
-    }
-    // Wrap the module in a ThreadSafeModule
-    auto tsm = ::llvm::orc::ThreadSafeModule(std::move(module), std::move(llvm_ctx));
-
-    // Add the module to the JIT
-    if (auto err = jit.addIRModule(std::move(tsm))) {
-        ::llvm::handleAllErrors(std::move(err), [](const ::llvm::ErrorInfoBase &err) {
-            LUISA_WARNING_WITH_LOCATION("LLJIT::addIRModule(): {}", err.message());
-        });
-    }
-}
 
 FallbackDevice::FallbackDevice(Context &&ctx) noexcept
     : DeviceInterface{std::move(ctx)} {
@@ -110,11 +87,11 @@ void FallbackDevice::synchronize_stream(uint64_t stream_handle) noexcept {
 }
 
 void FallbackDevice::destroy_shader(uint64_t handle) noexcept {
-    //luisa::delete_with_allocator(reinterpret_cast<LLVMShader *>(handle));
+    luisa::delete_with_allocator(reinterpret_cast<FallbackShader *>(handle));
 }
 
 void FallbackDevice::destroy_event(uint64_t handle) noexcept {
-    //luisa::delete_with_allocator(reinterpret_cast<LLVMEvent *>(handle));
+    luisa::delete_with_allocator(reinterpret_cast<FallbackEvent *>(handle));
 }
 
 void FallbackDevice::destroy_mesh(uint64_t handle) noexcept {
@@ -126,8 +103,7 @@ void FallbackDevice::destroy_accel(uint64_t handle) noexcept {
 }
 
 void FallbackDevice::destroy_swap_chain(uint64_t handle) noexcept {
-    auto b = reinterpret_cast<FallbackSwapchain *>(handle);
-    luisa::deallocate_with_allocator(b);
+    luisa::deallocate_with_allocator(reinterpret_cast<FallbackSwapchain *>(handle));
 }
 
 void FallbackDevice::present_display_in_stream(uint64_t stream_handle,
@@ -144,9 +120,7 @@ uint FallbackDevice::compute_warp_size() const noexcept {
 }
 
 BufferCreationInfo FallbackDevice::create_buffer(const Type *element, size_t elem_count, void *external_memory) noexcept {
-
     BufferCreationInfo info{};
-
     if (element == Type::of<void>()) {
         info.element_stride = 1u;
     } else {
@@ -164,17 +138,21 @@ BufferCreationInfo FallbackDevice::create_buffer(const ir::CArc<ir::Type> *eleme
 }
 
 ResourceCreationInfo FallbackDevice::create_texture(PixelFormat format, uint dimension, uint width, uint height, uint depth, uint mipmap_levels, bool simultaneous_access, bool allow_raster_target) noexcept {
-    ResourceCreationInfo info{};
     auto texture = luisa::new_with_allocator<FallbackTexture>(
         pixel_format_to_storage(format), dimension,
         make_uint3(width, height, depth), mipmap_levels);
-    info.handle = reinterpret_cast<uint64_t>(texture);
-    return info;
+    return {
+        .handle = reinterpret_cast<uint64_t>(texture),
+        .native_handle = texture->native_handle(),
+    };
 }
 
 ResourceCreationInfo FallbackDevice::create_stream(StreamTag stream_tag) noexcept {
-    return ResourceCreationInfo{
-        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<FallbackStream>())};
+    auto stream = luisa::new_with_allocator<FallbackStream>();
+    return {
+        .handle = reinterpret_cast<uint64_t>(stream),
+        .native_handle = native_handle(),
+    };
 }
 
 void FallbackDevice::dispatch(uint64_t stream_handle, CommandList &&list) noexcept {
@@ -190,10 +168,9 @@ void FallbackDevice::set_stream_log_callback(uint64_t stream_handle, const Devic
 SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &option, uint64_t stream_handle) noexcept {
     auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
     auto sc = luisa::new_with_allocator<FallbackSwapchain>(stream, option);
-    return SwapchainCreationInfo{
-        ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
-                             .native_handle = nullptr},
-        (option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)};
+    return {ResourceCreationInfo{.handle = reinterpret_cast<uint64_t>(sc),
+                                 .native_handle = nullptr},
+            (option.wants_hdr ? PixelStorage::FLOAT4 : PixelStorage::BYTE4)};
 }
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
@@ -224,19 +201,29 @@ Usage FallbackDevice::shader_argument_usage(uint64_t handle, size_t index) noexc
 }
 
 void FallbackDevice::signal_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept {
-    LUISA_NOT_IMPLEMENTED();
+    auto event = reinterpret_cast<FallbackEvent *>(handle);
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    stream->queue()->enqueue([event, fence_value] {
+        event->signal(fence_value);
+    });
 }
 
 void FallbackDevice::wait_event(uint64_t handle, uint64_t stream_handle, uint64_t fence_value) noexcept {
-    LUISA_NOT_IMPLEMENTED();
+    auto event = reinterpret_cast<FallbackEvent *>(handle);
+    auto stream = reinterpret_cast<FallbackStream *>(stream_handle);
+    stream->queue()->enqueue([event, fence_value] {
+        event->wait(fence_value);
+    });
 }
 
 bool FallbackDevice::is_event_completed(uint64_t handle, uint64_t fence_value) const noexcept {
-    return false;
+    auto event = reinterpret_cast<FallbackEvent *>(handle);
+    return event->is_completed(fence_value);
 }
 
 void FallbackDevice::synchronize_event(uint64_t handle, uint64_t fence_value) noexcept {
-    LUISA_NOT_IMPLEMENTED();
+    auto event = reinterpret_cast<FallbackEvent *>(handle);
+    event->wait(fence_value);
 }
 
 ResourceCreationInfo FallbackDevice::create_mesh(const AccelOption &option) noexcept {
@@ -322,18 +309,19 @@ void FallbackDevice::destroy_sparse_texture(uint64_t handle) noexcept {
 }
 
 ResourceCreationInfo FallbackDevice::create_bindless_array(size_t size) noexcept {
-    ResourceCreationInfo info{};
     auto array = luisa::new_with_allocator<FallbackBindlessArray>(size);
-    info.handle = reinterpret_cast<uint64_t>(array);
-    return info;
+    return ResourceCreationInfo{
+        .handle = reinterpret_cast<uint64_t>(array),
+        .native_handle = array->native_handle(),
+    };
 }
 
 ResourceCreationInfo FallbackDevice::create_event() noexcept {
-    return ResourceCreationInfo{};
-    //    return ResourceCreationInfo
-    //    {
-    //        .handle = reinterpret_cast<uint64_t>(luisa::new_with_allocator<LLVMEvent>())
-    //    };
+    auto event = luisa::new_with_allocator<FallbackEvent>();
+    return ResourceCreationInfo{
+        .handle = reinterpret_cast<uint64_t>(event),
+        .native_handle = event->native_handle(),
+    };
 }
 
 }// namespace luisa::compute::fallback

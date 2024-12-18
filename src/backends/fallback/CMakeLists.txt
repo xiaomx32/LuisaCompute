@@ -15,6 +15,7 @@ if (LLVM_FOUND AND embree_FOUND)
             fallback_device.cpp
             fallback_device_api.cpp
             fallback_device_api_ir_module.cpp
+            fallback_event.cpp
             fallback_command_queue.cpp
             fallback_bindless_array.cpp
             fallback_stream.cpp
