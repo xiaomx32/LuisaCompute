@@ -15,7 +15,7 @@ LCSwapChain::LCSwapChain(
     uint backBufferCount)
     : Resource(device), vsync(vsync) {
     this->format = format;
-    auto frameCount = backBufferCount + 1;
+    frameCount = backBufferCount + 1;
     vstd::push_back_func(
         m_renderTargets,
         frameCount,
@@ -40,19 +40,19 @@ LCSwapChain::LCSwapChain(
             nullptr,
             nullptr,
             &localSwap));
-        
-        swapChain = DxPtr(static_cast<IDXGISwapChain3*>(localSwap), true);
+
+        swapChain = DxPtr(localSwap, true);
     }
     for (uint32_t n = 0; n < frameCount; n++) {
         ThrowIfFailed(swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n].rt)));
     }
-    if (!vsync)
-        swapChain->SetMaximumFrameLatency(backBufferCount * 2);
+    // if (!vsync)
+    //     swapChain->SetMaximumFrameLatency(backBufferCount * 2);
 }
 LCSwapChain::LCSwapChain(
     PixelStorage &storage,
     Device *device,
-    IDXGISwapChain4 *swapChain,
+    IDXGISwapChain1 *swapChain,
     bool vsync)
     : Resource(device),
       swapChain(swapChain, false),
@@ -63,6 +63,7 @@ LCSwapChain::LCSwapChain(
         m_renderTargets,
         swapChainDesc.BufferCount,
         [&] { return device; });
+    frameCount = swapChainDesc.BufferCount;
     for (uint32_t n = 0; n < swapChainDesc.BufferCount; n++) {
         ThrowIfFailed(swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n].rt)));
     }

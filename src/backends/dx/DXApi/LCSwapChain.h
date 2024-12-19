@@ -9,8 +9,9 @@ namespace lc::dx {
 class LCSwapChain : public Resource {
 public:
     vstd::vector<SwapChain> m_renderTargets;
-    DxPtr<IDXGISwapChain3> swapChain;
+    DxPtr<IDXGISwapChain1> swapChain;
     uint64 frameIndex = 0;
+    uint64 frameCount = 0;
     DXGI_FORMAT format;
     bool vsync;
     Tag GetTag() const override { return Tag::SwapChain; }
@@ -27,7 +28,7 @@ public:
     LCSwapChain(
         PixelStorage& storage,
         Device* device,
-        IDXGISwapChain4* swapChain,
+        IDXGISwapChain1* swapChain,
         bool vsync);
 };
 }// namespace lc::dx

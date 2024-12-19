@@ -1123,8 +1123,10 @@ void LCCmdBuffer::Present(
     {
         std::lock_guard lck{mtx};
         tracker.listType = alloc->Type();
-        swapchain->frameIndex = swapchain->swapChain->GetCurrentBackBufferIndex();
+        // swapchain->frameIndex = swapchain->swapChain->GetCurrentBackBufferIndex();
         auto &&rt = &swapchain->m_renderTargets[swapchain->frameIndex];
+        swapchain->frameIndex += 1;
+        swapchain->frameIndex %= swapchain->frameCount;
         auto cb = alloc->GetBuffer();
         auto bd = cb->Build();
         auto cmdList = cb->CmdList();
