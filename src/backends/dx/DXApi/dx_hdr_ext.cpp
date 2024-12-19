@@ -43,7 +43,8 @@ DXHDRExt::DisplayCurve EnsureSwapChainColorSpace(
 }
 DXHDRExt::DisplayChromaticities SetHDRMetaData(
     DXGI_COLOR_SPACE_TYPE &colorSpace,
-    LCSwapChain *swapchain,
+    IDXGISwapChain4 *swapchain,
+    DXGI_FORMAT format,
     bool hdr_support,
     float MaxOutputNits /*=1000.0f*/,
     float MinOutputNits /*=0.001f*/,
@@ -56,7 +57,7 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
 
     // Clean the hdr metadata if the display doesn't support HDR
     if (!hdr_support) {
-        ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+        ThrowIfFailed(swapchain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
         return {};
     }
 
@@ -68,7 +69,7 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
 
     // Select the chromaticity based on HDR format of the DWM.
     DXHDRExt::SwapChainBitDepth hitDepth;
-    switch (swapchain->format) {
+    switch (format) {
         case DXGI_FORMAT_R10G10B10A2_TYPELESS:
         case DXGI_FORMAT_R10G10B10A2_UNORM:
         case DXGI_FORMAT_R10G10B10A2_UINT:
@@ -88,15 +89,15 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
             break;
     }
 
-    EnsureSwapChainColorSpace(swapchain->swapChain, colorSpace, hitDepth, hdr_support);
+    EnsureSwapChainColorSpace(swapchain, colorSpace, hitDepth, hdr_support);
     int selectedChroma = 0;
-    if (swapchain->format == DXGI_FORMAT_R16G16B16A16_FLOAT && colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
+    if (format == DXGI_FORMAT_R16G16B16A16_FLOAT && colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
         selectedChroma = 0;
     } else if (hitDepth == DXHDRExt::SwapChainBitDepth::_10 && colorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
         selectedChroma = 1;
     } else {
         // Reset the metadata since this is not a supported HDR format.
-        ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+        ThrowIfFailed(swapchain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
         return {};
     }
 
@@ -116,7 +117,7 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
     HDR10MetaData.MinMasteringLuminance = static_cast<UINT>(MinOutputNits * 10000.0f);
     HDR10MetaData.MaxContentLightLevel = static_cast<UINT16>(MaxCLL);
     HDR10MetaData.MaxFrameAverageLightLevel = static_cast<UINT16>(MaxFALL);
-    ThrowIfFailed(swapchain->swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &HDR10MetaData));
+    ThrowIfFailed(swapchain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &HDR10MetaData));
     return *Chroma;
 }
 }// namespace dx_hdr_ext_detail
@@ -154,18 +155,20 @@ auto DXHDRExtImpl::set_hdr_meta_data(
     float max_cll,
     float max_fall,
     const DXHDRExt::DisplayChromaticities *custom_chroma) noexcept -> Meta {
-    DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_CUSTOM;
-    auto chroma = dx_hdr_ext_detail::SetHDRMetaData(
-        color_space,
-        reinterpret_cast<LCSwapChain *>(swapchain_handle),
-        true,
-        max_output_nits,
-        min_output_nits,
-        max_cll,
-        max_fall,
-        custom_chroma);
-    return {
-        static_cast<ColorSpace>(color_space),
-        chroma};
+    // DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_CUSTOM;
+    // auto chroma = dx_hdr_ext_detail::SetHDRMetaData(
+    //     color_space,
+    //     reinterpret_cast<LCSwapChain *>(swapchain_handle),
+    //     true,
+    //     max_output_nits,
+    //     min_output_nits,
+    //     max_cll,
+    //     max_fall,
+    //     custom_chroma);
+    // return {
+    //     static_cast<ColorSpace>(color_space),
+    //     chroma};
+    LUISA_ERROR("Not implemented.");
+    return {};
 }
 }// namespace lc::dx

@@ -40,7 +40,8 @@ LCSwapChain::LCSwapChain(
             nullptr,
             nullptr,
             &localSwap));
-        swapChain = DxPtr(static_cast<IDXGISwapChain4 *>(localSwap), true);
+        
+        swapChain = DxPtr(static_cast<IDXGISwapChain3*>(localSwap), true);
     }
     for (uint32_t n = 0; n < frameCount; n++) {
         ThrowIfFailed(swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n].rt)));

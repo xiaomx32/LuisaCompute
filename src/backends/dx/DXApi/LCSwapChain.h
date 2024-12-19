@@ -9,7 +9,7 @@ namespace lc::dx {
 class LCSwapChain : public Resource {
 public:
     vstd::vector<SwapChain> m_renderTargets;
-    DxPtr<IDXGISwapChain4> swapChain;
+    DxPtr<IDXGISwapChain3> swapChain;
     uint64 frameIndex = 0;
     DXGI_FORMAT format;
     bool vsync;

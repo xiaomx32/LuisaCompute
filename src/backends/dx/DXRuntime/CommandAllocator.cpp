@@ -82,7 +82,7 @@ void CommandAllocator::Execute(
         }
     }
 }
-void CommandAllocator::ExecuteAndPresent(CommandQueue *queue, ID3D12Fence *fence, uint64 fenceIndex, IDXGISwapChain4 *swapchain, bool vsync) {
+void CommandAllocator::ExecuteAndPresent(CommandQueue *queue, ID3D12Fence *fence, uint64 fenceIndex, IDXGISwapChain1 *swapchain, bool vsync) {
     auto present = [&]() {
         if (vsync) {
             ThrowIfFailed(swapchain->Present(1, 0));
