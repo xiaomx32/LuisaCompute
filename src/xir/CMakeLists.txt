@@ -44,6 +44,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # passes
         passes/outline.cpp
+        passes/sink_alloca.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})

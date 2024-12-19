@@ -12,9 +12,8 @@ OutlineInfo outline_pass_run_on_module(Module *module) noexcept {
     for (auto &f : module->functions()) { functions.emplace_back(&f); }
     for (auto &f : module->functions()) {
         auto func_info = outline_pass_run_on_function(module, &f);
-
     }
     return info;
 }
 
-}
+}// namespace luisa::compute::xir
