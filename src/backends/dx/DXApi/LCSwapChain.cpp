@@ -36,6 +36,7 @@ LCSwapChain::LCSwapChain(
         ThrowIfFailed(device->dxgiFactory->CreateSwapChainForHwnd(
             queue->Queue(),
             windowHandle,
+
             &swapChainDesc,
             nullptr,
             nullptr,
@@ -46,8 +47,15 @@ LCSwapChain::LCSwapChain(
     for (uint32_t n = 0; n < frameCount; n++) {
         ThrowIfFailed(swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n].rt)));
     }
-    // if (!vsync)
-    //     swapChain->SetMaximumFrameLatency(backBufferCount * 2);
+    if (!vsync) {
+        ComPtr<IDXGISwapChain3> swapChain3;
+        auto hr = swapChain->QueryInterface(IID_PPV_ARGS(&swapChain3));
+        if (hr == S_OK) {
+            swapChain3->SetMaximumFrameLatency(backBufferCount * 2);
+        } else {
+            LUISA_WARNING("Can not get IDXGISwapChain3, please check your Direct-X runtime.");
+        }
+    }
 }
 LCSwapChain::LCSwapChain(
     PixelStorage &storage,

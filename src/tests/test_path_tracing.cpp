@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <luisa/backends/ext/dx_hdr_ext.hpp>
 #include <stb/stb_image_write.h>
 
 #include <luisa/luisa-compute.h>
@@ -30,11 +30,7 @@ int main(int argc, char *argv[]) {
     log_level_verbose();
 
     Context context{argv[0]};
-    if (argc <= 1) {
-        LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
-        exit(1);
-    }
-    Device device = context.create_device(argv[1]);
+    Device device = context.create_device("dx");
 
     // load the Cornell Box scene
     tinyobj::ObjReaderConfig obj_reader_config;
@@ -271,16 +267,37 @@ int main(int argc, char *argv[]) {
         return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0f, 1.0f);
     };
 
+    Callable linear_to_st2084 = [](Float3 color) noexcept {
+        Float m1 = 2610.0 / 4096.0 / 4;
+        Float m2 = 2523.0 / 4096.0 * 128;
+        Float c1 = 3424.0 / 4096.0;
+        Float c2 = 2413.0 / 4096.0 * 32;
+        Float c3 = 2392.0 / 4096.0 * 32;
+        Float3 cp = pow(abs(color), m1);
+        return pow((c1 + c2 * cp) / (1.0f + c3 * cp), m2);
+    };
+
     Kernel2D clear_kernel = [](ImageFloat image) noexcept {
         image.write(dispatch_id().xy(), make_float4(0.0f));
     };
 
-    Kernel2D hdr2ldr_kernel = [&](ImageFloat hdr_image, ImageFloat ldr_image, Float scale, Bool is_hdr) noexcept {
+    Kernel2D hdr2ldr_kernel = [&](ImageFloat hdr_image, ImageFloat ldr_image, Float scale, Int mode) noexcept {
         UInt2 coord = dispatch_id().xy();
         Float4 hdr = hdr_image.read(coord);
         Float3 ldr = hdr.xyz() / hdr.w * scale;
-        $if (!is_hdr) {
-            ldr = linear_to_srgb(ldr);
+        $switch (mode) {
+            // sRGB
+            $case (0) {
+                ldr = linear_to_srgb(ldr);
+            };
+            // 10-bit
+            $case (1) {
+                ldr = linear_to_st2084(ldr * 80.0f / 10000.0f);
+            };
+            // 16-bit
+            $case (2) {
+                // LINEAR
+            };
         };
         ldr_image.write(coord, make_float4(ldr, 1.0f));
     };
@@ -302,40 +319,52 @@ int main(int argc, char *argv[]) {
              << make_sampler_shader(seed_image).dispatch(resolution);
 
     Window window{"path tracing", resolution};
-    Swapchain swap_chain = device.create_swapchain(
+    auto dx_hdr_ext = device.extension<DXHDRExt>();
+    // Swapchain swap_chain = device.create_swapchain(
+    //     stream,
+    //     SwapchainOption{
+    //         .display = window.native_display(),
+    //         .window = window.native_handle(),
+    //         .size = make_uint2(resolution),
+    //         .wants_hdr = false,
+    //         .wants_vsync = false,
+    //         .back_buffer_count = 8,
+    //     });
+    Swapchain swap_chain = dx_hdr_ext->create_swapchain(
         stream,
-        SwapchainOption{
-            .display = window.native_display(),
+        DXHDRExt::DXSwapchainOption{
             .window = window.native_handle(),
             .size = make_uint2(resolution),
-            .wants_hdr = false,
+            .storage = PixelStorage::HALF4,
             .wants_vsync = false,
-            .back_buffer_count = 8,
         });
+    dx_hdr_ext->set_hdr_meta_data(
+        swap_chain.handle());
     Image<float> ldr_image = device.create_image<float>(swap_chain.backend_storage(), resolution);
     double last_time = 0.0;
     uint frame_count = 0u;
     Clock clock;
 
     while (!window.should_close()) {
+        int mode = 0;
+        if (swap_chain.backend_storage() == PixelStorage::R10G10B10A2) {
+            mode = 1;
+        } else if (swap_chain.backend_storage() == PixelStorage::HALF4) {
+            mode = 2;
+        }
         cmd_list << raytracing_shader(framebuffer, seed_image, accel, resolution)
                         .dispatch(resolution)
                  << accumulate_shader(accum_image, framebuffer)
                         .dispatch(resolution);
-        cmd_list << hdr2ldr_shader(accum_image, ldr_image, 1.0f, swap_chain.backend_storage() != PixelStorage::BYTE4).dispatch(resolution);
+        cmd_list << hdr2ldr_shader(accum_image, ldr_image, 1.0f, mode).dispatch(resolution);
         stream << cmd_list.commit()
                << swap_chain.present(ldr_image) << synchronize();
         window.poll_events();
         double dt = clock.toc() - last_time;
         last_time = clock.toc();
         frame_count += spp_per_dispatch;
-        LUISA_INFO("spp: {}, time: {} ms, spp/s: {}",
-                   frame_count, dt, spp_per_dispatch / dt * 1000);
     }
     stream
         << ldr_image.copy_to(host_image.data())
         << synchronize();
-
-    LUISA_INFO("FPS: {}", frame_count / clock.toc() * 1000);
-    stbi_write_png("test_path_tracing.png", resolution.x, resolution.y, 4, host_image.data(), 0);
 }

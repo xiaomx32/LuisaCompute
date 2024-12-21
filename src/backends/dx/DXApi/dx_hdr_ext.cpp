@@ -155,20 +155,22 @@ auto DXHDRExtImpl::set_hdr_meta_data(
     float max_cll,
     float max_fall,
     const DXHDRExt::DisplayChromaticities *custom_chroma) noexcept -> Meta {
-    // DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_CUSTOM;
-    // auto chroma = dx_hdr_ext_detail::SetHDRMetaData(
-    //     color_space,
-    //     reinterpret_cast<LCSwapChain *>(swapchain_handle),
-    //     true,
-    //     max_output_nits,
-    //     min_output_nits,
-    //     max_cll,
-    //     max_fall,
-    //     custom_chroma);
-    // return {
-    //     static_cast<ColorSpace>(color_space),
-    //     chroma};
-    LUISA_ERROR("Not implemented.");
-    return {};
+    DXGI_COLOR_SPACE_TYPE color_space = DXGI_COLOR_SPACE_CUSTOM;
+    auto swapChain = reinterpret_cast<LCSwapChain *>(swapchain_handle);
+    ComPtr<IDXGISwapChain4> swapChain4;
+    ThrowIfFailed(swapChain->swapChain->QueryInterface(IID_PPV_ARGS(&swapChain4)));
+    auto chroma = dx_hdr_ext_detail::SetHDRMetaData(
+        color_space,
+        swapChain4.Get(),
+        swapChain->format,
+        true,
+        max_output_nits,
+        min_output_nits,
+        max_cll,
+        max_fall,
+        custom_chroma);
+    return {
+        static_cast<ColorSpace>(color_space),
+        chroma};
 }
 }// namespace lc::dx
