@@ -30,7 +30,11 @@ int main(int argc, char *argv[]) {
     log_level_verbose();
 
     Context context{argv[0]};
-    Device device = context.create_device("dx");
+    if (argc <= 1) {
+        LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
+        exit(1);
+    }
+    Device device = context.create_device(argv[1]);
 
     // load the Cornell Box scene
     tinyobj::ObjReaderConfig obj_reader_config;
@@ -319,27 +323,32 @@ int main(int argc, char *argv[]) {
              << make_sampler_shader(seed_image).dispatch(resolution);
 
     Window window{"path tracing", resolution};
-    auto dx_hdr_ext = device.extension<DXHDRExt>();
-    // Swapchain swap_chain = device.create_swapchain(
-    //     stream,
-    //     SwapchainOption{
-    //         .display = window.native_display(),
-    //         .window = window.native_handle(),
-    //         .size = make_uint2(resolution),
-    //         .wants_hdr = false,
-    //         .wants_vsync = false,
-    //         .back_buffer_count = 8,
-    //     });
-    Swapchain swap_chain = dx_hdr_ext->create_swapchain(
-        stream,
-        DXHDRExt::DXSwapchainOption{
-            .window = window.native_handle(),
-            .size = make_uint2(resolution),
-            .storage = PixelStorage::HALF4,
-            .wants_vsync = false,
-        });
-    dx_hdr_ext->set_hdr_meta_data(
-        swap_chain.handle());
+    Swapchain swap_chain;
+    if (luisa::string_view{argv[1]} == "dx") {
+        auto dx_hdr_ext = device.extension<DXHDRExt>();
+        swap_chain = dx_hdr_ext->create_swapchain(
+            stream,
+            DXHDRExt::DXSwapchainOption{
+                .window = window.native_handle(),
+                .size = make_uint2(resolution),
+                .storage = PixelStorage::HALF4,
+                .wants_vsync = false,
+            });
+        dx_hdr_ext->set_hdr_meta_data(
+            swap_chain.handle());
+    } else {
+        swap_chain = device.create_swapchain(
+            stream,
+            SwapchainOption{
+                .display = window.native_display(),
+                .window = window.native_handle(),
+                .size = make_uint2(resolution),
+                .wants_hdr = false,
+                .wants_vsync = false,
+                .back_buffer_count = 8,
+            });
+    }
+
     Image<float> ldr_image = device.create_image<float>(swap_chain.backend_storage(), resolution);
     double last_time = 0.0;
     uint frame_count = 0u;
@@ -367,4 +376,6 @@ int main(int argc, char *argv[]) {
     stream
         << ldr_image.copy_to(host_image.data())
         << synchronize();
+    LUISA_INFO("FPS: {}", frame_count / clock.toc() * 1000);
+    stbi_write_png("test_path_tracing.png", resolution.x, resolution.y, 4, host_image.data(), 0);
 }
