@@ -4,6 +4,8 @@
 namespace lc::dx {
 class DXHDRExtImpl : public luisa::compute::DXHDRExt {
     LCDevice *_lc_device;
+    bool _device_support_hdr = false;
+    bool device_support_hdr() const override;
 public:
     DXHDRExtImpl(LCDevice *lc_device);
     ~DXHDRExtImpl();

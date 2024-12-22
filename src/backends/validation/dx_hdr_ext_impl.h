@@ -17,5 +17,8 @@ public:
         float max_cll = 2000.0f,
         float max_fall = 500.0f,
         const DisplayChromaticities *custom_chroma = nullptr) noexcept override;
+    bool device_support_hdr() const override {
+        return ptr->device_support_hdr();
+    }
 };
 }// namespace lc::validation

@@ -80,6 +80,7 @@ public:
         const DisplayChromaticities *custom_chroma = nullptr) noexcept = 0;
     static constexpr luisa::string_view name = "DXHDRExt";
     [[nodiscard]] Swapchain create_swapchain(const Stream &stream, const DXSwapchainOption &option) noexcept;
+    [[nodiscard]] virtual bool device_support_hdr() const = 0;
 
 protected:
     ~DXHDRExt() = default;

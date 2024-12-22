@@ -121,7 +121,23 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
     return *Chroma;
 }
 }// namespace dx_hdr_ext_detail
-DXHDRExtImpl::DXHDRExtImpl(LCDevice *lc_device) : _lc_device(lc_device) {}
+DXHDRExtImpl::DXHDRExtImpl(LCDevice *lc_device) : _lc_device(lc_device) {
+
+    UINT i = 0;
+    ComPtr<IDXGIOutput> currentOutput;
+    float bestIntersectArea = -1;
+
+    while (lc_device->nativeDevice.adapter->EnumOutputs(i, &currentOutput) != DXGI_ERROR_NOT_FOUND) {
+        // Having determined the output (display) upon which the app is primarily being
+        // rendered, retrieve the HDR capabilities of that display by checking the color space.
+        ComPtr<IDXGIOutput6> output6;
+        ThrowIfFailed(currentOutput.As(&output6));
+        DXGI_OUTPUT_DESC1 desc1;
+        ThrowIfFailed(output6->GetDesc1(&desc1));
+        _device_support_hdr |= (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+        i++;
+    }
+}
 DXHDRExtImpl::~DXHDRExtImpl() = default;
 
 SwapchainCreationInfo DXHDRExtImpl::create_swapchain(
@@ -172,5 +188,8 @@ auto DXHDRExtImpl::set_hdr_meta_data(
     return {
         static_cast<ColorSpace>(color_space),
         chroma};
+}
+bool DXHDRExtImpl::device_support_hdr() const {
+    return _device_support_hdr;
 }
 }// namespace lc::dx
