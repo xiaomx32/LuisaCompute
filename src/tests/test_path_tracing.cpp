@@ -324,7 +324,7 @@ int main(int argc, char *argv[]) {
 
     Window window{"path tracing", resolution};
     Swapchain swap_chain;
-    if (luisa::string_view{argv[1]} == "dx") {
+    if (device.backend_name() == "dx") {
         auto dx_hdr_ext = device.extension<DXHDRExt>();
         swap_chain = dx_hdr_ext->create_swapchain(
             stream,
