@@ -116,7 +116,7 @@ private:
 #endif
 
 private:
-    [[nodiscard]] ShaderCreationInfo _create_shader(luisa::string name,
+    [[nodiscard]] ShaderCreationInfo _load_or_compile_shader(luisa::string name,
                                                     const string &source, const ShaderOption &option,
                                                     luisa::span<const char *const> nvrtc_options,
                                                     const CUDAShaderMetadata &expected_metadata,

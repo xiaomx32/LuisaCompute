@@ -207,6 +207,7 @@
 #include <luisa/xir/instruction.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
+#include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -230,8 +231,13 @@
 #include <luisa/xir/metadata/location.h>
 #include <luisa/xir/metadata/name.h>
 #include <luisa/xir/module.h>
+#include <luisa/xir/passes/extract_cfg.h>
+#include <luisa/xir/passes/outline.h>
+#include <luisa/xir/passes/sink_alloca.h>
 #include <luisa/xir/pool.h>
 #include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/json2xir.h>
+#include <luisa/xir/translators/xir2json.h>
 #include <luisa/xir/translators/xir2text.h>
 #include <luisa/xir/use.h>
 #include <luisa/xir/user.h>

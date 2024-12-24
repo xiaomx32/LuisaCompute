@@ -33,8 +33,9 @@ else ()
     option(LUISA_COMPUTE_ENABLE_METAL "Enable Metal backend" ON)
     option(LUISA_COMPUTE_ENABLE_CUDA "Enable CUDA backend" ON)
     option(LUISA_COMPUTE_ENABLE_CUDA_EXT_LCUB "Enable CUDA extension: LCUB" OFF)
-    option(LUISA_COMPUTE_ENABLE_VULKAN "Enable Vulkan backend" ON)
+    option(LUISA_COMPUTE_ENABLE_VULKAN "Enable Vulkan backend" OFF)
     option(LUISA_COMPUTE_ENABLE_CPU "Enable CPU backend" ON)
+    option(LUISA_COMPUTE_ENABLE_FALLBACK "Enable Fallback backend" ON)
     option(LUISA_COMPUTE_ENABLE_REMOTE "Enable Remote backend" ON)
     option(LUISA_COMPUTE_ENABLE_GUI "Enable GUI support" ON)
     option(LUISA_COMPUTE_ENABLE_CLANG_CXX "Enable ClangTooling-based C++ shading language" OFF)
@@ -116,10 +117,7 @@ endif ()
 
 # add platform macros
 if (WIN32)
-    target_compile_definitions(luisa-compute-include INTERFACE
-            LUISA_PLATFORM_WINDOWS=1
-            _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR=1 # workaround for MSVC, again
-    )
+    target_compile_definitions(luisa-compute-include INTERFACE LUISA_PLATFORM_WINDOWS=1)
 elseif (UNIX)
     target_compile_definitions(luisa-compute-include INTERFACE LUISA_PLATFORM_UNIX=1)
     if (APPLE)
@@ -137,5 +135,12 @@ install(TARGETS luisa-compute-include
 install(DIRECTORY include/luisa
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+
+# Global definition to avoid MSVC ABI break.
+# See https://github.com/microsoft/STL/releases/tag/vs-2022-17.10 for details.
+if (WIN32)
+    add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+    target_compile_definitions(luisa-compute-include INTERFACE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+endif ()
 
 add_subdirectory(src)

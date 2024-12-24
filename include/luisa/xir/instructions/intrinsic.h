@@ -10,10 +10,10 @@ enum struct IntrinsicOp {
     NOP,
 
     // unary operators
-    UNARY_PLUS,   // +x
-    UNARY_MINUS,  // -x
-    UNARY_NOT,    // !x
-    UNARY_BIT_NOT,// ~x
+    UNARY_PLUS,     // +x
+    UNARY_MINUS,    // -x
+    UNARY_LOGIC_NOT,// !x
+    UNARY_BIT_NOT,  // ~x
 
     // binary operators
     BINARY_ADD,
@@ -22,8 +22,8 @@ enum struct IntrinsicOp {
     BINARY_DIV,
     BINARY_MOD,
 
-    BINARY_AND,
-    BINARY_OR,
+    BINARY_LOGIC_AND,
+    BINARY_LOGIC_OR,
 
     BINARY_BIT_AND,
     BINARY_BIT_OR,
@@ -40,13 +40,6 @@ enum struct IntrinsicOp {
     BINARY_GREATER_EQUAL,
     BINARY_EQUAL,
     BINARY_NOT_EQUAL,
-
-    // optimization/debugging
-    ASSUME,
-    ASSERT,
-
-    // hacking
-    ADDRESS_OF,// (variable) -> uint64
 
     // thread coordination
     THREAD_ID,
@@ -118,6 +111,7 @@ enum struct IntrinsicOp {
     FRACT,// (floatN)
     TRUNC,// (floatN)
     ROUND,// (floatN)
+    RINT, // (floatN)
 
     FMA,     // (a: floatN, b: floatN, c: floatN): return a * b + c
     COPYSIGN,// (floatN, floatN)
@@ -130,16 +124,22 @@ enum struct IntrinsicOp {
     FACEFORWARD,   // (floatN, floatN, floatN)
     REFLECT,       // (floatN, floatN)
 
-    REDUCE_SUM,    // (floatN)
-    REDUCE_PRODUCT,// (floatN)
-    REDUCE_MIN,    // (floatN)
-    REDUCE_MAX,    // (floatN)
+    REDUCE_SUM,    // (floatN) -> float
+    REDUCE_PRODUCT,// (floatN) -> float
+    REDUCE_MIN,    // (floatN) -> float
+    REDUCE_MAX,    // (floatN) -> float
 
-    OUTER_PRODUCT,  // (floatN | floatNxN)
-    MATRIX_COMP_MUL,// (floatNxN, floatNxN)
-    DETERMINANT,    // (floatNxN)
-    TRANSPOSE,      // (floatNxN)
-    INVERSE,        // (floatNxN)
+    OUTER_PRODUCT,// (floatN, floatN) -> floatNxN | (floatNxN, floatNxN) -> floatNxN
+
+    MATRIX_COMP_NEG,   // (floatNxN) -> floatNxN
+    MATRIX_COMP_ADD,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_SUB,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_MUL,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_COMP_DIV,   // (floatNxN, floatNxN) -> floatNxN | (floatNxN, float) -> floatNxN | (float, floatNxN) -> floatNxN
+    MATRIX_LINALG_MUL, // (floatNxN, floatNxN) -> floatNxN | (floatNxN, floatN) -> floatN
+    MATRIX_DETERMINANT,// (floatNxN) -> float
+    MATRIX_TRANSPOSE,  // (floatNxN) -> floatNxN
+    MATRIX_INVERSE,    // (floatNxN) -> floatNxN
 
     // atomic operations
     ATOMIC_EXCHANGE,        /// [(atomic_ref, desired) -> old]: stores desired, returns old.
@@ -153,37 +153,48 @@ enum struct IntrinsicOp {
     ATOMIC_FETCH_MAX,       /// [(atomic_ref, val) -> old]: stores max(old, val), returns old.
 
     // resource operations
-    BUFFER_READ,   /// [(buffer, index) -> value]: reads the index-th element in buffer
-    BUFFER_WRITE,  /// [(buffer, index, value) -> void]: writes value into the index-th element of buffer
-    BUFFER_SIZE,   /// [(buffer) -> size]
-    BUFFER_ADDRESS,/// [(buffer) -> address]
+    BUFFER_READ, /// [(buffer, index) -> value]: reads the index-th element in buffer
+    BUFFER_WRITE,/// [(buffer, index, value) -> void]: writes value into the index-th element of buffer
+    BUFFER_SIZE, /// [(buffer) -> size]
 
     BYTE_BUFFER_READ, /// [(buffer, byte_index) -> value]: reads the index-th element in buffer
     BYTE_BUFFER_WRITE,/// [(buffer, byte_index, value) -> void]: writes value into the index-th element of buffer
     BYTE_BUFFER_SIZE, /// [(buffer) -> size_bytes]
 
-    TEXTURE_READ, /// [(texture, coord) -> value]
-    TEXTURE_WRITE,/// [(texture, coord, value) -> void]
-    TEXTURE_SIZE, /// [(texture) -> Vector<uint, dim>]
+    TEXTURE2D_READ,             /// [(texture, coord) -> value]
+    TEXTURE2D_WRITE,            /// [(texture, coord, value) -> void]
+    TEXTURE2D_SIZE,             /// [(texture) -> Vector<uint, dim>]
+    TEXTURE2D_SAMPLE,           // (tex, uv: float2, filter: uint, level: uint): float4
+    TEXTURE2D_SAMPLE_LEVEL,     // (tex, uv: float2, level: float, filter: uint, level: uint): float4
+    TEXTURE2D_SAMPLE_GRAD,      // (tex, uv: float2, ddx: float2, ddy: float2, filter: uint, level: uint): float4
+    TEXTURE2D_SAMPLE_GRAD_LEVEL,// (tex, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, level: uint): float4
+
+    TEXTURE3D_READ,             /// [(texture, coord) -> value]
+    TEXTURE3D_WRITE,            /// [(texture, coord, value) -> void]
+    TEXTURE3D_SIZE,             /// [(texture) -> Vector<uint, dim>]
+    TEXTURE3D_SAMPLE,           // (tex, uv: float3, filter: uint, level: uint): float4
+    TEXTURE3D_SAMPLE_LEVEL,     // (tex, uv: float3, level: float, filter: uint, level: uint): float4
+    TEXTURE3D_SAMPLE_GRAD,      // (tex, uv: float3, ddx: float3, ddy: float3, filter: uint, level: uint): float4
+    TEXTURE3D_SAMPLE_GRAD_LEVEL,// (tex, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, level: uint): float4
 
     // bindless array operations
     BINDLESS_TEXTURE2D_SAMPLE,           // (bindless_array, index: uint, uv: float2): float4
     BINDLESS_TEXTURE2D_SAMPLE_LEVEL,     // (bindless_array, index: uint, uv: float2, level: float): float4
     BINDLESS_TEXTURE2D_SAMPLE_GRAD,      // (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2): float4
-    BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL,// (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float): float4
+    BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL,// (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2, mip_clamp: float): float4
     BINDLESS_TEXTURE3D_SAMPLE,           // (bindless_array, index: uint, uv: float3): float4
     BINDLESS_TEXTURE3D_SAMPLE_LEVEL,     // (bindless_array, index: uint, uv: float3, level: float): float4
     BINDLESS_TEXTURE3D_SAMPLE_GRAD,      // (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3): float4
-    BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL,// (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float): float4
+    BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL,// (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3, mip_clamp: float): float4
 
-    BINDLESS_TEXTURE2D_SAMPLE_SAMPLER,           // (bindless_array, index: uint, uv: float2, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER,     // (bindless_array, index: uint, uv: float2, level: float, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER,      // (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER,// (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE3D_SAMPLE_SAMPLER,           // (bindless_array, index: uint, uv: float3, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER,     // (bindless_array, index: uint, uv: float3, level: float, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER,      // (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3, filter: uint, address: uint): float4
-    BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER,// (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, address: uint): float4
+    BINDLESS_TEXTURE2D_SAMPLE_SAMPLER,           // (bindless_array, index: uint, uv: float2, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER,     // (bindless_array, index: uint, uv: float2, level: float, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER,      // (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER,// (bindless_array, index: uint, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE3D_SAMPLE_SAMPLER,           // (bindless_array, index: uint, uv: float3, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER,     // (bindless_array, index: uint, uv: float3, level: float, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER,      // (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3, filter: uint, level: uint): float4
+    BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER,// (bindless_array, index: uint, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, level: uint): float4
 
     BINDLESS_TEXTURE2D_READ,      // (bindless_array, index: uint, coord: uint2): float4
     BINDLESS_TEXTURE3D_READ,      // (bindless_array, index: uint, coord: uint3): float4
@@ -194,13 +205,19 @@ enum struct IntrinsicOp {
     BINDLESS_TEXTURE2D_SIZE_LEVEL,// (bindless_array, index: uint, level: uint): uint2
     BINDLESS_TEXTURE3D_SIZE_LEVEL,// (bindless_array, index: uint, level: uint): uint3
 
-    BINDLESS_BUFFER_READ,     // (bindless_array, index: uint, elem_index: uint): expr->type()
-    BINDLESS_BUFFER_WRITE,    // (bindless_array, index: uint, elem_index: uint, value: expr): void
-    BINDLESS_BYTE_BUFFER_READ,// (bindless_array, index: uint, offset_bytes: uint): expr->type()
-    BINDLESS_BUFFER_SIZE,     // (bindless_array, index: uint, stride: uint) -> size
-    BINDLESS_BUFFER_TYPE,     // (bindless_array, index: uint) -> uint64 (type id of the element); the returned value
-                              // could be compared with the value of a TypeIDExpr to examine the type of the buffer
-    BINDLESS_BUFFER_ADDRESS,  // (bindless_array, index: uint) -> uint64 (address of the buffer)
+    BINDLESS_BUFFER_READ, // (bindless_array, index: uint, elem_index: uint) -> T
+    BINDLESS_BUFFER_WRITE,// (bindless_array, index: uint, elem_index: uint, value: T) -> void
+    BINDLESS_BUFFER_SIZE, // (bindless_array, index: uint, stride: uint) -> size: uint64
+
+    BINDLESS_BYTE_BUFFER_READ, // (bindless_array, index: uint, offset_bytes: uint64) -> T
+    BINDLESS_BYTE_BUFFER_WRITE,// (bindless_array, index: uint, offset_bytes: uint64, value: T) -> void
+    BINDLESS_BYTE_BUFFER_SIZE, // (bindless_array, index: uint) -> size: uint64
+
+    // low-level pointer operations, for akari
+    BUFFER_DEVICE_ADDRESS,         // (buffer) -> address: uint64
+    BINDLESS_BUFFER_DEVICE_ADDRESS,// (bindless_array, index: uint) -> address: uint64
+    DEVICE_ADDRESS_READ,           // (address: uint64) -> value: T
+    DEVICE_ADDRESS_WRITE,          // (address: uint64, value: T) -> void
 
     // aggregate operations
     AGGREGATE,
@@ -209,22 +226,22 @@ enum struct IntrinsicOp {
     EXTRACT,
 
     // autodiff ops
-    REQUIRES_GRADIENT,  // (expr) -> void
-    GRADIENT,           // (expr) -> expr
-    GRADIENT_MARKER,    // (ref, expr) -> void
-    ACCUMULATE_GRADIENT,// (ref, expr) -> void
-    BACKWARD,           // (expr) -> void
-    DETACH,             // (expr) -> expr
+    AUTODIFF_REQUIRES_GRADIENT,  // (expr) -> void
+    AUTODIFF_GRADIENT,           // (expr) -> expr
+    AUTODIFF_GRADIENT_MARKER,    // (ref, expr) -> void
+    AUTODIFF_ACCUMULATE_GRADIENT,// (ref, expr) -> void
+    AUTODIFF_BACKWARD,           // (expr) -> void
+    AUTODIFF_DETACH,             // (expr) -> expr
 
     // ray tracing
     RAY_TRACING_INSTANCE_TRANSFORM,      // (Accel, uint)
     RAY_TRACING_INSTANCE_USER_ID,        // (Accel, uint)
     RAY_TRACING_INSTANCE_VISIBILITY_MASK,// (Accel, uint)
 
-    RAY_TRACING_SET_INSTANCE_TRANSFORM, // (Accel, uint, float4x4)
-    RAY_TRACING_SET_INSTANCE_VISIBILITY,// (Accel, uint, uint)
-    RAY_TRACING_SET_INSTANCE_OPACITY,   // (Accel, uint, bool)
-    RAY_TRACING_SET_INSTANCE_USER_ID,   // (Accel, uint, uint)
+    RAY_TRACING_SET_INSTANCE_TRANSFORM,      // (Accel, uint, float4x4)
+    RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK,// (Accel, uint, uint)
+    RAY_TRACING_SET_INSTANCE_OPACITY,        // (Accel, uint, bool)
+    RAY_TRACING_SET_INSTANCE_USER_ID,        // (Accel, uint, uint)
 
     RAY_TRACING_TRACE_CLOSEST,// (Accel, ray, mask: uint): TriangleHit
     RAY_TRACING_TRACE_ANY,    // (Accel, ray, mask: uint): bool
@@ -258,8 +275,8 @@ enum struct IntrinsicOp {
 
     // rasterization
     RASTER_DISCARD,// (): void
-    DDX,           // (arg: float vector): float vector
-    DDY,           // (arg: float vector): float vector
+    RASTER_DDX,    // (arg: float vector): float vector
+    RASTER_DDY,    // (arg: float vector): float vector
 
     // warp operations
     WARP_IS_FIRST_ACTIVE_LANE,  // (): bool
@@ -283,21 +300,14 @@ enum struct IntrinsicOp {
     WARP_READ_FIRST_ACTIVE_LANE,// (type: scalar/vector/matrix): type (read this variable's value at the first lane)
 
     // indirect dispatch
-    INDIRECT_SET_DISPATCH_KERNEL,// (Buffer, uint offset, uint3 block_size, uint3 dispatch_size, uint kernel_id)
-    INDIRECT_SET_DISPATCH_COUNT, // (Buffer, uint count)
-
-    // direct texture sampling
-    TEXTURE2D_SAMPLE,           // (tex, uv: float2, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_LEVEL,     // (tex, uv: float2, level: float, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_GRAD,      // (tex, uv: float2, ddx: float2, ddy: float2, filter: uint, address: uint): float4
-    TEXTURE2D_SAMPLE_GRAD_LEVEL,// (tex, uv: float2, ddx: float2, ddy: float2,  mip_clamp: float, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE,           // (tex, uv: float3, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_LEVEL,     // (tex, uv: float3, level: float, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_GRAD,      // (tex, uv: float3, ddx: float3, ddy: float3, filter: uint, address: uint): float4
-    TEXTURE3D_SAMPLE_GRAD_LEVEL,// (tex, uv: float3, ddx: float3, ddy: float3,  mip_clamp: float, filter: uint, address: uint): float4
+    INDIRECT_DISPATCH_SET_KERNEL,// (Buffer, uint offset, uint3 block_size, uint3 dispatch_size, uint kernel_id)
+    INDIRECT_DISPATCH_SET_COUNT, // (Buffer, uint count)
 
     // shader execution re-ordering
     SHADER_EXECUTION_REORDER,// (uint hint, uint hint_bits): void
+
+    // clock
+    CLOCK,// (): uint64
 };
 
 [[nodiscard]] LC_XIR_API luisa::string to_string(IntrinsicOp op) noexcept;

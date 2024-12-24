@@ -26,14 +26,11 @@ public:
     [[nodiscard]] auto &functions() const noexcept { return _functions; }
 
     void add_constant(Constant *constant) noexcept;
-    [[nodiscard]] Constant *create_constant(const Type *type, const void *data) noexcept;
+    [[nodiscard]] Constant *create_constant(const Type *type, const void *data = nullptr) noexcept;
+    [[nodiscard]] Constant *create_constant_zero(const Type *type) noexcept;
+    [[nodiscard]] Constant *create_constant_one(const Type *type) noexcept;
     [[nodiscard]] auto &constants() noexcept { return _constants; }
     [[nodiscard]] auto &constants() const noexcept { return _constants; }
-
-    template<typename T>
-    [[nodiscard]] Constant *create_constant(const T &value) noexcept {
-        return create_constant(Type::of<T>(), &value);
-    }
 };
 
 }// namespace luisa::compute::xir

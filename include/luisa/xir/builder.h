@@ -4,6 +4,7 @@
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
+#include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -69,6 +70,7 @@ public:
     ReturnInst *return_void() noexcept;
 
     AssertInst *assert_(Value *condition, luisa::string_view message = {}) noexcept;
+    AssumeInst *assume_(Value *condition, luisa::string_view message = {}) noexcept;
 
     CallInst *call(const Type *type, Value *callee, luisa::span<Value *const> arguments) noexcept;
     CallInst *call(const Type *type, Value *callee, std::initializer_list<Value *> arguments) noexcept;
@@ -76,7 +78,7 @@ public:
     IntrinsicInst *call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept;
     IntrinsicInst *call(const Type *type, IntrinsicOp op, std::initializer_list<Value *> arguments) noexcept;
 
-    CastInst *static_cast_(const Type *type, Value *value) noexcept;
+    Instruction *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
     Value *static_cast_if_necessary(const Type *type, Value *value) noexcept;

@@ -6,6 +6,7 @@
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
+#include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/break.h>
@@ -78,6 +79,45 @@ private:
         _prelude << "type T" << next_uid << " = struct { " << desc << " };\n\n";
         _struct_uid_map.emplace(type, next_uid);
         return next_uid;
+    }
+
+    void _traverse_value_in_instruction(const Instruction *inst) noexcept {
+        static_cast<void>(_value_uid(inst));
+        for (auto &use : inst->operand_uses()) {
+            if (auto value = use->value();
+                value != nullptr && value->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
+                _traverse_values_in_basic_block(static_cast<const BasicBlock *>(value));
+            }
+        }
+    }
+
+    void _traverse_values_in_basic_block(const BasicBlock *bb) noexcept {
+        if (!_value_uid_map.contains(bb)) {// to avoid infinite recursion in loops
+            static_cast<void>(_value_uid(bb));
+            for (auto &inst : bb->instructions()) {
+                _traverse_value_in_instruction(&inst);
+            }
+        }
+    }
+
+    void _traverse_values_in_function(const Function *f) noexcept {
+        for (auto arg : f->arguments()) {
+            static_cast<void>(_value_uid(arg));
+        }
+        if (f->is_definition()) {
+            auto def = static_cast<const FunctionDefinition *>(f);
+            _traverse_values_in_basic_block(def->body_block());
+        }
+    }
+
+    void _traverse_values_in_module(const Module *module) noexcept {
+        for (auto &c : module->constants()) {
+            static_cast<void>(_value_uid(&c));
+        }
+        for (auto &f : module->functions()) {
+            static_cast<void>(_value_uid(&f));
+            _traverse_values_in_function(&f);
+        }
     }
 
     [[nodiscard]] luisa::string _type_ident(const Type *type) noexcept {
@@ -186,6 +226,15 @@ private:
 
     void _emit_assert_inst(const AssertInst *inst) noexcept {
         _main << "assert";
+        if (!inst->message().empty()) {
+            _main << " ";
+            _emit_string_escaped(_main, inst->message());
+        }
+        _main << " " << _value_ident(inst->condition());
+    }
+
+    void _emit_assume_inst(const AssumeInst *inst) noexcept {
+        _main << "assume";
         if (!inst->message().empty()) {
             _main << " ";
             _emit_string_escaped(_main, inst->message());
@@ -411,6 +460,9 @@ private:
             case DerivedInstructionTag::ASSERT:
                 _emit_assert_inst(static_cast<const AssertInst *>(inst));
                 break;
+            case DerivedInstructionTag::ASSUME:
+                _emit_assume_inst(static_cast<const AssumeInst *>(inst));
+                break;
         }
         _main << ";";
         _emit_use_debug_info(_main, inst->use_list());
@@ -476,6 +528,7 @@ private:
     }
 
     void _emit_module(const Module *module) noexcept {
+        _traverse_values_in_module(module);
         if (!module->metadata_list().empty()) {
             _emit_metadata_list(_prelude, module->metadata_list());
             _prelude << "\n";
@@ -526,6 +579,7 @@ private:
 
 public:
     XIR2TextTranslator() noexcept : _prelude{1_k}, _main{4_k} {}
+
     [[nodiscard]] luisa::string emit(const Module *module, bool debug_info) noexcept {
         _prelude.clear();
         _main.clear();

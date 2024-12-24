@@ -9,7 +9,11 @@
 #include <luisa/core/logging.h>
 #include <luisa/ast/external_function.h>
 #include "builtin/hlsl_builtin.hpp"
+#if __has_include(<zlib.h>)
+#include <zlib.h>
+#else
 #include <zlib/zlib.h>
+#endif
 static bool shown_buffer_warning = false;
 namespace lc::hlsl {
 static std::atomic_bool rootsig_exceed_warned = false;

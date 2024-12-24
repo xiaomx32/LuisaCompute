@@ -11,10 +11,12 @@ void Builder::_check_valid_insertion_point() const noexcept {
 Builder::Builder() noexcept = default;
 
 IfInst *Builder::if_(Value *cond) noexcept {
+    LUISA_ASSERT(cond != nullptr && cond->type() == Type::of<bool>(), "Invalid condition.");
     return _create_and_append_instruction<IfInst>(cond);
 }
 
 SwitchInst *Builder::switch_(Value *value) noexcept {
+    LUISA_ASSERT(value != nullptr, "Switch value cannot be null.");
     return _create_and_append_instruction<SwitchInst>(value);
 }
 
@@ -33,6 +35,7 @@ BranchInst *Builder::br(BasicBlock *target) noexcept {
 }
 
 ConditionalBranchInst *Builder::cond_br(Value *cond, BasicBlock *true_target, BasicBlock *false_target) noexcept {
+    LUISA_ASSERT(cond != nullptr && cond->type() == Type::of<bool>(), "Invalid condition.");
     auto inst = _create_and_append_instruction<ConditionalBranchInst>(cond);
     inst->set_true_target(true_target);
     inst->set_false_target(false_target);
@@ -57,6 +60,10 @@ UnreachableInst *Builder::unreachable_(luisa::string_view message) noexcept {
 
 AssertInst *Builder::assert_(Value *condition, luisa::string_view message) noexcept {
     return _create_and_append_instruction<AssertInst>(condition, luisa::string{message});
+}
+
+AssumeInst *Builder::assume_(Value *condition, luisa::string_view message) noexcept {
+    return _create_and_append_instruction<AssumeInst>(condition, luisa::string{message});
 }
 
 ReturnInst *Builder::return_(Value *value) noexcept {
@@ -109,7 +116,8 @@ IntrinsicInst *Builder::call(const Type *type, IntrinsicOp op, luisa::span<Value
     return _create_and_append_instruction<IntrinsicInst>(type, op, arguments);
 }
 
-CastInst *Builder::static_cast_(const Type *type, Value *value) noexcept {
+Instruction *Builder::static_cast_(const Type *type, Value *value) noexcept {
+    LUISA_ASSERT(type->is_scalar() && value->type()->is_scalar(), "Invalid cast operation.");
     return _create_and_append_instruction<CastInst>(type, CastOp::STATIC_CAST, value);
 }
 
@@ -140,10 +148,15 @@ GEPInst *Builder::gep(const Type *type, Value *base, luisa::span<Value *const> i
 }
 
 LoadInst *Builder::load(const Type *type, Value *variable) noexcept {
+    LUISA_ASSERT(variable->is_lvalue(), "Load source must be an lvalue.");
+	LUISA_ASSERT(type == variable->type(), "Type mismatch in Load");
     return _create_and_append_instruction<LoadInst>(type, variable);
 }
 
 StoreInst *Builder::store(Value *variable, Value *value) noexcept {
+    LUISA_ASSERT(variable->is_lvalue(), "Store destination must be an lvalue.");
+    LUISA_ASSERT(!value->is_lvalue(), "Store source cannot be an lvalue.");
+	LUISA_ASSERT(variable->type() == value->type(), "Type mismatch in Store");
     return _create_and_append_instruction<StoreInst>(variable, value);
 }
 
