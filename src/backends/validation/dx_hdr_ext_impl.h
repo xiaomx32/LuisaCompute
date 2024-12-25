@@ -1,8 +1,12 @@
 #pragma once
+
+#include <luisa/vstl/meta_lib.h>
 #include <luisa/backends/ext/dx_hdr_ext_interface.h>
 
 namespace lc::validation {
+
 using namespace luisa::compute;
+
 class DXHDRExtImpl : public DXHDRExt, public vstd::IOperatorNewBase {
 public:
     DXHDRExt *ptr;
@@ -21,4 +25,5 @@ public:
         return ptr->device_support_hdr();
     }
 };
+
 }// namespace lc::validation
