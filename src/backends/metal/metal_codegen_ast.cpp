@@ -30,11 +30,10 @@ public:
     void operator()(double v) const noexcept {
         if (std::isnan(v)) [[unlikely]] { LUISA_ERROR_WITH_LOCATION("Encountered with NaN."); }
         if (std::isinf(v)) {
-            _s << (v < 0.0 ? "double(-INFINITY)" : "double(+INFINITY)");
+            _s << (v < 0.0 ? "-INFINITY" : "+INFINITY");
         } else {
             _s << v;
         }
-        LUISA_ERROR_WITH_LOCATION("Double literals are not supported.");
     }
     void operator()(half v) const noexcept {
         if (luisa::isnan(v)) [[unlikely]] { LUISA_ERROR_WITH_LOCATION("Encountered with NaN."); }

@@ -272,17 +272,17 @@ int main(int argc, char *argv[]) {
     };
 
     Callable linear_to_st2084 = [](Float3 color) noexcept {
-        Float m1 = 2610.0 / 4096.0 / 4;
-        Float m2 = 2523.0 / 4096.0 * 128;
-        Float c1 = 3424.0 / 4096.0;
-        Float c2 = 2413.0 / 4096.0 * 32;
-        Float c3 = 2392.0 / 4096.0 * 32;
+        Float m1 = 2610.f / 4096.f / 4.f;
+        Float m2 = 2523.f / 4096.f * 128.f;
+        Float c1 = 3424.f / 4096.f;
+        Float c2 = 2413.f / 4096.f * 32.f;
+        Float c3 = 2392.f / 4096.f * 32.f;
         Float3 cp = pow(abs(color), m1);
         return pow((c1 + c2 * cp) / (1.0f + c3 * cp), m2);
     };
 
     Kernel2D clear_kernel = [](ImageFloat image) noexcept {
-        image.write(dispatch_id().xy(), make_float4(0.0f));
+        image.write(dispatch_id().xy(), make_float4(0.f));
     };
 
     Kernel2D hdr2ldr_kernel = [&](ImageFloat hdr_image, ImageFloat ldr_image, Float scale, Int mode) noexcept {
@@ -296,14 +296,14 @@ int main(int argc, char *argv[]) {
             };
             // 10-bit
             $case (1) {
-                ldr = linear_to_st2084(ldr * 80.0f / 10000.0f);
+                ldr = linear_to_st2084(ldr * 80.f / 10000.f);
             };
             // 16-bit
             $case (2) {
                 // LINEAR
             };
         };
-        ldr_image.write(coord, make_float4(ldr, 1.0f));
+        ldr_image.write(coord, make_float4(ldr, 1.f));
     };
 
     ShaderOption o{.enable_debug_info = false};
@@ -370,6 +370,7 @@ int main(int argc, char *argv[]) {
                << swap_chain.present(ldr_image) << synchronize();
         window.poll_events();
         double dt = clock.toc() - last_time;
+        LUISA_INFO("dt = {:.2f}ms ({:.2f} spp/s)", dt, spp_per_dispatch / dt * 1000);
         last_time = clock.toc();
         frame_count += spp_per_dispatch;
     }
