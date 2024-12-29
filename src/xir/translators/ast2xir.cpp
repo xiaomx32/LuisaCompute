@@ -5,6 +5,7 @@
 #include <luisa/ast/statement.h>
 #include <luisa/ast/function.h>
 #include <luisa/xir/builder.h>
+#include <luisa/xir/special_register.h>
 #include <luisa/xir/translators/ast2xir.h>
 
 namespace luisa::compute::xir {
@@ -709,7 +710,7 @@ private:
             case CallOp::TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD);
             case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL);
             case CallOp::SHADER_EXECUTION_REORDER: return resource_call(IntrinsicOp::SHADER_EXECUTION_REORDER);
-            case CallOp::CLOCK: return pure_call(IntrinsicOp::CLOCK);
+            case CallOp::CLOCK: return b.clock();
         }
         LUISA_NOT_IMPLEMENTED();
     }

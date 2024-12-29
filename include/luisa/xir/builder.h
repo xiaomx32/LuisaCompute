@@ -2,7 +2,6 @@
 
 #include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
-#include <luisa/xir/special_register.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
@@ -10,6 +9,7 @@
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
+#include <luisa/xir/instructions/clock.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
 #include <luisa/xir/instructions/if.h>
@@ -25,6 +25,9 @@
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/unreachable.h>
 
+namespace luisa::compute::xir {
+class ClockInst;
+}// namespace luisa::compute::xir
 namespace luisa::compute::xir {
 
 class LC_XIR_API Builder {
@@ -100,6 +103,8 @@ public:
 
     LoadInst *load(const Type *type, Value *variable) noexcept;
     StoreInst *store(Value *variable, Value *value) noexcept;
+
+    ClockInst *clock() noexcept;
 
     OutlineInst *outline() noexcept;
     RayQueryInst *ray_query(Value *query_object) noexcept;

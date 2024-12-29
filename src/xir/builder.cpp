@@ -149,15 +149,19 @@ GEPInst *Builder::gep(const Type *type, Value *base, luisa::span<Value *const> i
 
 LoadInst *Builder::load(const Type *type, Value *variable) noexcept {
     LUISA_ASSERT(variable->is_lvalue(), "Load source must be an lvalue.");
-	LUISA_ASSERT(type == variable->type(), "Type mismatch in Load");
+    LUISA_ASSERT(type == variable->type(), "Type mismatch in Load");
     return _create_and_append_instruction<LoadInst>(type, variable);
 }
 
 StoreInst *Builder::store(Value *variable, Value *value) noexcept {
     LUISA_ASSERT(variable->is_lvalue(), "Store destination must be an lvalue.");
     LUISA_ASSERT(!value->is_lvalue(), "Store source cannot be an lvalue.");
-	LUISA_ASSERT(variable->type() == value->type(), "Type mismatch in Store");
+    LUISA_ASSERT(variable->type() == value->type(), "Type mismatch in Store");
     return _create_and_append_instruction<StoreInst>(variable, value);
+}
+
+ClockInst *Builder::clock() noexcept {
+    return _create_and_append_instruction<ClockInst>();
 }
 
 OutlineInst *Builder::outline() noexcept {

@@ -55,6 +55,10 @@ void Instruction::replace_self_with(Instruction *node) noexcept {
     remove_self();
 }
 
+const ControlFlowMerge *Instruction::control_flow_merge() const noexcept {
+    return const_cast<Instruction *>(this)->control_flow_merge();
+}
+
 TerminatorInstruction::TerminatorInstruction() noexcept
     : Instruction{nullptr} {}
 
@@ -141,7 +145,7 @@ const BasicBlock *ConditionalBranchTerminatorInstruction::false_block() const no
     return const_cast<ConditionalBranchTerminatorInstruction *>(this)->false_block();
 }
 
-BasicBlock *InstructionMergeMixin::create_merge_block(bool overwrite_existing) noexcept {
+BasicBlock *ControlFlowMerge::create_merge_block(bool overwrite_existing) noexcept {
     LUISA_ASSERT(merge_block() == nullptr || overwrite_existing,
                  "Merge block already exists.");
     auto block = Pool::current()->create<BasicBlock>();

@@ -4,8 +4,7 @@
 
 namespace luisa::compute::xir {
 
-class LC_XIR_API RayQueryInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::RAY_QUERY>,
-                                      public InstructionMergeMixin {
+class LC_XIR_API RayQueryInst final : public ControlFlowMergeMixin<DerivedTerminatorInstruction<DerivedInstructionTag::RAY_QUERY>> {
 
 public:
     static constexpr size_t operand_index_query_object = 0u;

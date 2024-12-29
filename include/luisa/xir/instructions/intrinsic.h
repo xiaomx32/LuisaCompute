@@ -294,9 +294,6 @@ enum struct IntrinsicOp {
 
     // shader execution re-ordering
     SHADER_EXECUTION_REORDER,// (uint hint, uint hint_bits): void
-
-    // clock
-    CLOCK,// (): uint64
 };
 
 [[nodiscard]] LC_XIR_API luisa::string to_string(IntrinsicOp op) noexcept;

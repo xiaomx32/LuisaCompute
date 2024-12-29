@@ -21,6 +21,7 @@
 #include <luisa/runtime/rtx/hit.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
+#include <luisa/xir/special_register.h>
 #include <luisa/xir/metadata/name.h>
 #include <luisa/xir/metadata/location.h>
 
@@ -2535,11 +2536,6 @@ private:
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
             case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
-            case xir::IntrinsicOp::CLOCK: {
-                auto call = b.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
-                auto llvm_result_type = _translate_type(inst->type(), true);
-                return b.CreateZExtOrTrunc(call, llvm_result_type);
-            }
         }
         LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
@@ -2872,6 +2868,14 @@ private:
             }
             case xir::DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
             case xir::DerivedInstructionTag::RAY_QUERY: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedInstructionTag::CLOCK: {
+                auto call = b.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
+                auto llvm_result_type = _translate_type(inst->type(), true);
+                return b.CreateZExtOrTrunc(call, llvm_result_type);
+            }
+            case xir::DerivedInstructionTag::ALU: break;
+            case xir::DerivedInstructionTag::CTA: break;
+            case xir::DerivedInstructionTag::RESOURCE: break;
         }
         LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "instruction.h"
+
 #include <luisa/xir/user.h>
 
 namespace luisa::compute::xir {
@@ -24,17 +26,31 @@ enum struct DerivedInstructionTag {
     RETURN,            // basic block terminator: return (early returns are removed after control flow normalization)
     PHI,               // basic block beginning: phi nodes
 
-    // variable instructions
+    /* variable instructions */
     ALLOCA,
     LOAD,
     STORE,
     GEP,
 
+    /* atomic instructions */
+    ATOMIC,// operates on buffers / shared memory
+
+    /* ALU (arithmetic logic unit) instructions */
+    ALU,// all are pure functions, free to move/eliminate
+
+    /* CTA (cooperative thread array) instructions */
+    CTA,// volatile, may involve synchronization and cannot be moved/eliminated
+
+    /* resource instructions */
+    RESOURCE,
+
     /* other instructions */
-    CALL,     // user or external function calls
+    CALL, // user or external function calls
+    CAST, // type casts
+    PRINT,// kernel print
+    CLOCK,// kernel clock
+
     INTRINSIC,// intrinsic function calls
-    CAST,     // type casts
-    PRINT,    // kernel print
 
     ASSERT,// assertion
     ASSUME,// assumption
@@ -43,6 +59,8 @@ enum struct DerivedInstructionTag {
     AUTO_DIFF,// automatic differentiation
     RAY_QUERY,// ray queries
 };
+
+class ControlFlowMerge;
 
 class LC_XIR_API Instruction : public IntrusiveNode<Instruction, DerivedValue<DerivedValueTag::INSTRUCTION, User>> {
 
@@ -70,6 +88,9 @@ public:
     [[nodiscard]] virtual bool is_terminator() const noexcept { return false; }
     [[nodiscard]] BasicBlock *parent_block() noexcept { return _parent_block; }
     [[nodiscard]] const BasicBlock *parent_block() const noexcept { return _parent_block; }
+
+    [[nodiscard]] virtual ControlFlowMerge *control_flow_merge() noexcept { return nullptr; }
+    [[nodiscard]] const ControlFlowMerge *control_flow_merge() const noexcept;
 };
 
 using InstructionList = InlineIntrusiveList<Instruction>;
@@ -158,20 +179,31 @@ public:
     using DerivedInstruction<tag, ConditionalBranchTerminatorInstruction>::DerivedInstruction;
 };
 
-class LC_XIR_API InstructionMergeMixin {
+class LC_XIR_API ControlFlowMerge {
 
 private:
     BasicBlock *_merge_block{nullptr};
 
 protected:
-    InstructionMergeMixin() noexcept = default;
-    ~InstructionMergeMixin() noexcept = default;
+    ControlFlowMerge() noexcept = default;
+    ~ControlFlowMerge() noexcept = default;
 
 public:
     void set_merge_block(BasicBlock *block) noexcept { _merge_block = block; }
     [[nodiscard]] BasicBlock *merge_block() noexcept { return _merge_block; }
     [[nodiscard]] const BasicBlock *merge_block() const noexcept { return _merge_block; }
     BasicBlock *create_merge_block(bool overwrite_existing = false) noexcept;
+};
+
+template<typename Base>
+    requires std::derived_from<Base, Instruction>
+class ControlFlowMergeMixin : public Base,
+                              public ControlFlowMerge {
+public:
+    using Base::Base;
+    [[nodiscard]] ControlFlowMerge *control_flow_merge() noexcept final {
+        return static_cast<ControlFlowMerge *>(this);
+    }
 };
 
 }// namespace luisa::compute::xir

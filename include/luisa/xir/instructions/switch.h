@@ -15,8 +15,7 @@ namespace luisa::compute::xir {
 // { merge_block }
 //
 // Note: this instruction must be the terminator of a basic block.
-class LC_XIR_API SwitchInst final : public DerivedTerminatorInstruction<DerivedInstructionTag::SWITCH>,
-                                    public InstructionMergeMixin {
+class LC_XIR_API SwitchInst final : public ControlFlowMergeMixin<DerivedTerminatorInstruction<DerivedInstructionTag::SWITCH>> {
 
 public:
     using case_value_type = int;

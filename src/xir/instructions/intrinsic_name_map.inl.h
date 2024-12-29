@@ -224,7 +224,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel";
         case IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count";
         case IntrinsicOp::SHADER_EXECUTION_REORDER: return "shader_execution_reorder";
-        case IntrinsicOp::CLOCK: return "clock";
     }
     LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation: {}.",
                               static_cast<uint32_t>(op));
@@ -454,7 +453,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"indirect_dispatch_set_kernel", IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL},
         {"indirect_dispatch_set_count", IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT},
         {"shader_execution_reorder", IntrinsicOp::SHADER_EXECUTION_REORDER},
-        {"clock", IntrinsicOp::CLOCK},
     };
     auto iter = m.find(name);
     LUISA_ASSERT(iter != m.end(), "Unknown intrinsic operation: {}.", name);

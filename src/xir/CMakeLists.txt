@@ -20,6 +20,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/assume.cpp
         instructions/call.cpp
         instructions/cast.cpp
+        instructions/clock.cpp
         instructions/gep.cpp
         instructions/intrinsic.cpp
         instructions/load.cpp

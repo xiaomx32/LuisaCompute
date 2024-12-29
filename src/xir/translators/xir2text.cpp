@@ -13,6 +13,7 @@
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
 #include <luisa/xir/instructions/cast.h>
+#include <luisa/xir/instructions/clock.h>
 #include <luisa/xir/instructions/continue.h>
 #include <luisa/xir/instructions/gep.h>
 #include <luisa/xir/instructions/intrinsic.h>
@@ -248,6 +249,10 @@ private:
         _main << " " << _value_ident(inst->condition());
     }
 
+    void _emit_clock_inst(const ClockInst *inst [[maybe_unused]]) noexcept {
+        _main << "clock";
+    }
+
     void _emit_if_inst(const IfInst *inst, int indent) noexcept {
         _main << "if " << _value_ident(inst->condition()) << ", then ";
         _emit_basic_block(inst->true_block(), indent);
@@ -469,6 +474,12 @@ private:
             case DerivedInstructionTag::ASSUME:
                 _emit_assume_inst(static_cast<const AssumeInst *>(inst));
                 break;
+            case DerivedInstructionTag::CLOCK:
+                _emit_clock_inst(static_cast<const ClockInst *>(inst));
+                break;
+            case DerivedInstructionTag::ALU: break;
+            case DerivedInstructionTag::CTA: break;
+            case DerivedInstructionTag::RESOURCE: break;
         }
         _main << ";";
         _emit_use_debug_info(_main, inst->use_list());
