@@ -63,6 +63,38 @@ public:
 
     [[nodiscard]] BasicBlock *body_block() noexcept { return _body_block; }
     [[nodiscard]] const BasicBlock *body_block() const noexcept { return _body_block; }
+
+private:
+    static void _traverse_basic_block_recursive(BasicBlock *block, void *visit_ctx,
+                                                void (*visit)(void *, BasicBlock *)) noexcept;
+
+public:
+    template<typename Visit>
+    void traverse_basic_blocks(Visit &&visit) noexcept {
+        auto visitor = [](void *ctx, BasicBlock *block) noexcept {
+            (*static_cast<Visit *>(ctx))(block);
+        };
+        _traverse_basic_block_recursive(_body_block, &visit, visitor);
+    }
+    template<typename Visit>
+    void traverse_basic_blocks(Visit &&visit) const noexcept {
+        auto visitor = [](void *ctx, BasicBlock *block) noexcept {
+            (*static_cast<Visit *>(ctx))(const_cast<const BasicBlock *>(block));
+        };
+        _traverse_basic_block_recursive(const_cast<BasicBlock *>(_body_block), &visit, visitor);
+    }
+    template<typename Visit>
+    void traverse_instructions(Visit &&visit) noexcept {
+        traverse_basic_blocks([&visit](BasicBlock *block) noexcept {
+            block->traverse_instructions(visit);
+        });
+    }
+    template<typename Visit>
+    void traverse_instructions(Visit &&visit) const noexcept {
+        traverse_basic_blocks([&visit](const BasicBlock *block) noexcept {
+            block->traverse_instructions(visit);
+        });
+    }
 };
 
 class LC_XIR_API CallableFunction final : public DerivedFunction<DerivedFunctionTag::CALLABLE, FunctionDefinition> {

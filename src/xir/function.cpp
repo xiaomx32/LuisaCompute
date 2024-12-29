@@ -1,3 +1,5 @@
+#include "luisa/core/stl/unordered_map.h"
+
 #include <luisa/ast/type.h>
 #include <luisa/core/logging.h>
 #include <luisa/xir/function.h>
@@ -93,6 +95,30 @@ BasicBlock *FunctionDefinition::create_body_block(bool overwrite_existing) noexc
     auto new_block = Pool::current()->create<BasicBlock>();
     set_body_block(new_block);
     return new_block;
+}
+
+namespace detail {
+
+void traverse_basic_block_recursive(luisa::unordered_set<BasicBlock *> &visited, BasicBlock *block,
+                                    void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
+    if (visited.emplace(block).second) {
+        visit(visit_ctx, block);
+        auto terminator = block->terminator();
+        for (auto use : terminator->operand_uses()) {
+            if (auto v = use->value();
+                v != nullptr && v->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
+                traverse_basic_block_recursive(visited, static_cast<BasicBlock *>(v), visit_ctx, visit);
+            }
+        }
+    }
+}
+
+}// namespace detail
+
+void FunctionDefinition::_traverse_basic_block_recursive(BasicBlock *block, void *visit_ctx,
+                                                         void (*visit)(void *, BasicBlock *)) noexcept {
+    luisa::unordered_set<BasicBlock *> visited;
+    detail::traverse_basic_block_recursive(visited, block, visit_ctx, visit);
 }
 
 KernelFunction::KernelFunction(luisa::uint3 block_size) noexcept {

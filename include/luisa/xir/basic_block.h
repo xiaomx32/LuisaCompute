@@ -17,6 +17,23 @@ public:
     BasicBlock() noexcept;
     [[nodiscard]] auto &instructions() noexcept { return _instructions; }
     [[nodiscard]] auto &instructions() const noexcept { return _instructions; }
+
+    [[nodiscard]] bool is_terminated() const noexcept;
+    [[nodiscard]] TerminatorInstruction *terminator() noexcept;
+    [[nodiscard]] const TerminatorInstruction *terminator() const noexcept;
+
+    template<typename Visit>
+    void traverse_instructions(Visit &&visit) noexcept {
+        for (auto &inst : _instructions) {
+            visit(&inst);
+        }
+    }
+    template<typename Visit>
+    void traverse_instructions(Visit &&visit) const noexcept {
+        for (auto &inst : _instructions) {
+            visit(&inst);
+        }
+    }
 };
 
 }// namespace luisa::compute::xir

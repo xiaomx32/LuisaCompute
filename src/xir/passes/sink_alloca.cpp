@@ -9,37 +9,18 @@ namespace luisa::compute::xir {
 class AllocaInstSinker {
 
 private:
-    static void _collect_alloca_insts_in_block(luisa::vector<AllocaInst *> &collected,
-                                               luisa::unordered_set<BasicBlock *> &visited,
-                                               BasicBlock *bb) noexcept {
-        if (visited.emplace(bb).second) {
-            for (auto &&inst : bb->instructions()) {
-                if (inst.derived_instruction_tag() == DerivedInstructionTag::ALLOCA) {
-                    collected.emplace_back(static_cast<AllocaInst *>(&inst));
-                } else {// find basic blocks
-                    for (auto &&o : inst.operand_uses()) {
-                        if (auto v = o->value(); v->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
-                            _collect_alloca_insts_in_block(collected, visited, static_cast<BasicBlock *>(v));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-private:
     [[nodiscard]] static bool _try_sink_alloca_inst(AllocaInst *inst) noexcept {
         return false;
     }
 
 public:
     [[nodiscard]] static SinkAllocaInfo run(FunctionDefinition *f) noexcept {
-        auto collected = [f] {
-            luisa::vector<AllocaInst *> collected;
-            luisa::unordered_set<BasicBlock *> visited;
-            _collect_alloca_insts_in_block(collected, visited, f->body_block());
-            return collected;
-        }();
+        luisa::vector<AllocaInst *> collected;
+        f->traverse_instructions([&](Instruction *inst) noexcept {
+            if (inst->derived_instruction_tag() == DerivedInstructionTag::ALLOCA) {
+                collected.emplace_back(static_cast<AllocaInst *>(inst));
+            }
+        });
         collected.erase(std::remove_if(collected.begin(), collected.end(), [](AllocaInst *inst) noexcept {
                             return !_try_sink_alloca_inst(inst);
                         }),
@@ -48,7 +29,7 @@ public:
     }
 };
 
-SinkAllocaInfo sink_alloca_pass_run_on_function(Module *module, Function *function) noexcept {
+SinkAllocaInfo sink_alloca_pass_run_on_function(Function *function) noexcept {
     return function->is_definition() ?
                AllocaInstSinker::run(static_cast<FunctionDefinition *>(function)) :
                SinkAllocaInfo{};
@@ -65,7 +46,7 @@ SinkAllocaInfo sink_alloca_pass_run_on_module(Module *module) noexcept {
     SinkAllocaInfo info;
     for (auto &f : module->functions()) {
         if (f.is_definition()) {
-            auto func_info = sink_alloca_pass_run_on_function(module, &f);
+            auto func_info = sink_alloca_pass_run_on_function(&f);
             merge_sink_alloca_info(info, func_info);
         }
     }

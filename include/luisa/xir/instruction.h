@@ -67,7 +67,7 @@ public:
     void insert_after_self(Instruction *node) noexcept override;
     void replace_self_with(Instruction *node) noexcept;
 
-    [[nodiscard]] virtual bool is_terminator() noexcept { return false; }
+    [[nodiscard]] virtual bool is_terminator() const noexcept { return false; }
     [[nodiscard]] BasicBlock *parent_block() noexcept { return _parent_block; }
     [[nodiscard]] const BasicBlock *parent_block() const noexcept { return _parent_block; }
 };
@@ -77,7 +77,7 @@ using InstructionList = InlineIntrusiveList<Instruction>;
 class LC_XIR_API TerminatorInstruction : public Instruction {
 public:
     TerminatorInstruction() noexcept;
-    [[nodiscard]] bool is_terminator() noexcept final { return true; }
+    [[nodiscard]] bool is_terminator() const noexcept final { return true; }
 };
 
 // unconditional branch

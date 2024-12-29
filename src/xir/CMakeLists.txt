@@ -46,6 +46,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         passes/extract_cfg.cpp
         passes/outline.cpp
         passes/sink_alloca.cpp
+        passes/trace_gep.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})

@@ -234,6 +234,7 @@
 #include <luisa/xir/passes/extract_cfg.h>
 #include <luisa/xir/passes/outline.h>
 #include <luisa/xir/passes/sink_alloca.h>
+#include <luisa/xir/passes/trace_gep.h>
 #include <luisa/xir/pool.h>
 #include <luisa/xir/translators/ast2xir.h>
 #include <luisa/xir/translators/json2xir.h>
