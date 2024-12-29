@@ -38,8 +38,8 @@ enum struct DerivedInstructionTag {
     /* ALU (arithmetic logic unit) instructions */
     ALU,// all are pure functions, free to move/eliminate
 
-    /* CTA (cooperative thread array) instructions */
-    CTA,// volatile, may involve synchronization and cannot be moved/eliminated
+    /* thread-group instructions */
+    THREAD_GROUP,// volatile, may involve synchronization and cannot be moved/eliminated
 
     /* resource instructions */
     RESOURCE,
@@ -50,14 +50,14 @@ enum struct DerivedInstructionTag {
     PRINT,// kernel print
     CLOCK,// kernel clock
 
-    INTRINSIC,// intrinsic function calls
-
     ASSERT,// assertion
     ASSUME,// assumption
 
     OUTLINE,  // mark that the body might be outlined (e.g., for faster compilation)
     AUTO_DIFF,// automatic differentiation
     RAY_QUERY,// ray queries
+
+    INTRINSIC,// other intrinsics that are not yet promoted to dedicated instructions
 };
 
 class ControlFlowMerge;

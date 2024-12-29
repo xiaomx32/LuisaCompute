@@ -172,64 +172,86 @@ RayQueryInst *Builder::ray_query(Value *query_object) noexcept {
     return _create_and_append_instruction<RayQueryInst>(query_object);
 }
 
-AtomicInst *Builder::atomic(const Type *type, AtomicOp op, Value *base,
-                            luisa::span<Value *const> indices,
-                            luisa::span<Value *const> values) noexcept {
+ThreadGroupInst *Builder::call(const Type *type, ThreadGroupOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<ThreadGroupInst>(type, op, operands);
+}
+
+ThreadGroupInst *Builder::shader_execution_reorder() noexcept {
+    return this->call(nullptr, ThreadGroupOp::SHADER_EXECUTION_REORDER, {});
+}
+
+ThreadGroupInst *Builder::shader_execution_reorder(Value *hint, Value *hint_bits) noexcept {
+    return this->call(nullptr, ThreadGroupOp::SHADER_EXECUTION_REORDER, std::array{hint, hint_bits});
+}
+
+ThreadGroupInst *Builder::synchronize_block() noexcept {
+    return this->call(nullptr, ThreadGroupOp::SYNCHRONIZE_BLOCK, {});
+}
+
+ThreadGroupInst *Builder::raster_quad_ddx(const Type *type, Value *value) noexcept {
+    return this->call(type, ThreadGroupOp::RASTER_QUAD_DDX, std::array{value});
+}
+
+ThreadGroupInst *Builder::raster_quad_ddy(const Type *type, Value *value) noexcept {
+    return this->call(type, ThreadGroupOp::RASTER_QUAD_DDY, std::array{value});
+}
+
+AtomicInst *Builder::call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept {
     return _create_and_append_instruction<AtomicInst>(type, op, base, indices, values);
 }
 
 AtomicInst *Builder::atomic_fetch_add(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_ADD, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_ADD, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_sub(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_SUB, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_SUB, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_and(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_AND, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_AND, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_or(const Type *type, Value *base,
                                      luisa::span<Value *const> indices,
                                      Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_OR, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_OR, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_xor(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_XOR, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_XOR, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_min(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_MIN, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_MIN, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_fetch_max(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {
-    return this->atomic(type, AtomicOp::FETCH_MAX, base, indices, std::array{value});
+    return this->call(type, AtomicOp::FETCH_MAX, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_exchange(const Type *type, Value *base,
                                      luisa::span<Value *const> indices,
                                      Value *value) noexcept {
-    return this->atomic(type, AtomicOp::EXCHANGE, base, indices, std::array{value});
+    return this->call(type, AtomicOp::EXCHANGE, base, indices, std::array{value});
 }
 
 AtomicInst *Builder::atomic_compare_exchange(const Type *type, Value *base,
                                              luisa::span<Value *const> indices,
                                              Value *expected, Value *desired) noexcept {
-    return this->atomic(type, AtomicOp::COMPARE_EXCHANGE, base, indices, std::array{expected, desired});
+    return this->call(type, AtomicOp::COMPARE_EXCHANGE, base, indices, std::array{expected, desired});
 }
 
 void Builder::set_insertion_point(Instruction *insertion_point) noexcept {

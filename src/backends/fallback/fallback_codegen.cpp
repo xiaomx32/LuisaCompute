@@ -1981,7 +1981,6 @@ private:
             case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::ALL: {
                 auto llvm_operand = _lookup_value(current, b, inst->operand(0u));
                 return b.CreateAndReduce(llvm_operand);
@@ -2504,30 +2503,8 @@ private:
             case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
             case xir::IntrinsicOp::RASTER_DISCARD: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::RASTER_DDX: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::RASTER_DDY: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_ALL_EQUAL: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_AND: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_OR: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_XOR: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_COUNT_BITS: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_MAX: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_MIN: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_PRODUCT: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_SUM: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_ALL: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_ANY: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_ACTIVE_BIT_MASK: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_PREFIX_COUNT_BITS: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_PREFIX_SUM: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_PREFIX_PRODUCT: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_READ_LANE: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
-            case xir::IntrinsicOp::SHADER_EXECUTION_REORDER: return nullptr;// no-op on the LLVM side
         }
         LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
@@ -2678,7 +2655,16 @@ private:
         return llvm_call;
     }
 
-    [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b, const xir::Instruction *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_thread_group_inst(CurrentFunction &current, IRBuilder &b,
+                                                            const xir::ThreadGroupInst *inst) noexcept {
+        if (inst->op() == xir::ThreadGroupOp::SHADER_EXECUTION_REORDER) {
+            return nullptr;
+        }
+        LUISA_NOT_IMPLEMENTED();
+    }
+
+    [[nodiscard]] llvm::Value *_translate_instruction(CurrentFunction &current, IRBuilder &b,
+                                                      const xir::Instruction *inst) noexcept {
         switch (inst->derived_instruction_tag()) {
             case xir::DerivedInstructionTag::SENTINEL: {
                 LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
@@ -2846,8 +2832,7 @@ private:
             case xir::DerivedInstructionTag::ASSUME: {
                 auto assume_inst = static_cast<const xir::AssumeInst *>(inst);
                 auto llvm_condition = _lookup_value(current, b, assume_inst->condition());
-                // TODO: we ignore assumption message for now
-                return b.CreateAssumption(llvm_condition);
+                return b.CreateAssumption(llvm_condition);// TODO: we ignore assumption message for now
             }
             case xir::DerivedInstructionTag::OUTLINE: {
                 auto outline_inst = static_cast<const xir::OutlineInst *>(inst);
@@ -2866,8 +2851,11 @@ private:
                 return b.CreateZExtOrTrunc(call, llvm_result_type);
             }
             case xir::DerivedInstructionTag::ALU: break;
-            case xir::DerivedInstructionTag::CTA: break;
             case xir::DerivedInstructionTag::RESOURCE: break;
+            case xir::DerivedInstructionTag::THREAD_GROUP: {
+                auto cta_inst = static_cast<const xir::ThreadGroupInst *>(inst);
+                return _translate_thread_group_inst(current, b, cta_inst);
+            }
             case xir::DerivedInstructionTag::ATOMIC: {
                 auto atomic_inst = static_cast<const xir::AtomicInst *>(inst);
                 switch (atomic_inst->op()) {

@@ -385,6 +385,15 @@ private:
             }
             return b.call(expr->type(), target_op, args);
         };
+        auto cta_call = [&](ThreadGroupOp target_op) noexcept {
+            luisa::fixed_vector<Value *, 16u> args;
+            args.reserve(expr->arguments().size());
+            for (auto ast_arg : expr->arguments()) {
+                auto arg = _translate_expression(b, ast_arg, true);
+                args.emplace_back(arg);
+            }
+            return b.call(expr->type(), target_op, args);
+        };
         auto resource_call = [&](IntrinsicOp target_op) noexcept {
             LUISA_ASSERT(!expr->arguments().empty(), "Resource call requires at least one argument.");
             luisa::fixed_vector<Value *, 16u> args;
@@ -412,7 +421,7 @@ private:
             }
             auto indices = luisa::span{args}.subspan(0u, args.size() - value_count);
             auto values = luisa::span{args}.subspan(args.size() - value_count, value_count);
-            return b.atomic(expr->type(), target_op, base, indices, values);
+            return b.call(expr->type(), target_op, base, indices, values);
         };
         auto texture_dim = [&]() noexcept {
             LUISA_ASSERT(!expr->arguments().empty(), "Texture dimension call requires at least one argument.");
@@ -530,7 +539,6 @@ private:
             case CallOp::DETERMINANT: return pure_call(IntrinsicOp::MATRIX_DETERMINANT);
             case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::MATRIX_TRANSPOSE);
             case CallOp::INVERSE: return pure_call(IntrinsicOp::MATRIX_INVERSE);
-            case CallOp::SYNCHRONIZE_BLOCK: return pure_call(IntrinsicOp::SYNCHRONIZE_BLOCK);
             case CallOp::ATOMIC_EXCHANGE: return atomic_call(AtomicOp::EXCHANGE);
             case CallOp::ATOMIC_COMPARE_EXCHANGE: return atomic_call(AtomicOp::COMPARE_EXCHANGE);
             case CallOp::ATOMIC_FETCH_ADD: return atomic_call(AtomicOp::FETCH_ADD);
@@ -694,27 +702,29 @@ private:
             case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE);
             case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE);
             case CallOp::RASTER_DISCARD: return pure_call(IntrinsicOp::RASTER_DISCARD);
-            case CallOp::DDX: return pure_call(IntrinsicOp::RASTER_DDX);
-            case CallOp::DDY: return pure_call(IntrinsicOp::RASTER_DDY);
-            case CallOp::WARP_IS_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE);
-            case CallOp::WARP_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_FIRST_ACTIVE_LANE);
-            case CallOp::WARP_ACTIVE_ALL_EQUAL: return pure_call(IntrinsicOp::WARP_ACTIVE_ALL_EQUAL);
-            case CallOp::WARP_ACTIVE_BIT_AND: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_AND);
-            case CallOp::WARP_ACTIVE_BIT_OR: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_OR);
-            case CallOp::WARP_ACTIVE_BIT_XOR: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_XOR);
-            case CallOp::WARP_ACTIVE_COUNT_BITS: return pure_call(IntrinsicOp::WARP_ACTIVE_COUNT_BITS);
-            case CallOp::WARP_ACTIVE_MAX: return pure_call(IntrinsicOp::WARP_ACTIVE_MAX);
-            case CallOp::WARP_ACTIVE_MIN: return pure_call(IntrinsicOp::WARP_ACTIVE_MIN);
-            case CallOp::WARP_ACTIVE_PRODUCT: return pure_call(IntrinsicOp::WARP_ACTIVE_PRODUCT);
-            case CallOp::WARP_ACTIVE_SUM: return pure_call(IntrinsicOp::WARP_ACTIVE_SUM);
-            case CallOp::WARP_ACTIVE_ALL: return pure_call(IntrinsicOp::WARP_ACTIVE_ALL);
-            case CallOp::WARP_ACTIVE_ANY: return pure_call(IntrinsicOp::WARP_ACTIVE_ANY);
-            case CallOp::WARP_ACTIVE_BIT_MASK: return pure_call(IntrinsicOp::WARP_ACTIVE_BIT_MASK);
-            case CallOp::WARP_PREFIX_COUNT_BITS: return pure_call(IntrinsicOp::WARP_PREFIX_COUNT_BITS);
-            case CallOp::WARP_PREFIX_SUM: return pure_call(IntrinsicOp::WARP_PREFIX_SUM);
-            case CallOp::WARP_PREFIX_PRODUCT: return pure_call(IntrinsicOp::WARP_PREFIX_PRODUCT);
-            case CallOp::WARP_READ_LANE: return pure_call(IntrinsicOp::WARP_READ_LANE);
-            case CallOp::WARP_READ_FIRST_ACTIVE_LANE: return pure_call(IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE);
+            case CallOp::DDX: return cta_call(ThreadGroupOp::RASTER_QUAD_DDX);
+            case CallOp::DDY: return cta_call(ThreadGroupOp::RASTER_QUAD_DDY);
+            case CallOp::SHADER_EXECUTION_REORDER: return cta_call(ThreadGroupOp::SHADER_EXECUTION_REORDER);
+            case CallOp::SYNCHRONIZE_BLOCK: return cta_call(ThreadGroupOp::SYNCHRONIZE_BLOCK);
+            case CallOp::WARP_IS_FIRST_ACTIVE_LANE: return cta_call(ThreadGroupOp::WARP_IS_FIRST_ACTIVE_LANE);
+            case CallOp::WARP_FIRST_ACTIVE_LANE: return cta_call(ThreadGroupOp::WARP_FIRST_ACTIVE_LANE);
+            case CallOp::WARP_ACTIVE_ALL_EQUAL: return cta_call(ThreadGroupOp::WARP_ACTIVE_ALL_EQUAL);
+            case CallOp::WARP_ACTIVE_BIT_AND: return cta_call(ThreadGroupOp::WARP_ACTIVE_BIT_AND);
+            case CallOp::WARP_ACTIVE_BIT_OR: return cta_call(ThreadGroupOp::WARP_ACTIVE_BIT_OR);
+            case CallOp::WARP_ACTIVE_BIT_XOR: return cta_call(ThreadGroupOp::WARP_ACTIVE_BIT_XOR);
+            case CallOp::WARP_ACTIVE_COUNT_BITS: return cta_call(ThreadGroupOp::WARP_ACTIVE_COUNT_BITS);
+            case CallOp::WARP_ACTIVE_MAX: return cta_call(ThreadGroupOp::WARP_ACTIVE_MAX);
+            case CallOp::WARP_ACTIVE_MIN: return cta_call(ThreadGroupOp::WARP_ACTIVE_MIN);
+            case CallOp::WARP_ACTIVE_PRODUCT: return cta_call(ThreadGroupOp::WARP_ACTIVE_PRODUCT);
+            case CallOp::WARP_ACTIVE_SUM: return cta_call(ThreadGroupOp::WARP_ACTIVE_SUM);
+            case CallOp::WARP_ACTIVE_ALL: return cta_call(ThreadGroupOp::WARP_ACTIVE_ALL);
+            case CallOp::WARP_ACTIVE_ANY: return cta_call(ThreadGroupOp::WARP_ACTIVE_ANY);
+            case CallOp::WARP_ACTIVE_BIT_MASK: return cta_call(ThreadGroupOp::WARP_ACTIVE_BIT_MASK);
+            case CallOp::WARP_PREFIX_COUNT_BITS: return cta_call(ThreadGroupOp::WARP_PREFIX_COUNT_BITS);
+            case CallOp::WARP_PREFIX_SUM: return cta_call(ThreadGroupOp::WARP_PREFIX_SUM);
+            case CallOp::WARP_PREFIX_PRODUCT: return cta_call(ThreadGroupOp::WARP_PREFIX_PRODUCT);
+            case CallOp::WARP_READ_LANE: return cta_call(ThreadGroupOp::WARP_READ_LANE);
+            case CallOp::WARP_READ_FIRST_ACTIVE_LANE: return cta_call(ThreadGroupOp::WARP_READ_FIRST_ACTIVE_LANE);
             case CallOp::INDIRECT_SET_DISPATCH_KERNEL: return resource_call(IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL);
             case CallOp::INDIRECT_SET_DISPATCH_COUNT: return resource_call(IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT);
             case CallOp::TEXTURE2D_SAMPLE: return resource_call(IntrinsicOp::TEXTURE2D_SAMPLE);
@@ -725,7 +735,6 @@ private:
             case CallOp::TEXTURE3D_SAMPLE_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL);
             case CallOp::TEXTURE3D_SAMPLE_GRAD: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD);
             case CallOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return resource_call(IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL);
-            case CallOp::SHADER_EXECUTION_REORDER: return resource_call(IntrinsicOp::SHADER_EXECUTION_REORDER);
             case CallOp::CLOCK: return b.clock();
         }
         LUISA_NOT_IMPLEMENTED();

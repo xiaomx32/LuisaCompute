@@ -27,7 +27,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINARY_GREATER_EQUAL: return "binary_greater_equal";
         case IntrinsicOp::BINARY_EQUAL: return "binary_equal";
         case IntrinsicOp::BINARY_NOT_EQUAL: return "binary_not_equal";
-        case IntrinsicOp::SYNCHRONIZE_BLOCK: return "synchronize_block";
         case IntrinsicOp::ALL: return "all";
         case IntrinsicOp::ANY: return "any";
         case IntrinsicOp::SELECT: return "select";
@@ -191,30 +190,8 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return "ray_query_is_triangle_candidate";
         case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return "ray_query_is_procedural_candidate";
         case IntrinsicOp::RASTER_DISCARD: return "raster_discard";
-        case IntrinsicOp::RASTER_DDX: return "raster_ddx";
-        case IntrinsicOp::RASTER_DDY: return "raster_ddy";
-        case IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE: return "warp_is_first_active_lane";
-        case IntrinsicOp::WARP_FIRST_ACTIVE_LANE: return "warp_first_active_lane";
-        case IntrinsicOp::WARP_ACTIVE_ALL_EQUAL: return "warp_active_all_equal";
-        case IntrinsicOp::WARP_ACTIVE_BIT_AND: return "warp_active_bit_and";
-        case IntrinsicOp::WARP_ACTIVE_BIT_OR: return "warp_active_bit_or";
-        case IntrinsicOp::WARP_ACTIVE_BIT_XOR: return "warp_active_bit_xor";
-        case IntrinsicOp::WARP_ACTIVE_COUNT_BITS: return "warp_active_count_bits";
-        case IntrinsicOp::WARP_ACTIVE_MAX: return "warp_active_max";
-        case IntrinsicOp::WARP_ACTIVE_MIN: return "warp_active_min";
-        case IntrinsicOp::WARP_ACTIVE_PRODUCT: return "warp_active_product";
-        case IntrinsicOp::WARP_ACTIVE_SUM: return "warp_active_sum";
-        case IntrinsicOp::WARP_ACTIVE_ALL: return "warp_active_all";
-        case IntrinsicOp::WARP_ACTIVE_ANY: return "warp_active_any";
-        case IntrinsicOp::WARP_ACTIVE_BIT_MASK: return "warp_active_bit_mask";
-        case IntrinsicOp::WARP_PREFIX_COUNT_BITS: return "warp_prefix_count_bits";
-        case IntrinsicOp::WARP_PREFIX_SUM: return "warp_prefix_sum";
-        case IntrinsicOp::WARP_PREFIX_PRODUCT: return "warp_prefix_product";
-        case IntrinsicOp::WARP_READ_LANE: return "warp_read_lane";
-        case IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE: return "warp_read_first_active_lane";
         case IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel";
         case IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count";
-        case IntrinsicOp::SHADER_EXECUTION_REORDER: return "shader_execution_reorder";
     }
     LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation: {}.",
                               static_cast<uint32_t>(op));
@@ -247,7 +224,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"binary_greater_equal", IntrinsicOp::BINARY_GREATER_EQUAL},
         {"binary_equal", IntrinsicOp::BINARY_EQUAL},
         {"binary_not_equal", IntrinsicOp::BINARY_NOT_EQUAL},
-        {"synchronize_block", IntrinsicOp::SYNCHRONIZE_BLOCK},
         {"all", IntrinsicOp::ALL},
         {"any", IntrinsicOp::ANY},
         {"select", IntrinsicOp::SELECT},
@@ -411,30 +387,8 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"ray_query_is_triangle_candidate", IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE},
         {"ray_query_is_procedural_candidate", IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE},
         {"raster_discard", IntrinsicOp::RASTER_DISCARD},
-        {"raster_ddx", IntrinsicOp::RASTER_DDX},
-        {"raster_ddy", IntrinsicOp::RASTER_DDY},
-        {"warp_is_first_active_lane", IntrinsicOp::WARP_IS_FIRST_ACTIVE_LANE},
-        {"warp_first_active_lane", IntrinsicOp::WARP_FIRST_ACTIVE_LANE},
-        {"warp_active_all_equal", IntrinsicOp::WARP_ACTIVE_ALL_EQUAL},
-        {"warp_active_bit_and", IntrinsicOp::WARP_ACTIVE_BIT_AND},
-        {"warp_active_bit_or", IntrinsicOp::WARP_ACTIVE_BIT_OR},
-        {"warp_active_bit_xor", IntrinsicOp::WARP_ACTIVE_BIT_XOR},
-        {"warp_active_count_bits", IntrinsicOp::WARP_ACTIVE_COUNT_BITS},
-        {"warp_active_max", IntrinsicOp::WARP_ACTIVE_MAX},
-        {"warp_active_min", IntrinsicOp::WARP_ACTIVE_MIN},
-        {"warp_active_product", IntrinsicOp::WARP_ACTIVE_PRODUCT},
-        {"warp_active_sum", IntrinsicOp::WARP_ACTIVE_SUM},
-        {"warp_active_all", IntrinsicOp::WARP_ACTIVE_ALL},
-        {"warp_active_any", IntrinsicOp::WARP_ACTIVE_ANY},
-        {"warp_active_bit_mask", IntrinsicOp::WARP_ACTIVE_BIT_MASK},
-        {"warp_prefix_count_bits", IntrinsicOp::WARP_PREFIX_COUNT_BITS},
-        {"warp_prefix_sum", IntrinsicOp::WARP_PREFIX_SUM},
-        {"warp_prefix_product", IntrinsicOp::WARP_PREFIX_PRODUCT},
-        {"warp_read_lane", IntrinsicOp::WARP_READ_LANE},
-        {"warp_read_first_active_lane", IntrinsicOp::WARP_READ_FIRST_ACTIVE_LANE},
         {"indirect_dispatch_set_kernel", IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL},
         {"indirect_dispatch_set_count", IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT},
-        {"shader_execution_reorder", IntrinsicOp::SHADER_EXECUTION_REORDER},
     };
     auto iter = m.find(name);
     LUISA_ASSERT(iter != m.end(), "Unknown intrinsic operation: {}.", name);

@@ -24,6 +24,7 @@
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
+#include <luisa/xir/instructions/thread_group.h>
 #include <luisa/xir/instructions/unreachable.h>
 
 namespace luisa::compute::xir {
@@ -110,7 +111,7 @@ public:
     OutlineInst *outline() noexcept;
     RayQueryInst *ray_query(Value *query_object) noexcept;
 
-    AtomicInst *atomic(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept;
+    AtomicInst *call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept;
     AtomicInst *atomic_fetch_add(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_fetch_sub(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_fetch_and(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
@@ -120,6 +121,13 @@ public:
     AtomicInst *atomic_fetch_max(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_compare_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *expected, Value *desired) noexcept;
+
+    ThreadGroupInst *call(const Type *type, ThreadGroupOp op, luisa::span<Value *const> operands) noexcept;
+    ThreadGroupInst *shader_execution_reorder() noexcept;
+    ThreadGroupInst *shader_execution_reorder(Value *hint, Value *hint_bits) noexcept;
+    ThreadGroupInst *synchronize_block() noexcept;
+    ThreadGroupInst *raster_quad_ddx(const Type *type, Value *value) noexcept;
+    ThreadGroupInst *raster_quad_ddy(const Type *type, Value *value) noexcept;
 };
 
 }// namespace luisa::compute::xir

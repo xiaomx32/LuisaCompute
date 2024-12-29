@@ -32,6 +32,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/return.cpp
         instructions/store.cpp
         instructions/switch.cpp
+        instructions/thread_group.cpp
         instructions/unreachable.cpp
 
         # derived metadata

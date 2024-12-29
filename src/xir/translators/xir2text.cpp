@@ -27,6 +27,7 @@
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
+#include <luisa/xir/instructions/thread_group.h>
 #include <luisa/xir/instructions/unreachable.h>
 #include <luisa/xir/metadata/comment.h>
 #include <luisa/xir/metadata/location.h>
@@ -356,6 +357,11 @@ private:
         _emit_operands(inst);
     }
 
+    void _emit_thread_group_inst(const ThreadGroupInst *inst) noexcept {
+        _main << "thread_group " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
     void _emit_call_inst(const CallInst *inst) noexcept {
         _main << "call ";
         _emit_operands(inst);
@@ -487,7 +493,7 @@ private:
                 _emit_atomic_inst(static_cast<const AtomicInst *>(inst));
                 break;
             case DerivedInstructionTag::ALU: break;
-            case DerivedInstructionTag::CTA: break;
+            case DerivedInstructionTag::THREAD_GROUP: break;
             case DerivedInstructionTag::RESOURCE: break;
         }
         _main << ";";
