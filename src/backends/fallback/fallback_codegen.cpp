@@ -2502,7 +2502,6 @@ private:
             case xir::IntrinsicOp::RAY_QUERY_PROCEED: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
-            case xir::IntrinsicOp::RASTER_DISCARD: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
             case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
         }
@@ -2754,6 +2753,7 @@ private:
                 }
                 return b.CreateRetVoid();
             }
+            case xir::DerivedInstructionTag::RASTER_DISCARD: LUISA_NOT_IMPLEMENTED();
             case xir::DerivedInstructionTag::PHI: {
                 LUISA_ERROR_WITH_LOCATION("Unexpected phi instruction. Please run reg2mem pass first.");
             }

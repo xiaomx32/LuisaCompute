@@ -189,7 +189,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::RAY_QUERY_PROCEED: return "ray_query_proceed";
         case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return "ray_query_is_triangle_candidate";
         case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return "ray_query_is_procedural_candidate";
-        case IntrinsicOp::RASTER_DISCARD: return "raster_discard";
         case IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel";
         case IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count";
     }
@@ -386,7 +385,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"ray_query_proceed", IntrinsicOp::RAY_QUERY_PROCEED},
         {"ray_query_is_triangle_candidate", IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE},
         {"ray_query_is_procedural_candidate", IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE},
-        {"raster_discard", IntrinsicOp::RASTER_DISCARD},
         {"indirect_dispatch_set_kernel", IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL},
         {"indirect_dispatch_set_count", IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT},
     };

@@ -24,6 +24,7 @@
 #include <luisa/xir/instructions/phi.h>
 #include <luisa/xir/instructions/print.h>
 #include <luisa/xir/instructions/ray_query.h>
+#include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
@@ -319,6 +320,10 @@ private:
         }
     }
 
+    void _emit_raster_discard_inst(const RasterDiscardInst *inst [[maybe_unused]]) noexcept {
+        _main << "raster_discard";
+    }
+
     void _emit_phi_inst(const PhiInst *inst) noexcept {
         _main << "phi";
         for (auto i = 0u; i < inst->incoming_count(); i++) {
@@ -439,6 +444,9 @@ private:
                 break;
             case DerivedInstructionTag::RETURN:
                 _emit_return_inst(static_cast<const ReturnInst *>(inst));
+                break;
+            case DerivedInstructionTag::RASTER_DISCARD:
+                _emit_raster_discard_inst(static_cast<const RasterDiscardInst *>(inst));
                 break;
             case DerivedInstructionTag::PHI:
                 _emit_phi_inst(static_cast<const PhiInst *>(inst));

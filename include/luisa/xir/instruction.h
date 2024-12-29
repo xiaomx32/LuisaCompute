@@ -23,8 +23,12 @@ enum struct DerivedInstructionTag {
     UNREACHABLE,       // basic block terminator: unreachable
     BREAK,             // basic block terminator: break (removed after control flow normalization)
     CONTINUE,          // basic block terminator: continue (removed after control flow normalization)
+
     RETURN,            // basic block terminator: return (early returns are removed after control flow normalization)
-    PHI,               // basic block beginning: phi nodes
+    RASTER_DISCARD,    // basic block terminator: raster discard
+
+    /* PHI nodes */
+    PHI,// basic block beginning: phi nodes
 
     /* variable instructions */
     ALLOCA,

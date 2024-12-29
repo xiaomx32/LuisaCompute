@@ -21,6 +21,7 @@
 #include <luisa/xir/instructions/phi.h>
 #include <luisa/xir/instructions/print.h>
 #include <luisa/xir/instructions/ray_query.h>
+#include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
@@ -74,6 +75,7 @@ public:
     UnreachableInst *unreachable_(luisa::string_view message = {}) noexcept;
     ReturnInst *return_(Value *value) noexcept;
     ReturnInst *return_void() noexcept;
+    RasterDiscardInst *raster_discard() noexcept;
 
     AssertInst *assert_(Value *condition, luisa::string_view message = {}) noexcept;
     AssumeInst *assume_(Value *condition, luisa::string_view message = {}) noexcept;

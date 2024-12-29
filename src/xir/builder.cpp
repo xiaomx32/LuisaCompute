@@ -74,6 +74,10 @@ ReturnInst *Builder::return_void() noexcept {
     return _create_and_append_instruction<ReturnInst>();
 }
 
+RasterDiscardInst *Builder::raster_discard() noexcept {
+    return _create_and_append_instruction<RasterDiscardInst>();
+}
+
 CallInst *Builder::call(const Type *type, Value *callee, luisa::span<Value *const> arguments) noexcept {
     return _create_and_append_instruction<CallInst>(type, callee, arguments);
 }

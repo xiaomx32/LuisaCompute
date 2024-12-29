@@ -662,6 +662,7 @@ private:
                 }
                 return b.unreachable_(message);
             }
+            case CallOp::RASTER_DISCARD: return b.raster_discard();
             case CallOp::ZERO: return _translate_zero_or_one(expr->type(), 0);
             case CallOp::ONE: return _translate_zero_or_one(expr->type(), 1);
             case CallOp::PACK: LUISA_NOT_IMPLEMENTED();
@@ -701,7 +702,6 @@ private:
             case CallOp::RAY_QUERY_PROCEED: return resource_call(IntrinsicOp::RAY_QUERY_PROCEED);
             case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE);
             case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return resource_call(IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE);
-            case CallOp::RASTER_DISCARD: return pure_call(IntrinsicOp::RASTER_DISCARD);
             case CallOp::DDX: return cta_call(ThreadGroupOp::RASTER_QUAD_DDX);
             case CallOp::DDY: return cta_call(ThreadGroupOp::RASTER_QUAD_DDY);
             case CallOp::SHADER_EXECUTION_REORDER: return cta_call(ThreadGroupOp::SHADER_EXECUTION_REORDER);

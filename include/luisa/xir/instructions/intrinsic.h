@@ -127,6 +127,12 @@ enum struct IntrinsicOp {
     MATRIX_TRANSPOSE,  // (floatNxN) -> floatNxN
     MATRIX_INVERSE,    // (floatNxN) -> floatNxN
 
+    // aggregate operations
+    AGGREGATE,
+    SHUFFLE,
+    INSERT,
+    EXTRACT,
+
     // resource operations
     BUFFER_READ, /// [(buffer, index) -> value]: reads the index-th element in buffer
     BUFFER_WRITE,/// [(buffer, index, value) -> void]: writes value into the index-th element of buffer
@@ -194,12 +200,6 @@ enum struct IntrinsicOp {
     DEVICE_ADDRESS_READ,           // (address: uint64) -> value: T
     DEVICE_ADDRESS_WRITE,          // (address: uint64, value: T) -> void
 
-    // aggregate operations
-    AGGREGATE,
-    SHUFFLE,
-    INSERT,
-    EXTRACT,
-
     // autodiff ops
     AUTODIFF_REQUIRES_GRADIENT,  // (expr) -> void
     AUTODIFF_GRADIENT,           // (expr) -> expr
@@ -247,9 +247,6 @@ enum struct IntrinsicOp {
     RAY_QUERY_PROCEED,
     RAY_QUERY_IS_TRIANGLE_CANDIDATE,
     RAY_QUERY_IS_PROCEDURAL_CANDIDATE,
-
-    // rasterization
-    RASTER_DISCARD,// (): void
 
     // indirect dispatch
     INDIRECT_DISPATCH_SET_KERNEL,// (Buffer, uint offset, uint3 block_size, uint3 dispatch_size, uint kernel_id)
