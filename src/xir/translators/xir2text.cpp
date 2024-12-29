@@ -500,8 +500,10 @@ private:
             case DerivedInstructionTag::ATOMIC:
                 _emit_atomic_inst(static_cast<const AtomicInst *>(inst));
                 break;
-            case DerivedInstructionTag::ALU: break;
-            case DerivedInstructionTag::THREAD_GROUP: break;
+            case DerivedInstructionTag::THREAD_GROUP:
+                _emit_thread_group_inst(static_cast<const ThreadGroupInst *>(inst));
+                break;
+            case DerivedInstructionTag::ARITHMETIC: break;
             case DerivedInstructionTag::RESOURCE: break;
         }
         _main << ";";

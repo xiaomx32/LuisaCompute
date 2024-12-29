@@ -1,7 +1,5 @@
 #pragma once
 
-#include "instruction.h"
-
 #include <luisa/xir/user.h>
 
 namespace luisa::compute::xir {
@@ -23,7 +21,6 @@ enum struct DerivedInstructionTag {
     UNREACHABLE,       // basic block terminator: unreachable
     BREAK,             // basic block terminator: break (removed after control flow normalization)
     CONTINUE,          // basic block terminator: continue (removed after control flow normalization)
-
     RETURN,            // basic block terminator: return (early returns are removed after control flow normalization)
     RASTER_DISCARD,    // basic block terminator: raster discard
 
@@ -40,7 +37,7 @@ enum struct DerivedInstructionTag {
     ATOMIC,// operates on buffers / shared memory
 
     /* ALU (arithmetic logic unit) instructions */
-    ALU,// all are pure functions, free to move/eliminate
+    ARITHMETIC,// arithmetic operations
 
     /* thread-group instructions */
     THREAD_GROUP,// volatile, may involve synchronization and cannot be moved/eliminated

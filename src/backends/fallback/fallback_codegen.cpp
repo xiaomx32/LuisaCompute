@@ -2850,7 +2850,7 @@ private:
                 auto llvm_result_type = _translate_type(inst->type(), true);
                 return b.CreateZExtOrTrunc(call, llvm_result_type);
             }
-            case xir::DerivedInstructionTag::ALU: break;
+            case xir::DerivedInstructionTag::ARITHMETIC: break;
             case xir::DerivedInstructionTag::RESOURCE: break;
             case xir::DerivedInstructionTag::THREAD_GROUP: {
                 auto cta_inst = static_cast<const xir::ThreadGroupInst *>(inst);

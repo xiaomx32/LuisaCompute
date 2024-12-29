@@ -16,6 +16,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # derived instructions
         instructions/alloca.cpp
+        instructions/arithmetic.cpp
         instructions/assert.cpp
         instructions/assume.cpp
         instructions/atomic.cpp
