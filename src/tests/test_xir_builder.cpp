@@ -31,7 +31,7 @@ int main() {
     b.set_insertion_point(f->create_body_block());
     auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
     auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
-    auto coord = b.call(Type::of<uint3>(), xir::IntrinsicOp::DISPATCH_ID, {});
+    auto coord = xir::SPR_DispatchID::create();
     auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, u32_zero});
     auto outline = b.outline();
     auto outline_body = outline->create_target_block();

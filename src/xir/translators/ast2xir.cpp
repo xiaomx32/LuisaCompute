@@ -242,39 +242,26 @@ private:
         return _translate_typed_literal(key);
     }
 
-    [[nodiscard]] static Value *_translate_builtin_variable(Builder &b, Variable ast_var) noexcept {
+    [[nodiscard]] static Value *_translate_builtin_variable(Variable ast_var) noexcept {
         LUISA_ASSERT(ast_var.is_builtin(), "Unresolved variable reference.");
-        auto op = [tag = ast_var.tag(), t = ast_var.type()] {
+        auto r = [tag = ast_var.tag()] {
             switch (tag) {
-                case Variable::Tag::THREAD_ID:
-                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid thread_id type: {}", t->description());
-                    return IntrinsicOp::THREAD_ID;
-                case Variable::Tag::BLOCK_ID:
-                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid block_id type: {}.", t->description());
-                    return IntrinsicOp::BLOCK_ID;
-                case Variable::Tag::DISPATCH_ID:
-                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid dispatch_id type: {}", t->description());
-                    return IntrinsicOp::DISPATCH_ID;
-                case Variable::Tag::DISPATCH_SIZE:
-                    LUISA_ASSERT(t == Type::of<uint3>(), "Invalid dispatch_size type: {}", t->description());
-                    return IntrinsicOp::DISPATCH_SIZE;
-                case Variable::Tag::KERNEL_ID:
-                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid kernel_id type: {}", t->description());
-                    return IntrinsicOp::KERNEL_ID;
-                case Variable::Tag::WARP_LANE_COUNT:
-                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid warp_size type: {}", t->description());
-                    return IntrinsicOp::WARP_SIZE;
-                case Variable::Tag::WARP_LANE_ID:
-                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid warp_lane_id type: {}", t->description());
-                    return IntrinsicOp::WARP_LANE_ID;
-                case Variable::Tag::OBJECT_ID:
-                    LUISA_ASSERT(t == Type::of<uint>(), "Invalid object_id type: {}", t->description());
-                    return IntrinsicOp::OBJECT_ID;
+                case Variable::Tag::THREAD_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::THREAD_ID);
+                case Variable::Tag::BLOCK_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::BLOCK_ID);
+                case Variable::Tag::DISPATCH_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::DISPATCH_ID);
+                case Variable::Tag::DISPATCH_SIZE: return SpecialRegister::create(DerivedSpecialRegisterTag::DISPATCH_SIZE);
+                case Variable::Tag::KERNEL_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::KERNEL_ID);
+                case Variable::Tag::WARP_LANE_COUNT: return SpecialRegister::create(DerivedSpecialRegisterTag::WARP_SIZE);
+                case Variable::Tag::WARP_LANE_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::WARP_LANE_ID);
+                case Variable::Tag::OBJECT_ID: return SpecialRegister::create(DerivedSpecialRegisterTag::OBJECT_ID);
                 default: break;
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected variable type.");
         }();
-        return b.call(ast_var.type(), op, {});
+        LUISA_ASSERT(r->type() == ast_var.type(), "Special register {} type mismatch: {} vs {}.",
+                     xir::to_string(r->derived_special_register_tag()),
+                     r->type()->description(), ast_var.type()->description());
+        return r;
     }
 
     [[nodiscard]] Value *_translate_ref_expr(Builder &b, const RefExpr *expr, bool load_lval) noexcept {
@@ -284,7 +271,7 @@ private:
             auto var = iter->second;
             return load_lval && var->is_lvalue() ? b.load(expr->type(), var) : var;
         }
-        return _translate_builtin_variable(b, ast_var);
+        return _translate_builtin_variable(ast_var);
     }
 
     [[nodiscard]] Value *_translate_constant_expr(const ConstantExpr *expr) noexcept {
@@ -1049,7 +1036,7 @@ private:
                                "Local variable already exists.");
             auto v = _current.variables.emplace(ast_local, b.alloca_local(ast_local.type())).first->second;
             if (ast_local.is_builtin()) {
-                auto builtin_init = _translate_builtin_variable(b, ast_local);
+                auto builtin_init = _translate_builtin_variable(ast_local);
                 LUISA_ASSERT(v->type() == builtin_init->type(), "Variable type mismatch.");
                 b.store(v, builtin_init);
             }

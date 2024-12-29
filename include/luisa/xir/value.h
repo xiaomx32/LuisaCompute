@@ -15,6 +15,7 @@ enum struct DerivedValueTag {
     INSTRUCTION,
     CONSTANT,
     ARGUMENT,
+    SPECIAL_REGISTER,
 };
 
 class LC_XIR_API Value : public PooledObject,

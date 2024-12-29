@@ -324,6 +324,22 @@ private:
         }
     }
 
+    [[nodiscard]] llvm::Value *_translate_special_register(CurrentFunction &current, IRBuilder &b,
+                                                           const xir::SpecialRegister *sreg) noexcept {
+        switch (sreg->derived_special_register_tag()) {
+            case xir::DerivedSpecialRegisterTag::THREAD_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_thread_id];
+            case xir::DerivedSpecialRegisterTag::BLOCK_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_id];
+            case xir::DerivedSpecialRegisterTag::WARP_LANE_ID: return llvm::ConstantInt::get(b.getInt32Ty(), 0);// CPU only has one lane
+            case xir::DerivedSpecialRegisterTag::DISPATCH_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_id];
+            case xir::DerivedSpecialRegisterTag::KERNEL_ID: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedSpecialRegisterTag::OBJECT_ID: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedSpecialRegisterTag::BLOCK_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_size];
+            case xir::DerivedSpecialRegisterTag::WARP_SIZE: return llvm::ConstantInt::get(b.getInt32Ty(), 1);// CPU only has one lane
+            case xir::DerivedSpecialRegisterTag::DISPATCH_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_size];
+        }
+        LUISA_ERROR_WITH_LOCATION("Invalid special register.");
+    }
+
     [[nodiscard]] llvm::Value *_lookup_value(CurrentFunction &current, IRBuilder &b, const xir::Value *v, bool load_global = true) noexcept {
         LUISA_ASSERT(v != nullptr, "Value is null.");
         switch (v->derived_value_tag()) {
@@ -347,6 +363,10 @@ private:
                 auto iter = current.value_map.find(v);
                 LUISA_ASSERT(iter != current.value_map.end(), "Value not found.");
                 return iter->second;
+            }
+            case xir::DerivedValueTag::SPECIAL_REGISTER: {
+                auto sreg = static_cast<const xir::SpecialRegister *>(v);
+                return _translate_special_register(current, b, sreg);
             }
         }
         LUISA_ERROR_WITH_LOCATION("Invalid value.");
@@ -1959,15 +1979,6 @@ private:
             case xir::IntrinsicOp::BINARY_GREATER_EQUAL: return _translate_binary_greater_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_EQUAL: return _translate_binary_equal(current, b, inst->operand(0u), inst->operand(1u));
             case xir::IntrinsicOp::BINARY_NOT_EQUAL: return _translate_binary_not_equal(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::IntrinsicOp::THREAD_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_thread_id];
-            case xir::IntrinsicOp::BLOCK_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_id];
-            case xir::IntrinsicOp::WARP_LANE_ID: return llvm::ConstantInt::get(b.getInt32Ty(), 0);// CPU only has one lane
-            case xir::IntrinsicOp::DISPATCH_ID: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_id];
-            case xir::IntrinsicOp::KERNEL_ID: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::OBJECT_ID: LUISA_NOT_IMPLEMENTED();
-            case xir::IntrinsicOp::BLOCK_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_block_size];
-            case xir::IntrinsicOp::WARP_SIZE: return llvm::ConstantInt::get(b.getInt32Ty(), 1);// CPU only has one lane
-            case xir::IntrinsicOp::DISPATCH_SIZE: return current.builtin_variables[CurrentFunction::builtin_variable_index_dispatch_size];
             case xir::IntrinsicOp::SYNCHRONIZE_BLOCK: LUISA_NOT_IMPLEMENTED();
             case xir::IntrinsicOp::ALL: {
                 auto llvm_operand = _lookup_value(current, b, inst->operand(0u));

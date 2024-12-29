@@ -27,15 +27,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::BINARY_GREATER_EQUAL: return "binary_greater_equal";
         case IntrinsicOp::BINARY_EQUAL: return "binary_equal";
         case IntrinsicOp::BINARY_NOT_EQUAL: return "binary_not_equal";
-        case IntrinsicOp::THREAD_ID: return "thread_id";
-        case IntrinsicOp::BLOCK_ID: return "block_id";
-        case IntrinsicOp::WARP_LANE_ID: return "warp_lane_id";
-        case IntrinsicOp::DISPATCH_ID: return "dispatch_id";
-        case IntrinsicOp::KERNEL_ID: return "kernel_id";
-        case IntrinsicOp::OBJECT_ID: return "object_id";
-        case IntrinsicOp::BLOCK_SIZE: return "block_size";
-        case IntrinsicOp::WARP_SIZE: return "warp_size";
-        case IntrinsicOp::DISPATCH_SIZE: return "dispatch_size";
         case IntrinsicOp::SYNCHRONIZE_BLOCK: return "synchronize_block";
         case IntrinsicOp::ALL: return "all";
         case IntrinsicOp::ANY: return "any";
@@ -266,15 +257,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"binary_greater_equal", IntrinsicOp::BINARY_GREATER_EQUAL},
         {"binary_equal", IntrinsicOp::BINARY_EQUAL},
         {"binary_not_equal", IntrinsicOp::BINARY_NOT_EQUAL},
-        {"thread_id", IntrinsicOp::THREAD_ID},
-        {"block_id", IntrinsicOp::BLOCK_ID},
-        {"warp_lane_id", IntrinsicOp::WARP_LANE_ID},
-        {"dispatch_id", IntrinsicOp::DISPATCH_ID},
-        {"kernel_id", IntrinsicOp::KERNEL_ID},
-        {"object_id", IntrinsicOp::OBJECT_ID},
-        {"block_size", IntrinsicOp::BLOCK_SIZE},
-        {"warp_size", IntrinsicOp::WARP_SIZE},
-        {"dispatch_size", IntrinsicOp::DISPATCH_SIZE},
         {"synchronize_block", IntrinsicOp::SYNCHRONIZE_BLOCK},
         {"all", IntrinsicOp::ALL},
         {"any", IntrinsicOp::ANY},

@@ -41,17 +41,6 @@ enum struct IntrinsicOp {
     BINARY_EQUAL,
     BINARY_NOT_EQUAL,
 
-    // thread coordination
-    THREAD_ID,
-    BLOCK_ID,
-    WARP_LANE_ID,
-    DISPATCH_ID,
-    KERNEL_ID,
-    OBJECT_ID,
-    BLOCK_SIZE,
-    WARP_SIZE,
-    DISPATCH_SIZE,
-
     // block synchronization
     SYNCHRONIZE_BLOCK,// ()
 

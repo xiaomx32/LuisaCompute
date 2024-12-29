@@ -2,6 +2,7 @@
 
 #include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
+#include <luisa/xir/special_register.h>
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
