@@ -208,6 +208,7 @@
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
+#include <luisa/xir/instructions/atomic.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>

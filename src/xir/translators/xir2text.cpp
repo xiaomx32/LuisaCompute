@@ -8,6 +8,7 @@
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
+#include <luisa/xir/instructions/atomic.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/if.h>
 #include <luisa/xir/instructions/break.h>
@@ -350,6 +351,11 @@ private:
         _emit_operands(inst);
     }
 
+    void _emit_atomic_inst(const AtomicInst *inst) noexcept {
+        _main << "atomic " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
     void _emit_call_inst(const CallInst *inst) noexcept {
         _main << "call ";
         _emit_operands(inst);
@@ -476,6 +482,9 @@ private:
                 break;
             case DerivedInstructionTag::CLOCK:
                 _emit_clock_inst(static_cast<const ClockInst *>(inst));
+                break;
+            case DerivedInstructionTag::ATOMIC:
+                _emit_atomic_inst(static_cast<const AtomicInst *>(inst));
                 break;
             case DerivedInstructionTag::ALU: break;
             case DerivedInstructionTag::CTA: break;

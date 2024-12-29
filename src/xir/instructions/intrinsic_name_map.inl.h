@@ -97,15 +97,6 @@ luisa::string to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::MATRIX_DETERMINANT: return "matrix_determinant";
         case IntrinsicOp::MATRIX_TRANSPOSE: return "matrix_transpose";
         case IntrinsicOp::MATRIX_INVERSE: return "matrix_inverse";
-        case IntrinsicOp::ATOMIC_EXCHANGE: return "atomic_exchange";
-        case IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: return "atomic_compare_exchange";
-        case IntrinsicOp::ATOMIC_FETCH_ADD: return "atomic_fetch_add";
-        case IntrinsicOp::ATOMIC_FETCH_SUB: return "atomic_fetch_sub";
-        case IntrinsicOp::ATOMIC_FETCH_AND: return "atomic_fetch_and";
-        case IntrinsicOp::ATOMIC_FETCH_OR: return "atomic_fetch_or";
-        case IntrinsicOp::ATOMIC_FETCH_XOR: return "atomic_fetch_xor";
-        case IntrinsicOp::ATOMIC_FETCH_MIN: return "atomic_fetch_min";
-        case IntrinsicOp::ATOMIC_FETCH_MAX: return "atomic_fetch_max";
         case IntrinsicOp::BUFFER_READ: return "buffer_read";
         case IntrinsicOp::BUFFER_WRITE: return "buffer_write";
         case IntrinsicOp::BUFFER_SIZE: return "buffer_size";
@@ -326,15 +317,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"matrix_determinant", IntrinsicOp::MATRIX_DETERMINANT},
         {"matrix_transpose", IntrinsicOp::MATRIX_TRANSPOSE},
         {"matrix_inverse", IntrinsicOp::MATRIX_INVERSE},
-        {"atomic_exchange", IntrinsicOp::ATOMIC_EXCHANGE},
-        {"atomic_compare_exchange", IntrinsicOp::ATOMIC_COMPARE_EXCHANGE},
-        {"atomic_fetch_add", IntrinsicOp::ATOMIC_FETCH_ADD},
-        {"atomic_fetch_sub", IntrinsicOp::ATOMIC_FETCH_SUB},
-        {"atomic_fetch_and", IntrinsicOp::ATOMIC_FETCH_AND},
-        {"atomic_fetch_or", IntrinsicOp::ATOMIC_FETCH_OR},
-        {"atomic_fetch_xor", IntrinsicOp::ATOMIC_FETCH_XOR},
-        {"atomic_fetch_min", IntrinsicOp::ATOMIC_FETCH_MIN},
-        {"atomic_fetch_max", IntrinsicOp::ATOMIC_FETCH_MAX},
         {"buffer_read", IntrinsicOp::BUFFER_READ},
         {"buffer_write", IntrinsicOp::BUFFER_WRITE},
         {"buffer_size", IntrinsicOp::BUFFER_SIZE},

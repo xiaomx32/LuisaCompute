@@ -18,6 +18,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/alloca.cpp
         instructions/assert.cpp
         instructions/assume.cpp
+        instructions/atomic.cpp
         instructions/call.cpp
         instructions/cast.cpp
         instructions/clock.cpp

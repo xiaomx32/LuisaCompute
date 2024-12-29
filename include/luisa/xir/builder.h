@@ -5,6 +5,7 @@
 #include <luisa/xir/instructions/alloca.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
+#include <luisa/xir/instructions/atomic.h>
 #include <luisa/xir/instructions/branch.h>
 #include <luisa/xir/instructions/break.h>
 #include <luisa/xir/instructions/call.h>
@@ -108,6 +109,17 @@ public:
 
     OutlineInst *outline() noexcept;
     RayQueryInst *ray_query(Value *query_object) noexcept;
+
+    AtomicInst *atomic(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept;
+    AtomicInst *atomic_fetch_add(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_sub(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_and(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_or(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_xor(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_min(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_fetch_max(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
+    AtomicInst *atomic_compare_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *expected, Value *desired) noexcept;
 };
 
 }// namespace luisa::compute::xir

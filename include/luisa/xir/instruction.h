@@ -202,7 +202,7 @@ class ControlFlowMergeMixin : public Base,
 public:
     using Base::Base;
     [[nodiscard]] ControlFlowMerge *control_flow_merge() noexcept final {
-        return static_cast<ControlFlowMerge *>(this);
+        return this;
     }
 };
 

@@ -130,17 +130,6 @@ enum struct IntrinsicOp {
     MATRIX_TRANSPOSE,  // (floatNxN) -> floatNxN
     MATRIX_INVERSE,    // (floatNxN) -> floatNxN
 
-    // atomic operations
-    ATOMIC_EXCHANGE,        /// [(atomic_ref, desired) -> old]: stores desired, returns old.
-    ATOMIC_COMPARE_EXCHANGE,/// [(atomic_ref, expected, desired) -> old]: stores (old == expected ? desired : old), returns old.
-    ATOMIC_FETCH_ADD,       /// [(atomic_ref, val) -> old]: stores (old + val), returns old.
-    ATOMIC_FETCH_SUB,       /// [(atomic_ref, val) -> old]: stores (old - val), returns old.
-    ATOMIC_FETCH_AND,       /// [(atomic_ref, val) -> old]: stores (old & val), returns old.
-    ATOMIC_FETCH_OR,        /// [(atomic_ref, val) -> old]: stores (old | val), returns old.
-    ATOMIC_FETCH_XOR,       /// [(atomic_ref, val) -> old]: stores (old ^ val), returns old.
-    ATOMIC_FETCH_MIN,       /// [(atomic_ref, val) -> old]: stores min(old, val), returns old.
-    ATOMIC_FETCH_MAX,       /// [(atomic_ref, val) -> old]: stores max(old, val), returns old.
-
     // resource operations
     BUFFER_READ, /// [(buffer, index) -> value]: reads the index-th element in buffer
     BUFFER_WRITE,/// [(buffer, index, value) -> void]: writes value into the index-th element of buffer

@@ -417,7 +417,8 @@ private:
                 llvm_ptr = b.CreateStructGEP(llvm_struct_type->type, llvm_ptr, padded_index);
                 ptr_type = ptr_type->members()[static_index];
             } else {
-                LUISA_ASSERT(ptr_type->is_array() || ptr_type->is_vector() || ptr_type->is_matrix(), "Invalid pointer type.");
+                LUISA_ASSERT(ptr_type->is_array() || ptr_type->is_vector() || ptr_type->is_matrix(),
+                             "Invalid pointer type: {}", ptr_type->description());
                 auto llvm_index = _lookup_value(current, b, index);
                 llvm_index = b.CreateZExtOrTrunc(llvm_index, llvm::Type::getInt64Ty(_llvm_context));
                 auto llvm_ptr_type = _translate_type(ptr_type, false);
@@ -1912,20 +1913,20 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_atomic_op(CurrentFunction &current, IRBuilder &b,
-                                                    const char *op_name, size_t value_count,
-                                                    const xir::IntrinsicInst *inst,
+                                                    const char *op_name, const xir::AtomicInst *inst,
                                                     bool byte_address = false) noexcept {
-        LUISA_ASSERT(2 + value_count <= inst->operand_count(), "Invalid atomic operation.");
-        auto buffer = inst->operand(0u);
+        auto value_count = inst->value_count();
+        auto buffer = inst->base();
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto buffer_elem_type = buffer->type()->element();
         LUISA_ASSERT(buffer_elem_type != nullptr, "Invalid buffer element type.");
-        auto slot = inst->operand(1u);
+        auto indices = inst->index_uses();
+        auto slot = indices.front()->value();
+        indices = indices.subspan(1);
         auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
         if (byte_address) {
             LUISA_ASSERT(2 + value_count == inst->operand_count(), "Invalid atomic operation.");
         }
-        auto indices = inst->operand_uses().subspan(2, inst->operand_count() - 2 - value_count);
         if (!indices.empty()) {
             llvm_elem_ptr = _translate_gep(current, b, inst->type(),
                                            buffer_elem_type, llvm_elem_ptr, indices);
@@ -1944,7 +1945,7 @@ private:
         auto llvm_func = _llvm_module->getFunction(llvm::StringRef{llvm_func_name});
         LUISA_ASSERT(llvm_func != nullptr && llvm_func->arg_size() == 1 + value_count, "Invalid atomic operation function.");
         llvm::SmallVector<llvm::Value *, 4u> llvm_args{llvm_elem_ptr};
-        for (auto value_uses : inst->operand_uses().subspan(inst->operand_count() - value_count)) {
+        for (auto value_uses : inst->value_uses()) {
             auto value = value_uses->value();
             LUISA_ASSERT(value->type() == inst->type(), "Atomic operation value type mismatch.");
             auto llvm_value = _lookup_value(current, b, value);
@@ -2409,15 +2410,6 @@ private:
             case xir::IntrinsicOp::MATRIX_DETERMINANT: return _translate_matrix_determinant(current, b, inst);
             case xir::IntrinsicOp::MATRIX_TRANSPOSE: return _translate_matrix_transpose(current, b, inst);
             case xir::IntrinsicOp::MATRIX_INVERSE: return _translate_matrix_inverse(current, b, inst);
-            case xir::IntrinsicOp::ATOMIC_EXCHANGE: return _translate_atomic_op(current, b, "exchange", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_COMPARE_EXCHANGE: return _translate_atomic_op(current, b, "compare.exchange", 2, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_ADD: return _translate_atomic_op(current, b, "fetch.add", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_SUB: return _translate_atomic_op(current, b, "fetch.sub", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_AND: return _translate_atomic_op(current, b, "fetch.and", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_OR: return _translate_atomic_op(current, b, "fetch.or", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_XOR: return _translate_atomic_op(current, b, "fetch.xor", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_MIN: return _translate_atomic_op(current, b, "fetch.min", 1, inst);
-            case xir::IntrinsicOp::ATOMIC_FETCH_MAX: return _translate_atomic_op(current, b, "fetch.max", 1, inst);
             case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
             case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
             case xir::IntrinsicOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
@@ -2876,6 +2868,21 @@ private:
             case xir::DerivedInstructionTag::ALU: break;
             case xir::DerivedInstructionTag::CTA: break;
             case xir::DerivedInstructionTag::RESOURCE: break;
+            case xir::DerivedInstructionTag::ATOMIC: {
+                auto atomic_inst = static_cast<const xir::AtomicInst *>(inst);
+                switch (atomic_inst->op()) {
+                    case xir::AtomicOp::EXCHANGE: return _translate_atomic_op(current, b, "exchange", atomic_inst);
+                    case xir::AtomicOp::COMPARE_EXCHANGE: return _translate_atomic_op(current, b, "compare.exchange", atomic_inst);
+                    case xir::AtomicOp::FETCH_ADD: return _translate_atomic_op(current, b, "fetch.add", atomic_inst);
+                    case xir::AtomicOp::FETCH_SUB: return _translate_atomic_op(current, b, "fetch.sub", atomic_inst);
+                    case xir::AtomicOp::FETCH_AND: return _translate_atomic_op(current, b, "fetch.and", atomic_inst);
+                    case xir::AtomicOp::FETCH_OR: return _translate_atomic_op(current, b, "fetch.or", atomic_inst);
+                    case xir::AtomicOp::FETCH_XOR: return _translate_atomic_op(current, b, "fetch.xor", atomic_inst);
+                    case xir::AtomicOp::FETCH_MIN: return _translate_atomic_op(current, b, "fetch.min", atomic_inst);
+                    case xir::AtomicOp::FETCH_MAX: return _translate_atomic_op(current, b, "fetch.max", atomic_inst);
+                }
+                LUISA_ERROR_WITH_LOCATION("Invalid atomic operation.");
+            }
         }
         LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
     }

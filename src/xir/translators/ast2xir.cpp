@@ -398,6 +398,22 @@ private:
             }
             return b.call(expr->type(), target_op, args);
         };
+        auto atomic_call = [&](AtomicOp target_op) noexcept {
+            LUISA_ASSERT(!expr->arguments().empty(), "Atomic call requires at least one argument.");
+            auto base = _translate_expression(b, expr->arguments()[0], false);
+            auto other = expr->arguments().subspan(1);
+            auto value_count = xir::atomic_op_value_count(target_op);
+            LUISA_ASSERT(other.size() >= value_count, "Invalid number of arguments for atomic call.");
+            luisa::fixed_vector<Value *, 16u> args;
+            args.reserve(other.size());
+            for (auto ast_arg : other) {
+                auto arg = _translate_expression(b, ast_arg, true);
+                args.emplace_back(arg);
+            }
+            auto indices = luisa::span{args}.subspan(0u, args.size() - value_count);
+            auto values = luisa::span{args}.subspan(args.size() - value_count, value_count);
+            return b.atomic(expr->type(), target_op, base, indices, values);
+        };
         auto texture_dim = [&]() noexcept {
             LUISA_ASSERT(!expr->arguments().empty(), "Texture dimension call requires at least one argument.");
             auto tex = expr->arguments()[0];
@@ -515,15 +531,15 @@ private:
             case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::MATRIX_TRANSPOSE);
             case CallOp::INVERSE: return pure_call(IntrinsicOp::MATRIX_INVERSE);
             case CallOp::SYNCHRONIZE_BLOCK: return pure_call(IntrinsicOp::SYNCHRONIZE_BLOCK);
-            case CallOp::ATOMIC_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_EXCHANGE);
-            case CallOp::ATOMIC_COMPARE_EXCHANGE: return resource_call(IntrinsicOp::ATOMIC_COMPARE_EXCHANGE);
-            case CallOp::ATOMIC_FETCH_ADD: return resource_call(IntrinsicOp::ATOMIC_FETCH_ADD);
-            case CallOp::ATOMIC_FETCH_SUB: return resource_call(IntrinsicOp::ATOMIC_FETCH_SUB);
-            case CallOp::ATOMIC_FETCH_AND: return resource_call(IntrinsicOp::ATOMIC_FETCH_AND);
-            case CallOp::ATOMIC_FETCH_OR: return resource_call(IntrinsicOp::ATOMIC_FETCH_OR);
-            case CallOp::ATOMIC_FETCH_XOR: return resource_call(IntrinsicOp::ATOMIC_FETCH_XOR);
-            case CallOp::ATOMIC_FETCH_MIN: return resource_call(IntrinsicOp::ATOMIC_FETCH_MIN);
-            case CallOp::ATOMIC_FETCH_MAX: return resource_call(IntrinsicOp::ATOMIC_FETCH_MAX);
+            case CallOp::ATOMIC_EXCHANGE: return atomic_call(AtomicOp::EXCHANGE);
+            case CallOp::ATOMIC_COMPARE_EXCHANGE: return atomic_call(AtomicOp::COMPARE_EXCHANGE);
+            case CallOp::ATOMIC_FETCH_ADD: return atomic_call(AtomicOp::FETCH_ADD);
+            case CallOp::ATOMIC_FETCH_SUB: return atomic_call(AtomicOp::FETCH_SUB);
+            case CallOp::ATOMIC_FETCH_AND: return atomic_call(AtomicOp::FETCH_AND);
+            case CallOp::ATOMIC_FETCH_OR: return atomic_call(AtomicOp::FETCH_OR);
+            case CallOp::ATOMIC_FETCH_XOR: return atomic_call(AtomicOp::FETCH_XOR);
+            case CallOp::ATOMIC_FETCH_MIN: return atomic_call(AtomicOp::FETCH_MIN);
+            case CallOp::ATOMIC_FETCH_MAX: return atomic_call(AtomicOp::FETCH_MAX);
             case CallOp::ADDRESS_OF: LUISA_ERROR_WITH_LOCATION("Removed address_of operation.");
             case CallOp::BUFFER_READ: return resource_call(IntrinsicOp::BUFFER_READ);
             case CallOp::BUFFER_WRITE: return resource_call(IntrinsicOp::BUFFER_WRITE);
