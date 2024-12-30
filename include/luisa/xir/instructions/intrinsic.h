@@ -253,7 +253,7 @@ enum struct IntrinsicOp {
     INDIRECT_DISPATCH_SET_COUNT, // (Buffer, uint count)
 };
 
-[[nodiscard]] LC_XIR_API luisa::string to_string(IntrinsicOp op) noexcept;
+[[nodiscard]] LC_XIR_API luisa::string_view to_string(IntrinsicOp op) noexcept;
 [[nodiscard]] LC_XIR_API IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept;
 
 class LC_XIR_API IntrinsicInst final : public DerivedInstruction<DerivedInstructionTag::INTRINSIC> {

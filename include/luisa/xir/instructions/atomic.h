@@ -16,21 +16,8 @@ enum class AtomicOp {
     FETCH_MAX,       /// [(base, indices..., val) -> old]: stores max(old, val), returns old.
 };
 
-[[nodiscard]] constexpr luisa::string_view to_string(AtomicOp op) noexcept {
-    using namespace std::string_view_literals;
-    switch (op) {
-        case AtomicOp::EXCHANGE: return "exchange"sv;
-        case AtomicOp::COMPARE_EXCHANGE: return "compare_exchange"sv;
-        case AtomicOp::FETCH_ADD: return "fetch_add"sv;
-        case AtomicOp::FETCH_SUB: return "fetch_sub"sv;
-        case AtomicOp::FETCH_AND: return "fetch_and"sv;
-        case AtomicOp::FETCH_OR: return "fetch_or"sv;
-        case AtomicOp::FETCH_XOR: return "fetch_xor"sv;
-        case AtomicOp::FETCH_MIN: return "fetch_min"sv;
-        case AtomicOp::FETCH_MAX: return "fetch_max"sv;
-    }
-    return "unknown"sv;
-}
+[[nodiscard]] LC_XIR_API luisa::string_view to_string(AtomicOp op) noexcept;
+[[nodiscard]] LC_XIR_API AtomicOp atomic_op_from_string(luisa::string_view name) noexcept;
 
 [[nodiscard]] constexpr auto atomic_op_value_count(AtomicOp op) noexcept {
     return op == AtomicOp::COMPARE_EXCHANGE ? 2u : 1u;

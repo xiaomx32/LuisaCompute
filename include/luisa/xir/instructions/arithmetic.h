@@ -131,6 +131,8 @@ enum class ArithmeticOp {
     EXTRACT,
 };
 
+[[nodiscard]] LC_XIR_API luisa::string_view to_string(ArithmeticOp op) noexcept;
+[[nodiscard]] LC_XIR_API ArithmeticOp arithmetic_op_from_string(luisa::string_view name) noexcept;
 
 
 }// namespace luisa::compute::xir

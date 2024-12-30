@@ -12,6 +12,4 @@ IntrinsicInst::IntrinsicInst(const Type *type, IntrinsicOp op,
                              luisa::span<Value *const> operands) noexcept
     : DerivedInstruction{type}, _op{op} { set_operands(operands); }
 
-#include "intrinsic_name_map.inl.h"
-
 }// namespace luisa::compute::xir

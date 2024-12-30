@@ -27,6 +27,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/intrinsic.cpp
         instructions/load.cpp
         instructions/loop.cpp
+        instructions/op_name_map.cpp
         instructions/phi.cpp
         instructions/print.cpp
         instructions/ray_query.cpp
