@@ -42,7 +42,7 @@ namespace detail {
     std::sort(user_instructions.begin(), user_instructions.end());
     user_instructions.erase(std::unique(user_instructions.begin(), user_instructions.end()), user_instructions.end());
     // find in the dominator block the first instruction that uses the alloca (or the terminator)
-    auto first_user_inst = [&] {
+    auto first_user_inst = [&]() noexcept -> Instruction * {
         for (auto &&inst : common_dominator->instructions()) {
             if (std::binary_search(user_instructions.begin(), user_instructions.end(), &inst)) {
                 return &inst;
