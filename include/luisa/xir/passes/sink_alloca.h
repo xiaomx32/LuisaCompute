@@ -8,7 +8,7 @@ namespace luisa::compute::xir {
 class AllocaInst;
 
 struct SinkAllocaInfo {
-    luisa::vector<AllocaInst *> sunken_alloca_insts;
+    luisa::vector<AllocaInst *> sunken_instructions;
 };
 
 LC_XIR_API SinkAllocaInfo sink_alloca_pass_run_on_function(Function *function) noexcept;
