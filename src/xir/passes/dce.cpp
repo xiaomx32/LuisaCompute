@@ -36,7 +36,9 @@ void eliminate_dead_code_in_function(Function *function, DCEInfo &info) noexcept
                         case DerivedInstructionTag::GEP: [[fallthrough]];
                         case DerivedInstructionTag::ARITHMETIC: [[fallthrough]];
                         case DerivedInstructionTag::CAST: [[fallthrough]];
-                        case DerivedInstructionTag::CLOCK: {
+                        case DerivedInstructionTag::CLOCK: [[fallthrough]];
+                        case DerivedInstructionTag::RESOURCE_QUERY: [[fallthrough]];
+                        case DerivedInstructionTag::RESOURCE_READ: {
                             if (all_users_dead(inst)) {
                                 dead.emplace(inst);
                             }

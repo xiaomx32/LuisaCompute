@@ -43,9 +43,9 @@ enum struct DerivedInstructionTag {
     THREAD_GROUP,// volatile, may involve synchronization and cannot be moved/eliminated
 
     /* resource instructions */
+    RESOURCE_QUERY,// query resource properties, free to move and eliminate
     RESOURCE_READ, // read from resources, may be eliminated if not used, but can be volatile to code motion
     RESOURCE_WRITE,// write to resources, may be volatile to code elimination and motion
-    RESOURCE_QUERY,// query resource properties, free to move and eliminate
 
     /* other instructions */
     CALL, // user or external function calls
