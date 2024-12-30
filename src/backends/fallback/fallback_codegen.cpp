@@ -1367,7 +1367,8 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_write(CurrentFunction &current, IRBuilder &b,
-                                                       const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+                                                       const xir::ResourceWriteInst *inst,
+                                                       bool byte_address = false) noexcept {
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
         auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
@@ -1378,7 +1379,8 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_read(CurrentFunction &current, IRBuilder &b,
-                                                      const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+                                                      const xir::ResourceReadInst *inst,
+                                                      bool byte_address = false) noexcept {
         auto buffer = inst->operand(0u);
         auto slot = inst->operand(1u);
         auto llvm_elem_ptr = _get_buffer_element_ptr(current, b, buffer, slot, byte_address);
@@ -1388,7 +1390,8 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_size(CurrentFunction &current, IRBuilder &b,
-                                                      const xir::IntrinsicInst *inst, bool byte_address = false) noexcept {
+                                                      const xir::ResourceQueryInst *inst,
+                                                      bool byte_address = false) noexcept {
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto llvm_buffer = _lookup_value(current, b, buffer);
@@ -1404,7 +1407,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_buffer_device_address(CurrentFunction &current, IRBuilder &b,
-                                                                const xir::IntrinsicInst *inst) noexcept {
+                                                                const xir::ResourceQueryInst *inst) noexcept {
         auto buffer = inst->operand(0u);
         LUISA_ASSERT(buffer->type()->is_buffer(), "Invalid buffer type.");
         auto llvm_buffer = _lookup_value(current, b, buffer);
@@ -1414,7 +1417,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_device_address_read(CurrentFunction &current, IRBuilder &b,
-                                                              const xir::IntrinsicInst *inst) noexcept {
+                                                              const xir::ResourceReadInst *inst) noexcept {
         auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
         auto llvm_ptr = b.CreateIntToPtr(llvm_device_address, llvm_ptr_type);
@@ -1424,7 +1427,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_device_address_write(CurrentFunction &current, IRBuilder &b,
-                                                               const xir::IntrinsicInst *inst) noexcept {
+                                                               const xir::ResourceWriteInst *inst) noexcept {
         auto llvm_device_address = _lookup_value(current, b, inst->operand(0u));
         auto llvm_value = _lookup_value(current, b, inst->operand(1u));
         auto llvm_ptr_type = llvm::PointerType::get(_llvm_context, 0);
@@ -1565,7 +1568,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_bindless_buffer_read(CurrentFunction &current, IRBuilder &b,
-                                                               const xir::IntrinsicInst *inst,
+                                                               const xir::ResourceReadInst *inst,
                                                                bool byte_address = false) noexcept {
         auto llvm_slot_type = _get_llvm_bindless_slot_type();
         auto result_type = inst->type();
@@ -1584,7 +1587,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_bindless_buffer_write(CurrentFunction &current, IRBuilder &b,
-                                                                const xir::IntrinsicInst *inst,
+                                                                const xir::ResourceWriteInst *inst,
                                                                 bool byte_address = false) noexcept {
         auto llvm_slot_type = _get_llvm_bindless_slot_type();
         auto bindless = inst->operand(0);
@@ -1603,7 +1606,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_bindless_buffer_size(CurrentFunction &current, IRBuilder &b,
-                                                               const xir::IntrinsicInst *inst,
+                                                               const xir::ResourceQueryInst *inst,
                                                                bool byte_address = false) noexcept {
         auto llvm_slot_type = _get_llvm_bindless_slot_type();
         auto bindless = inst->operand(0);
@@ -1622,7 +1625,7 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_bindless_buffer_device_address(CurrentFunction &current, IRBuilder &b,
-                                                                         const xir::IntrinsicInst *inst) noexcept {
+                                                                         const xir::ResourceQueryInst *inst) noexcept {
         auto llvm_slot_type = _get_llvm_bindless_slot_type();
         auto bindless = inst->operand(0);
         auto slot_index = inst->operand(1);
@@ -1751,7 +1754,8 @@ private:
         return b.CreateLoad(llvm_result_type, llvm_result_alloca);
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_read(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_texture_read(CurrentFunction &current, IRBuilder &b,
+                                                       const xir::ResourceReadInst *inst) noexcept {
         auto view = inst->operand(0u);
         LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
         auto coord = inst->operand(1u);
@@ -1779,7 +1783,8 @@ private:
         return b.CreateLoad(llvm_value_type, llvm_value_alloca);
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_write(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_texture_write(CurrentFunction &current, IRBuilder &b,
+                                                        const xir::ResourceWriteInst *inst) noexcept {
         auto view = inst->operand(0u);
         LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
         auto coord = inst->operand(1u);
@@ -1808,7 +1813,7 @@ private:
         return b.CreateCall(llvm_func, {llvm_view_alloca, llvm_coord_alloca, llvm_value_alloca});
     }
 
-    [[nodiscard]] llvm::Value *_translate_texture_size(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
+    [[nodiscard]] llvm::Value *_translate_texture_size(CurrentFunction &current, IRBuilder &b, const xir::ResourceQueryInst *inst) noexcept {
         auto view = inst->operand(0u);
         LUISA_ASSERT(view->type()->is_texture(), "Invalid texture view type.");
         auto llvm_func_name = luisa::format("luisa.texture{}d.size", view->type()->dimension());
@@ -1852,7 +1857,7 @@ private:
 
     [[nodiscard]] llvm::Value *_translate_bindless_texture_access(CurrentFunction &current, IRBuilder &b,
                                                                   llvm::StringRef llvm_func_name,
-                                                                  const xir::IntrinsicInst *inst) noexcept {
+                                                                  const xir::Instruction *inst) noexcept {
         auto llvm_bindless = _lookup_value(current, b, inst->operand(0u));
         auto llvm_bindless_alloca = b.CreateAlloca(llvm_bindless->getType());
         b.CreateStore(llvm_bindless, llvm_bindless_alloca);
@@ -1881,7 +1886,7 @@ private:
 
     [[nodiscard]] llvm::Value *_translate_accel_access(CurrentFunction &current, IRBuilder &b,
                                                        llvm::StringRef llvm_func_name,
-                                                       const xir::IntrinsicInst *inst) noexcept {
+                                                       const xir::Instruction *inst) noexcept {
         auto llvm_accel = _lookup_value(current, b, inst->operand(0u));
         auto llvm_accel_alloca = b.CreateAlloca(llvm_accel->getType());
         b.CreateStore(llvm_accel, llvm_accel_alloca);
@@ -2421,85 +2426,12 @@ private:
     [[nodiscard]] llvm::Value *_translate_intrinsic_inst(CurrentFunction &current, IRBuilder &b, const xir::IntrinsicInst *inst) noexcept {
         switch (inst->op()) {
             case xir::IntrinsicOp::NOP: LUISA_ERROR_WITH_LOCATION("Unexpected NOP.");
-            case xir::IntrinsicOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
-            case xir::IntrinsicOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
-            case xir::IntrinsicOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
-            case xir::IntrinsicOp::BYTE_BUFFER_READ: return _translate_buffer_read(current, b, inst, true);
-            case xir::IntrinsicOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
-            case xir::IntrinsicOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
-            case xir::IntrinsicOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_SIZE: return _translate_texture_size(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE2D_SAMPLE: break;
-            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE3D_READ: return _translate_texture_read(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_WRITE: return _translate_texture_write(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_SIZE: return _translate_texture_size(current, b, inst);
-            case xir::IntrinsicOp::TEXTURE3D_SAMPLE: break;
-            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: break;
-            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: break;
-            case xir::IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size.level", inst);
-            case xir::IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size.level", inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst, true);
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst, true);
-            case xir::IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst, true);
-            case xir::IntrinsicOp::BUFFER_DEVICE_ADDRESS: return _translate_buffer_device_address(current, b, inst);
-            case xir::IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return _translate_bindless_buffer_device_address(current, b, inst);
-            case xir::IntrinsicOp::DEVICE_ADDRESS_READ: return _translate_device_address_read(current, b, inst);
-            case xir::IntrinsicOp::DEVICE_ADDRESS_WRITE: return _translate_device_address_write(current, b, inst);
             case xir::IntrinsicOp::AUTODIFF_REQUIRES_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_GRADIENT_MARKER: break;
             case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
             case xir::IntrinsicOp::AUTODIFF_DETACH: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.set.instance.transform", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.set.instance.visibility.mask", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.set.instance.opacity", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.set.instance.user.id", inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_access(current, b, "luisa.accel.trace.closest", inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY: return _translate_accel_access(current, b, "luisa.accel.trace.any", inst);
-            case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL: break;
-            case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY: break;
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
-            case xir::IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.matrix", inst);
-            case xir::IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.srt", inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.closest.motion", inst);
-            case xir::IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.any.motion", inst);
-            case xir::IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
-            case xir::IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
             case xir::IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: break;
             case xir::IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: break;
             case xir::IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: break;
@@ -2510,8 +2442,6 @@ private:
             case xir::IntrinsicOp::RAY_QUERY_PROCEED: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
             case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
-            case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: break;
-            case xir::IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: break;
         }
         LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
@@ -2520,6 +2450,102 @@ private:
             return llvm::Constant::getNullValue(llvm_ret_type);
         }
         return nullptr;
+    }
+
+    [[nodiscard]] llvm::Value *_translate_resource_query_inst(CurrentFunction &current, IRBuilder &b,
+                                                              const xir::ResourceQueryInst *inst) noexcept {
+        switch (inst->op()) {
+            case xir::ResourceQueryOp::BUFFER_SIZE: return _translate_buffer_size(current, b, inst);
+            case xir::ResourceQueryOp::BYTE_BUFFER_SIZE: return _translate_buffer_size(current, b, inst, true);
+            case xir::ResourceQueryOp::TEXTURE2D_SIZE: return _translate_texture_size(current, b, inst);
+            case xir::ResourceQueryOp::TEXTURE3D_SIZE: return _translate_texture_size(current, b, inst);
+            case xir::ResourceQueryOp::TEXTURE2D_SAMPLE: break;
+            case xir::ResourceQueryOp::TEXTURE2D_SAMPLE_LEVEL: break;
+            case xir::ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD: break;
+            case xir::ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: break;
+            case xir::ResourceQueryOp::TEXTURE3D_SAMPLE: break;
+            case xir::ResourceQueryOp::TEXTURE3D_SAMPLE_LEVEL: break;
+            case xir::ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD: break;
+            case xir::ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.sample.grad.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.sample.grad.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: break;
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.size.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.size.level", inst);
+            case xir::ResourceQueryOp::BINDLESS_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst);
+            case xir::ResourceQueryOp::BINDLESS_BYTE_BUFFER_SIZE: return _translate_bindless_buffer_size(current, b, inst, true);
+            case xir::ResourceQueryOp::BUFFER_DEVICE_ADDRESS: return _translate_buffer_device_address(current, b, inst);
+            case xir::ResourceQueryOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return _translate_bindless_buffer_device_address(current, b, inst);
+            case xir::ResourceQueryOp::RAY_TRACING_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.instance.transform", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.instance.user.id", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.instance.visibility.mask", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST: return _translate_accel_access(current, b, "luisa.accel.trace.closest", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_TRACE_ANY: return _translate_accel_access(current, b, "luisa.accel.trace.any", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.instance.motion.matrix", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.instance.motion.srt", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.closest.motion", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return _translate_accel_access(current, b, "luisa.accel.trace.any.motion", inst);
+            case xir::ResourceQueryOp::RAY_TRACING_QUERY_ALL: break;
+            case xir::ResourceQueryOp::RAY_TRACING_QUERY_ANY: break;
+            case xir::ResourceQueryOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: break;
+            case xir::ResourceQueryOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected resource query operation: {}.", xir::to_string(inst->op()));
+    }
+
+    [[nodiscard]] llvm::Value *_translate_resource_read_inst(CurrentFunction &current, IRBuilder &b,
+                                                             const xir::ResourceReadInst *inst) noexcept {
+        switch (inst->op()) {
+            case xir::ResourceReadOp::BUFFER_READ: return _translate_buffer_read(current, b, inst);
+            case xir::ResourceReadOp::BYTE_BUFFER_READ: return _translate_buffer_read(current, b, inst, true);
+            case xir::ResourceReadOp::TEXTURE2D_READ: return _translate_texture_read(current, b, inst);
+            case xir::ResourceReadOp::TEXTURE3D_READ: return _translate_texture_read(current, b, inst);
+            case xir::ResourceReadOp::BINDLESS_TEXTURE2D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read", inst);
+            case xir::ResourceReadOp::BINDLESS_TEXTURE3D_READ: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read", inst);
+            case xir::ResourceReadOp::BINDLESS_TEXTURE2D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture2d.read.level", inst);
+            case xir::ResourceReadOp::BINDLESS_TEXTURE3D_READ_LEVEL: return _translate_bindless_texture_access(current, b, "luisa.bindless.texture3d.read.level", inst);
+            case xir::ResourceReadOp::BINDLESS_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst);
+            case xir::ResourceReadOp::BINDLESS_BYTE_BUFFER_READ: return _translate_bindless_buffer_read(current, b, inst, true);
+            case xir::ResourceReadOp::DEVICE_ADDRESS_READ: return _translate_device_address_read(current, b, inst);
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected resource read operation: {}.", xir::to_string(inst->op()));
+    }
+
+    [[nodiscard]] llvm::Value *_translate_resource_write_inst(CurrentFunction &current, IRBuilder &b,
+                                                              const xir::ResourceWriteInst *inst) noexcept {
+        switch (inst->op()) {
+            case xir::ResourceWriteOp::BUFFER_WRITE: return _translate_buffer_write(current, b, inst);
+            case xir::ResourceWriteOp::BYTE_BUFFER_WRITE: return _translate_buffer_write(current, b, inst, true);
+            case xir::ResourceWriteOp::TEXTURE2D_WRITE: return _translate_texture_write(current, b, inst);
+            case xir::ResourceWriteOp::TEXTURE3D_WRITE: return _translate_texture_write(current, b, inst);
+            case xir::ResourceWriteOp::BINDLESS_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst);
+            case xir::ResourceWriteOp::BINDLESS_BYTE_BUFFER_WRITE: return _translate_bindless_buffer_write(current, b, inst, true);
+            case xir::ResourceWriteOp::DEVICE_ADDRESS_WRITE: return _translate_device_address_write(current, b, inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return _translate_accel_access(current, b, "luisa.accel.set.instance.transform", inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return _translate_accel_access(current, b, "luisa.accel.set.instance.visibility.mask", inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_OPACITY: return _translate_accel_access(current, b, "luisa.accel.set.instance.opacity", inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_USER_ID: return _translate_accel_access(current, b, "luisa.accel.set.instance.user.id", inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.matrix", inst);
+            case xir::ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return _translate_accel_access(current, b, "luisa.accel.set.instance.motion.srt", inst);
+            case xir::ResourceWriteOp::INDIRECT_DISPATCH_SET_KERNEL: break;
+            case xir::ResourceWriteOp::INDIRECT_DISPATCH_SET_COUNT: break;
+        }
+        LUISA_ERROR_WITH_LOCATION("Unexpected resource write operation: {}.", xir::to_string(inst->op()));
     }
 
     [[nodiscard]] llvm::Value *_translate_cast_inst(CurrentFunction &current, IRBuilder &b,
@@ -2862,7 +2888,18 @@ private:
                 auto llvm_result_type = _translate_type(inst->type(), true);
                 return b.CreateZExtOrTrunc(call, llvm_result_type);
             }
-            case xir::DerivedInstructionTag::RESOURCE: break;
+            case xir::DerivedInstructionTag::RESOURCE_QUERY: {
+                auto query_inst = static_cast<const xir::ResourceQueryInst *>(inst);
+                return _translate_resource_query_inst(current, b, query_inst);
+            }
+            case xir::DerivedInstructionTag::RESOURCE_READ: {
+                auto read_inst = static_cast<const xir::ResourceReadInst *>(inst);
+                return _translate_resource_read_inst(current, b, read_inst);
+            }
+            case xir::DerivedInstructionTag::RESOURCE_WRITE: {
+                auto write_inst = static_cast<const xir::ResourceWriteInst *>(inst);
+                return _translate_resource_write_inst(current, b, write_inst);
+            }
             case xir::DerivedInstructionTag::THREAD_GROUP: {
                 auto cta_inst = static_cast<const xir::ThreadGroupInst *>(inst);
                 return _translate_thread_group_inst(current, b, cta_inst);

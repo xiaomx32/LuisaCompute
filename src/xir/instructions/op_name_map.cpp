@@ -9,6 +9,9 @@
 #include <luisa/xir/instructions/cast.h>
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/instructions/thread_group.h>
+#include <luisa/xir/instructions/resource_query.h>
+#include <luisa/xir/instructions/resource_read.h>
+#include <luisa/xir/instructions/resource_write.h>
 
 namespace luisa::compute::xir {
 
@@ -280,85 +283,12 @@ luisa::string_view to_string(IntrinsicOp op) noexcept {
     using namespace std::string_view_literals;
     switch (op) {
         case IntrinsicOp::NOP: return "nop"sv;
-        case IntrinsicOp::BUFFER_READ: return "buffer_read"sv;
-        case IntrinsicOp::BUFFER_WRITE: return "buffer_write"sv;
-        case IntrinsicOp::BUFFER_SIZE: return "buffer_size"sv;
-        case IntrinsicOp::BYTE_BUFFER_READ: return "byte_buffer_read"sv;
-        case IntrinsicOp::BYTE_BUFFER_WRITE: return "byte_buffer_write"sv;
-        case IntrinsicOp::BYTE_BUFFER_SIZE: return "byte_buffer_size"sv;
-        case IntrinsicOp::TEXTURE2D_READ: return "texture2d_read"sv;
-        case IntrinsicOp::TEXTURE2D_WRITE: return "texture2d_write"sv;
-        case IntrinsicOp::TEXTURE2D_SIZE: return "texture2d_size"sv;
-        case IntrinsicOp::TEXTURE2D_SAMPLE: return "texture2d_sample"sv;
-        case IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL: return "texture2d_sample_level"sv;
-        case IntrinsicOp::TEXTURE2D_SAMPLE_GRAD: return "texture2d_sample_grad"sv;
-        case IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: return "texture2d_sample_grad_level"sv;
-        case IntrinsicOp::TEXTURE3D_READ: return "texture3d_read"sv;
-        case IntrinsicOp::TEXTURE3D_WRITE: return "texture3d_write"sv;
-        case IntrinsicOp::TEXTURE3D_SIZE: return "texture3d_size"sv;
-        case IntrinsicOp::TEXTURE3D_SAMPLE: return "texture3d_sample"sv;
-        case IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL: return "texture3d_sample_level"sv;
-        case IntrinsicOp::TEXTURE3D_SAMPLE_GRAD: return "texture3d_sample_grad"sv;
-        case IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return "texture3d_sample_grad_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE: return "bindless_texture2d_sample"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return "bindless_texture2d_sample_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return "bindless_texture2d_sample_grad"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return "bindless_texture2d_sample_grad_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE: return "bindless_texture3d_sample"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return "bindless_texture3d_sample_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return "bindless_texture3d_sample_grad"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return "bindless_texture3d_sample_grad_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: return "bindless_texture2d_sample_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: return "bindless_texture2d_sample_level_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: return "bindless_texture2d_sample_grad_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: return "bindless_texture2d_sample_grad_level_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: return "bindless_texture3d_sample_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: return "bindless_texture3d_sample_level_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: return "bindless_texture3d_sample_grad_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: return "bindless_texture3d_sample_grad_level_sampler"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_READ: return "bindless_texture2d_read"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_READ: return "bindless_texture3d_read"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL: return "bindless_texture2d_read_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL: return "bindless_texture3d_read_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SIZE: return "bindless_texture2d_size"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SIZE: return "bindless_texture3d_size"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return "bindless_texture2d_size_level"sv;
-        case IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return "bindless_texture3d_size_level"sv;
-        case IntrinsicOp::BINDLESS_BUFFER_READ: return "bindless_buffer_read"sv;
-        case IntrinsicOp::BINDLESS_BUFFER_WRITE: return "bindless_buffer_write"sv;
-        case IntrinsicOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size"sv;
-        case IntrinsicOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read"sv;
-        case IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE: return "bindless_byte_buffer_write"sv;
-        case IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE: return "bindless_byte_buffer_size"sv;
-        case IntrinsicOp::BUFFER_DEVICE_ADDRESS: return "buffer_device_address"sv;
-        case IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return "bindless_buffer_device_address"sv;
-        case IntrinsicOp::DEVICE_ADDRESS_READ: return "device_address_read"sv;
-        case IntrinsicOp::DEVICE_ADDRESS_WRITE: return "device_address_write"sv;
         case IntrinsicOp::AUTODIFF_REQUIRES_GRADIENT: return "autodiff_requires_gradient"sv;
         case IntrinsicOp::AUTODIFF_GRADIENT: return "autodiff_gradient"sv;
         case IntrinsicOp::AUTODIFF_GRADIENT_MARKER: return "autodiff_gradient_marker"sv;
         case IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: return "autodiff_accumulate_gradient"sv;
         case IntrinsicOp::AUTODIFF_BACKWARD: return "autodiff_backward"sv;
         case IntrinsicOp::AUTODIFF_DETACH: return "autodiff_detach"sv;
-        case IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM: return "ray_tracing_instance_transform"sv;
-        case IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID: return "ray_tracing_instance_user_id"sv;
-        case IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return "ray_tracing_instance_visibility_mask"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return "ray_tracing_set_instance_transform"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return "ray_tracing_set_instance_visibility_mask"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY: return "ray_tracing_set_instance_opacity"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID: return "ray_tracing_set_instance_user_id"sv;
-        case IntrinsicOp::RAY_TRACING_TRACE_CLOSEST: return "ray_tracing_trace_closest"sv;
-        case IntrinsicOp::RAY_TRACING_TRACE_ANY: return "ray_tracing_trace_any"sv;
-        case IntrinsicOp::RAY_TRACING_QUERY_ALL: return "ray_tracing_query_all"sv;
-        case IntrinsicOp::RAY_TRACING_QUERY_ANY: return "ray_tracing_query_any"sv;
-        case IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return "ray_tracing_instance_motion_matrix"sv;
-        case IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT: return "ray_tracing_instance_motion_srt"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return "ray_tracing_set_instance_motion_matrix"sv;
-        case IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return "ray_tracing_set_instance_motion_srt"sv;
-        case IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return "ray_tracing_trace_closest_motion_blur"sv;
-        case IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return "ray_tracing_trace_any_motion_blur"sv;
-        case IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: return "ray_tracing_query_all_motion_blur"sv;
-        case IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: return "ray_tracing_query_any_motion_blur"sv;
         case IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: return "ray_query_world_space_ray"sv;
         case IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: return "ray_query_procedural_candidate_hit"sv;
         case IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: return "ray_query_triangle_candidate_hit"sv;
@@ -369,8 +299,6 @@ luisa::string_view to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::RAY_QUERY_PROCEED: return "ray_query_proceed"sv;
         case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return "ray_query_is_triangle_candidate"sv;
         case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return "ray_query_is_procedural_candidate"sv;
-        case IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel"sv;
-        case IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count"sv;
     }
     LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation (code = {}).", static_cast<uint32_t>(op));
 }
@@ -379,85 +307,12 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
     using namespace std::string_view_literals;
     static const luisa::unordered_map<luisa::string_view, IntrinsicOp> m{
         {"nop"sv, IntrinsicOp::NOP},
-        {"buffer_read"sv, IntrinsicOp::BUFFER_READ},
-        {"buffer_write"sv, IntrinsicOp::BUFFER_WRITE},
-        {"buffer_size"sv, IntrinsicOp::BUFFER_SIZE},
-        {"byte_buffer_read"sv, IntrinsicOp::BYTE_BUFFER_READ},
-        {"byte_buffer_write"sv, IntrinsicOp::BYTE_BUFFER_WRITE},
-        {"byte_buffer_size"sv, IntrinsicOp::BYTE_BUFFER_SIZE},
-        {"texture2d_read"sv, IntrinsicOp::TEXTURE2D_READ},
-        {"texture2d_write"sv, IntrinsicOp::TEXTURE2D_WRITE},
-        {"texture2d_size"sv, IntrinsicOp::TEXTURE2D_SIZE},
-        {"texture2d_sample"sv, IntrinsicOp::TEXTURE2D_SAMPLE},
-        {"texture2d_sample_level"sv, IntrinsicOp::TEXTURE2D_SAMPLE_LEVEL},
-        {"texture2d_sample_grad"sv, IntrinsicOp::TEXTURE2D_SAMPLE_GRAD},
-        {"texture2d_sample_grad_level"sv, IntrinsicOp::TEXTURE2D_SAMPLE_GRAD_LEVEL},
-        {"texture3d_read"sv, IntrinsicOp::TEXTURE3D_READ},
-        {"texture3d_write"sv, IntrinsicOp::TEXTURE3D_WRITE},
-        {"texture3d_size"sv, IntrinsicOp::TEXTURE3D_SIZE},
-        {"texture3d_sample"sv, IntrinsicOp::TEXTURE3D_SAMPLE},
-        {"texture3d_sample_level"sv, IntrinsicOp::TEXTURE3D_SAMPLE_LEVEL},
-        {"texture3d_sample_grad"sv, IntrinsicOp::TEXTURE3D_SAMPLE_GRAD},
-        {"texture3d_sample_grad_level"sv, IntrinsicOp::TEXTURE3D_SAMPLE_GRAD_LEVEL},
-        {"bindless_texture2d_sample"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE},
-        {"bindless_texture2d_sample_level"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL},
-        {"bindless_texture2d_sample_grad"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD},
-        {"bindless_texture2d_sample_grad_level"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL},
-        {"bindless_texture3d_sample"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE},
-        {"bindless_texture3d_sample_level"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL},
-        {"bindless_texture3d_sample_grad"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD},
-        {"bindless_texture3d_sample_grad_level"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL},
-        {"bindless_texture2d_sample_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER},
-        {"bindless_texture2d_sample_level_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER},
-        {"bindless_texture2d_sample_grad_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER},
-        {"bindless_texture2d_sample_grad_level_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER},
-        {"bindless_texture3d_sample_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER},
-        {"bindless_texture3d_sample_level_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER},
-        {"bindless_texture3d_sample_grad_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER},
-        {"bindless_texture3d_sample_grad_level_sampler"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER},
-        {"bindless_texture2d_read"sv, IntrinsicOp::BINDLESS_TEXTURE2D_READ},
-        {"bindless_texture3d_read"sv, IntrinsicOp::BINDLESS_TEXTURE3D_READ},
-        {"bindless_texture2d_read_level"sv, IntrinsicOp::BINDLESS_TEXTURE2D_READ_LEVEL},
-        {"bindless_texture3d_read_level"sv, IntrinsicOp::BINDLESS_TEXTURE3D_READ_LEVEL},
-        {"bindless_texture2d_size"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SIZE},
-        {"bindless_texture3d_size"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SIZE},
-        {"bindless_texture2d_size_level"sv, IntrinsicOp::BINDLESS_TEXTURE2D_SIZE_LEVEL},
-        {"bindless_texture3d_size_level"sv, IntrinsicOp::BINDLESS_TEXTURE3D_SIZE_LEVEL},
-        {"bindless_buffer_read"sv, IntrinsicOp::BINDLESS_BUFFER_READ},
-        {"bindless_buffer_write"sv, IntrinsicOp::BINDLESS_BUFFER_WRITE},
-        {"bindless_buffer_size"sv, IntrinsicOp::BINDLESS_BUFFER_SIZE},
-        {"bindless_byte_buffer_read"sv, IntrinsicOp::BINDLESS_BYTE_BUFFER_READ},
-        {"bindless_byte_buffer_write"sv, IntrinsicOp::BINDLESS_BYTE_BUFFER_WRITE},
-        {"bindless_byte_buffer_size"sv, IntrinsicOp::BINDLESS_BYTE_BUFFER_SIZE},
-        {"buffer_device_address"sv, IntrinsicOp::BUFFER_DEVICE_ADDRESS},
-        {"bindless_buffer_device_address"sv, IntrinsicOp::BINDLESS_BUFFER_DEVICE_ADDRESS},
-        {"device_address_read"sv, IntrinsicOp::DEVICE_ADDRESS_READ},
-        {"device_address_write"sv, IntrinsicOp::DEVICE_ADDRESS_WRITE},
         {"autodiff_requires_gradient"sv, IntrinsicOp::AUTODIFF_REQUIRES_GRADIENT},
         {"autodiff_gradient"sv, IntrinsicOp::AUTODIFF_GRADIENT},
         {"autodiff_gradient_marker"sv, IntrinsicOp::AUTODIFF_GRADIENT_MARKER},
         {"autodiff_accumulate_gradient"sv, IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT},
         {"autodiff_backward"sv, IntrinsicOp::AUTODIFF_BACKWARD},
         {"autodiff_detach"sv, IntrinsicOp::AUTODIFF_DETACH},
-        {"ray_tracing_instance_transform"sv, IntrinsicOp::RAY_TRACING_INSTANCE_TRANSFORM},
-        {"ray_tracing_instance_user_id"sv, IntrinsicOp::RAY_TRACING_INSTANCE_USER_ID},
-        {"ray_tracing_instance_visibility_mask"sv, IntrinsicOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK},
-        {"ray_tracing_set_instance_transform"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_TRANSFORM},
-        {"ray_tracing_set_instance_visibility_mask"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK},
-        {"ray_tracing_set_instance_opacity"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_OPACITY},
-        {"ray_tracing_set_instance_user_id"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_USER_ID},
-        {"ray_tracing_trace_closest"sv, IntrinsicOp::RAY_TRACING_TRACE_CLOSEST},
-        {"ray_tracing_trace_any"sv, IntrinsicOp::RAY_TRACING_TRACE_ANY},
-        {"ray_tracing_query_all"sv, IntrinsicOp::RAY_TRACING_QUERY_ALL},
-        {"ray_tracing_query_any"sv, IntrinsicOp::RAY_TRACING_QUERY_ANY},
-        {"ray_tracing_instance_motion_matrix"sv, IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_MATRIX},
-        {"ray_tracing_instance_motion_srt"sv, IntrinsicOp::RAY_TRACING_INSTANCE_MOTION_SRT},
-        {"ray_tracing_set_instance_motion_matrix"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX},
-        {"ray_tracing_set_instance_motion_srt"sv, IntrinsicOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT},
-        {"ray_tracing_trace_closest_motion_blur"sv, IntrinsicOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR},
-        {"ray_tracing_trace_any_motion_blur"sv, IntrinsicOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR},
-        {"ray_tracing_query_all_motion_blur"sv, IntrinsicOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR},
-        {"ray_tracing_query_any_motion_blur"sv, IntrinsicOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR},
         {"ray_query_world_space_ray"sv, IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY},
         {"ray_query_procedural_candidate_hit"sv, IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT},
         {"ray_query_triangle_candidate_hit"sv, IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT},
@@ -468,8 +323,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"ray_query_proceed"sv, IntrinsicOp::RAY_QUERY_PROCEED},
         {"ray_query_is_triangle_candidate"sv, IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE},
         {"ray_query_is_procedural_candidate"sv, IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE},
-        {"indirect_dispatch_set_kernel"sv, IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL},
-        {"indirect_dispatch_set_count"sv, IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT},
     };
     auto iter = m.find(name);
     LUISA_ASSERT(iter != m.end(), "Unknown intrinsic operation: {}.", name);
@@ -538,4 +391,202 @@ ThreadGroupOp thread_group_op_from_string(luisa::string_view name) noexcept {
     return iter->second;
 }
 
+luisa::string_view to_string(ResourceQueryOp op) noexcept {
+    using namespace std::string_view_literals;
+    switch (op) {
+        case ResourceQueryOp::BUFFER_SIZE: return "buffer_size"sv;
+        case ResourceQueryOp::BYTE_BUFFER_SIZE: return "byte_buffer_size"sv;
+        case ResourceQueryOp::TEXTURE2D_SIZE: return "texture2d_size"sv;
+        case ResourceQueryOp::TEXTURE3D_SIZE: return "texture3d_size"sv;
+        case ResourceQueryOp::BINDLESS_BUFFER_SIZE: return "bindless_buffer_size"sv;
+        case ResourceQueryOp::BINDLESS_BYTE_BUFFER_SIZE: return "bindless_byte_buffer_size"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE: return "bindless_texture2d_size"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE: return "bindless_texture3d_size"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE_LEVEL: return "bindless_texture2d_size_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE_LEVEL: return "bindless_texture3d_size_level"sv;
+        case ResourceQueryOp::TEXTURE2D_SAMPLE: return "texture2d_sample"sv;
+        case ResourceQueryOp::TEXTURE2D_SAMPLE_LEVEL: return "texture2d_sample_level"sv;
+        case ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD: return "texture2d_sample_grad"sv;
+        case ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD_LEVEL: return "texture2d_sample_grad_level"sv;
+        case ResourceQueryOp::TEXTURE3D_SAMPLE: return "texture3d_sample"sv;
+        case ResourceQueryOp::TEXTURE3D_SAMPLE_LEVEL: return "texture3d_sample_level"sv;
+        case ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD: return "texture3d_sample_grad"sv;
+        case ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD_LEVEL: return "texture3d_sample_grad_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE: return "bindless_texture2d_sample"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL: return "bindless_texture2d_sample_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD: return "bindless_texture2d_sample_grad"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL: return "bindless_texture2d_sample_grad_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE: return "bindless_texture3d_sample"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL: return "bindless_texture3d_sample_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD: return "bindless_texture3d_sample_grad"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL: return "bindless_texture3d_sample_grad_level"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER: return "bindless_texture2d_sample_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER: return "bindless_texture2d_sample_level_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER: return "bindless_texture2d_sample_grad_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER: return "bindless_texture2d_sample_grad_level_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER: return "bindless_texture3d_sample_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER: return "bindless_texture3d_sample_level_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER: return "bindless_texture3d_sample_grad_sampler"sv;
+        case ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER: return "bindless_texture3d_sample_grad_level_sampler"sv;
+        case ResourceQueryOp::BUFFER_DEVICE_ADDRESS: return "buffer_device_address"sv;
+        case ResourceQueryOp::BINDLESS_BUFFER_DEVICE_ADDRESS: return "bindless_buffer_device_address"sv;
+        case ResourceQueryOp::RAY_TRACING_INSTANCE_TRANSFORM: return "ray_tracing_instance_transform"sv;
+        case ResourceQueryOp::RAY_TRACING_INSTANCE_USER_ID: return "ray_tracing_instance_user_id"sv;
+        case ResourceQueryOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK: return "ray_tracing_instance_visibility_mask"sv;
+        case ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST: return "ray_tracing_trace_closest"sv;
+        case ResourceQueryOp::RAY_TRACING_TRACE_ANY: return "ray_tracing_trace_any"sv;
+        case ResourceQueryOp::RAY_TRACING_QUERY_ALL: return "ray_tracing_query_all"sv;
+        case ResourceQueryOp::RAY_TRACING_QUERY_ANY: return "ray_tracing_query_any"sv;
+        case ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: return "ray_tracing_instance_motion_matrix"sv;
+        case ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_SRT: return "ray_tracing_instance_motion_srt"sv;
+        case ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: return "ray_tracing_trace_closest_motion_blur"sv;
+        case ResourceQueryOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return "ray_tracing_trace_any_motion_blur"sv;
+        case ResourceQueryOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: return "ray_tracing_query_all_motion_blur"sv;
+        case ResourceQueryOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: return "ray_tracing_query_any_motion_blur"sv;
+    }
+    LUISA_ERROR_WITH_LOCATION("Unknown resource_query operation (code = {}).", static_cast<uint32_t>(op));
 }
+
+ResourceQueryOp resource_query_op_from_string(luisa::string_view name) noexcept {
+    using namespace std::string_view_literals;
+    static const luisa::unordered_map<luisa::string_view, ResourceQueryOp> m{
+        {"buffer_size"sv, ResourceQueryOp::BUFFER_SIZE},
+        {"byte_buffer_size"sv, ResourceQueryOp::BYTE_BUFFER_SIZE},
+        {"texture2d_size"sv, ResourceQueryOp::TEXTURE2D_SIZE},
+        {"texture3d_size"sv, ResourceQueryOp::TEXTURE3D_SIZE},
+        {"bindless_buffer_size"sv, ResourceQueryOp::BINDLESS_BUFFER_SIZE},
+        {"bindless_byte_buffer_size"sv, ResourceQueryOp::BINDLESS_BYTE_BUFFER_SIZE},
+        {"bindless_texture2d_size"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE},
+        {"bindless_texture3d_size"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE},
+        {"bindless_texture2d_size_level"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SIZE_LEVEL},
+        {"bindless_texture3d_size_level"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SIZE_LEVEL},
+        {"texture2d_sample"sv, ResourceQueryOp::TEXTURE2D_SAMPLE},
+        {"texture2d_sample_level"sv, ResourceQueryOp::TEXTURE2D_SAMPLE_LEVEL},
+        {"texture2d_sample_grad"sv, ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD},
+        {"texture2d_sample_grad_level"sv, ResourceQueryOp::TEXTURE2D_SAMPLE_GRAD_LEVEL},
+        {"texture3d_sample"sv, ResourceQueryOp::TEXTURE3D_SAMPLE},
+        {"texture3d_sample_level"sv, ResourceQueryOp::TEXTURE3D_SAMPLE_LEVEL},
+        {"texture3d_sample_grad"sv, ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD},
+        {"texture3d_sample_grad_level"sv, ResourceQueryOp::TEXTURE3D_SAMPLE_GRAD_LEVEL},
+        {"bindless_texture2d_sample"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE},
+        {"bindless_texture2d_sample_level"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL},
+        {"bindless_texture2d_sample_grad"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD},
+        {"bindless_texture2d_sample_grad_level"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL},
+        {"bindless_texture3d_sample"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE},
+        {"bindless_texture3d_sample_level"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL},
+        {"bindless_texture3d_sample_grad"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD},
+        {"bindless_texture3d_sample_grad_level"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL},
+        {"bindless_texture2d_sample_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_SAMPLER},
+        {"bindless_texture2d_sample_level_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_LEVEL_SAMPLER},
+        {"bindless_texture2d_sample_grad_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_SAMPLER},
+        {"bindless_texture2d_sample_grad_level_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE2D_SAMPLE_GRAD_LEVEL_SAMPLER},
+        {"bindless_texture3d_sample_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_SAMPLER},
+        {"bindless_texture3d_sample_level_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_LEVEL_SAMPLER},
+        {"bindless_texture3d_sample_grad_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_SAMPLER},
+        {"bindless_texture3d_sample_grad_level_sampler"sv, ResourceQueryOp::BINDLESS_TEXTURE3D_SAMPLE_GRAD_LEVEL_SAMPLER},
+        {"buffer_device_address"sv, ResourceQueryOp::BUFFER_DEVICE_ADDRESS},
+        {"bindless_buffer_device_address"sv, ResourceQueryOp::BINDLESS_BUFFER_DEVICE_ADDRESS},
+        {"ray_tracing_instance_transform"sv, ResourceQueryOp::RAY_TRACING_INSTANCE_TRANSFORM},
+        {"ray_tracing_instance_user_id"sv, ResourceQueryOp::RAY_TRACING_INSTANCE_USER_ID},
+        {"ray_tracing_instance_visibility_mask"sv, ResourceQueryOp::RAY_TRACING_INSTANCE_VISIBILITY_MASK},
+        {"ray_tracing_trace_closest"sv, ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST},
+        {"ray_tracing_trace_any"sv, ResourceQueryOp::RAY_TRACING_TRACE_ANY},
+        {"ray_tracing_query_all"sv, ResourceQueryOp::RAY_TRACING_QUERY_ALL},
+        {"ray_tracing_query_any"sv, ResourceQueryOp::RAY_TRACING_QUERY_ANY},
+        {"ray_tracing_instance_motion_matrix"sv, ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_MATRIX},
+        {"ray_tracing_instance_motion_srt"sv, ResourceQueryOp::RAY_TRACING_INSTANCE_MOTION_SRT},
+        {"ray_tracing_trace_closest_motion_blur"sv, ResourceQueryOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR},
+        {"ray_tracing_trace_any_motion_blur"sv, ResourceQueryOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR},
+        {"ray_tracing_query_all_motion_blur"sv, ResourceQueryOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR},
+        {"ray_tracing_query_any_motion_blur"sv, ResourceQueryOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR},
+    };
+    auto iter = m.find(name);
+    LUISA_ASSERT(iter != m.end(), "Unknown resource_query operation: {}.", name);
+    return iter->second;
+}
+
+luisa::string_view to_string(ResourceReadOp op) noexcept {
+    using namespace std::string_view_literals;
+    switch (op) {
+        case ResourceReadOp::BUFFER_READ: return "buffer_read"sv;
+        case ResourceReadOp::BYTE_BUFFER_READ: return "byte_buffer_read"sv;
+        case ResourceReadOp::TEXTURE2D_READ: return "texture2d_read"sv;
+        case ResourceReadOp::TEXTURE3D_READ: return "texture3d_read"sv;
+        case ResourceReadOp::BINDLESS_BUFFER_READ: return "bindless_buffer_read"sv;
+        case ResourceReadOp::BINDLESS_BYTE_BUFFER_READ: return "bindless_byte_buffer_read"sv;
+        case ResourceReadOp::BINDLESS_TEXTURE2D_READ: return "bindless_texture2d_read"sv;
+        case ResourceReadOp::BINDLESS_TEXTURE3D_READ: return "bindless_texture3d_read"sv;
+        case ResourceReadOp::BINDLESS_TEXTURE2D_READ_LEVEL: return "bindless_texture2d_read_level"sv;
+        case ResourceReadOp::BINDLESS_TEXTURE3D_READ_LEVEL: return "bindless_texture3d_read_level"sv;
+        case ResourceReadOp::DEVICE_ADDRESS_READ: return "device_address_read"sv;
+    }
+    LUISA_ERROR_WITH_LOCATION("Unknown resource_read operation (code = {}).", static_cast<uint32_t>(op));
+}
+
+ResourceReadOp resource_read_op_from_string(luisa::string_view name) noexcept {
+    using namespace std::string_view_literals;
+    static const luisa::unordered_map<luisa::string_view, ResourceReadOp> m{
+        {"buffer_read"sv, ResourceReadOp::BUFFER_READ},
+        {"byte_buffer_read"sv, ResourceReadOp::BYTE_BUFFER_READ},
+        {"texture2d_read"sv, ResourceReadOp::TEXTURE2D_READ},
+        {"texture3d_read"sv, ResourceReadOp::TEXTURE3D_READ},
+        {"bindless_buffer_read"sv, ResourceReadOp::BINDLESS_BUFFER_READ},
+        {"bindless_byte_buffer_read"sv, ResourceReadOp::BINDLESS_BYTE_BUFFER_READ},
+        {"bindless_texture2d_read"sv, ResourceReadOp::BINDLESS_TEXTURE2D_READ},
+        {"bindless_texture3d_read"sv, ResourceReadOp::BINDLESS_TEXTURE3D_READ},
+        {"bindless_texture2d_read_level"sv, ResourceReadOp::BINDLESS_TEXTURE2D_READ_LEVEL},
+        {"bindless_texture3d_read_level"sv, ResourceReadOp::BINDLESS_TEXTURE3D_READ_LEVEL},
+        {"device_address_read"sv, ResourceReadOp::DEVICE_ADDRESS_READ},
+    };
+    auto iter = m.find(name);
+    LUISA_ASSERT(iter != m.end(), "Unknown resource_read operation: {}.", name);
+    return iter->second;
+}
+
+luisa::string_view to_string(ResourceWriteOp op) noexcept {
+    using namespace std::string_view_literals;
+    switch (op) {
+        case ResourceWriteOp::BUFFER_WRITE: return "buffer_write"sv;
+        case ResourceWriteOp::BYTE_BUFFER_WRITE: return "byte_buffer_write"sv;
+        case ResourceWriteOp::TEXTURE2D_WRITE: return "texture2d_write"sv;
+        case ResourceWriteOp::TEXTURE3D_WRITE: return "texture3d_write"sv;
+        case ResourceWriteOp::BINDLESS_BUFFER_WRITE: return "bindless_buffer_write"sv;
+        case ResourceWriteOp::BINDLESS_BYTE_BUFFER_WRITE: return "bindless_byte_buffer_write"sv;
+        case ResourceWriteOp::DEVICE_ADDRESS_WRITE: return "device_address_write"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_TRANSFORM: return "ray_tracing_set_instance_transform"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK: return "ray_tracing_set_instance_visibility_mask"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_OPACITY: return "ray_tracing_set_instance_opacity"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_USER_ID: return "ray_tracing_set_instance_user_id"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: return "ray_tracing_set_instance_motion_matrix"sv;
+        case ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: return "ray_tracing_set_instance_motion_srt"sv;
+        case ResourceWriteOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel"sv;
+        case ResourceWriteOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count"sv;
+    }
+    LUISA_ERROR_WITH_LOCATION("Unknown resource_write operation (code = {}).", static_cast<uint32_t>(op));
+}
+
+ResourceWriteOp resource_write_op_from_string(luisa::string_view name) noexcept {
+    using namespace std::string_view_literals;
+    static const luisa::unordered_map<luisa::string_view, ResourceWriteOp> m{
+        {"buffer_write"sv, ResourceWriteOp::BUFFER_WRITE},
+        {"byte_buffer_write"sv, ResourceWriteOp::BYTE_BUFFER_WRITE},
+        {"texture2d_write"sv, ResourceWriteOp::TEXTURE2D_WRITE},
+        {"texture3d_write"sv, ResourceWriteOp::TEXTURE3D_WRITE},
+        {"bindless_buffer_write"sv, ResourceWriteOp::BINDLESS_BUFFER_WRITE},
+        {"bindless_byte_buffer_write"sv, ResourceWriteOp::BINDLESS_BYTE_BUFFER_WRITE},
+        {"device_address_write"sv, ResourceWriteOp::DEVICE_ADDRESS_WRITE},
+        {"ray_tracing_set_instance_transform"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_TRANSFORM},
+        {"ray_tracing_set_instance_visibility_mask"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_VISIBILITY_MASK},
+        {"ray_tracing_set_instance_opacity"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_OPACITY},
+        {"ray_tracing_set_instance_user_id"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_USER_ID},
+        {"ray_tracing_set_instance_motion_matrix"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX},
+        {"ray_tracing_set_instance_motion_srt"sv, ResourceWriteOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT},
+        {"indirect_dispatch_set_kernel"sv, ResourceWriteOp::INDIRECT_DISPATCH_SET_KERNEL},
+        {"indirect_dispatch_set_count"sv, ResourceWriteOp::INDIRECT_DISPATCH_SET_COUNT},
+    };
+    auto iter = m.find(name);
+    LUISA_ASSERT(iter != m.end(), "Unknown resource_write operation: {}.", name);
+    return iter->second;
+}
+
+}// namespace luisa::compute::xir

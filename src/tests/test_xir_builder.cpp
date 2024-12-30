@@ -68,7 +68,7 @@ int main() {
     b.store(va, f32_one);
     b.store(vb, f32_one);
     auto result = b.call(Type::of<float>(), f, {va, vb});
-    b.call(nullptr, xir::IntrinsicOp::BUFFER_WRITE, {buffer, u32_zero, result});
+    b.call(xir::ResourceWriteOp::BUFFER_WRITE, {buffer, u32_zero, result});
     b.return_void();
 
     auto dummy = module.create_callable(nullptr);

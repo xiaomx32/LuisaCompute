@@ -24,6 +24,9 @@
 #include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
+#include <luisa/xir/instructions/resource_query.h>
+#include <luisa/xir/instructions/resource_read.h>
+#include <luisa/xir/instructions/resource_write.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/thread_group.h>
@@ -95,6 +98,15 @@ public:
 
     ArithmeticInst *call(const Type *type, ArithmeticOp op, luisa::span<Value *const> operands) noexcept;
     ArithmeticInst *call(const Type *type, ArithmeticOp op, std::initializer_list<Value *> operands) noexcept;
+
+    ResourceQueryInst *call(const Type *type, ResourceQueryOp op, luisa::span<Value *const> operands) noexcept;
+    ResourceQueryInst *call(const Type *type, ResourceQueryOp op, std::initializer_list<Value *> operands) noexcept;
+
+    ResourceReadInst *call(const Type *type, ResourceReadOp op, luisa::span<Value *const> operands) noexcept;
+    ResourceReadInst *call(const Type *type, ResourceReadOp op, std::initializer_list<Value *> operands) noexcept;
+
+    ResourceWriteInst *call(ResourceWriteOp op, luisa::span<Value *const> operands) noexcept;
+    ResourceWriteInst *call(ResourceWriteOp op, std::initializer_list<Value *> operands) noexcept;
 
     Instruction *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;

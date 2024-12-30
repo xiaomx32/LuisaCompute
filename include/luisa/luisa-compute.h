@@ -226,6 +226,9 @@
 #include <luisa/xir/instructions/print.h>
 #include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/ray_query.h>
+#include <luisa/xir/instructions/resource_query.h>
+#include <luisa/xir/instructions/resource_read.h>
+#include <luisa/xir/instructions/resource_write.h>
 #include <luisa/xir/instructions/return.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>

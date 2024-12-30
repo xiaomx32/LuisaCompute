@@ -27,6 +27,9 @@
 #include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
+#include <luisa/xir/instructions/resource_query.h>
+#include <luisa/xir/instructions/resource_read.h>
+#include <luisa/xir/instructions/resource_write.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/thread_group.h>
@@ -403,6 +406,21 @@ private:
         _emit_operands(inst);
     }
 
+    void _emit_resource_query_inst(const ResourceQueryInst *inst) noexcept {
+        _main << "resource_query " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
+    void _emit_resource_read_inst(const ResourceReadInst *inst) noexcept {
+        _main << "resource_read " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
+    void _emit_resource_write_inst(const ResourceWriteInst *inst) noexcept {
+        _main << "resource_write " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
     void _emit_conditional_branch_inst(const ConditionalBranchInst *inst) noexcept {
         LUISA_DEBUG_ASSERT(inst->true_block() != nullptr && inst->false_block() != nullptr,
                            "Conditional branch target blocks must not be null.");
@@ -508,7 +526,15 @@ private:
             case DerivedInstructionTag::ARITHMETIC:
                 _emit_arithmetic_inst(static_cast<const ArithmeticInst *>(inst));
                 break;
-            case DerivedInstructionTag::RESOURCE: break;
+            case DerivedInstructionTag::RESOURCE_QUERY:
+                _emit_resource_query_inst(static_cast<const ResourceQueryInst *>(inst));
+                break;
+            case DerivedInstructionTag::RESOURCE_READ:
+                _emit_resource_read_inst(static_cast<const ResourceReadInst *>(inst));
+                break;
+            case DerivedInstructionTag::RESOURCE_WRITE:
+                _emit_resource_write_inst(static_cast<const ResourceWriteInst *>(inst));
+                break;
         }
         _main << ";";
         _emit_use_debug_info(_main, inst->use_list());

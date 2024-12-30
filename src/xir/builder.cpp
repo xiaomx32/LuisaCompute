@@ -220,6 +220,30 @@ ArithmeticInst *Builder::call(const Type *type, ArithmeticOp op, std::initialize
     return this->call(type, op, luisa::span{operands.begin(), operands.end()});
 }
 
+ResourceQueryInst *Builder::call(const Type *type, ResourceQueryOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<ResourceQueryInst>(type, op, operands);
+}
+
+ResourceQueryInst *Builder::call(const Type *type, ResourceQueryOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(type, op, luisa::span{operands.begin(), operands.end()});
+}
+
+ResourceReadInst *Builder::call(const Type *type, ResourceReadOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<ResourceReadInst>(type, op, operands);
+}
+
+ResourceReadInst *Builder::call(const Type *type, ResourceReadOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(type, op, luisa::span{operands.begin(), operands.end()});
+}
+
+ResourceWriteInst *Builder::call(ResourceWriteOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<ResourceWriteInst>(op, operands);
+}
+
+ResourceWriteInst *Builder::call(ResourceWriteOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(op, luisa::span{operands.begin(), operands.end()});
+}
+
 AtomicInst *Builder::atomic_fetch_add(const Type *type, Value *base,
                                       luisa::span<Value *const> indices,
                                       Value *value) noexcept {

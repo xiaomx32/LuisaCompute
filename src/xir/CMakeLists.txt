@@ -31,6 +31,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         instructions/phi.cpp
         instructions/print.cpp
         instructions/ray_query.cpp
+        instructions/resource.cpp
         instructions/return.cpp
         instructions/store.cpp
         instructions/switch.cpp
