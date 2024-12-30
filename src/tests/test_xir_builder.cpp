@@ -29,10 +29,10 @@ int main() {
     ray->add_comment("This is a ray...");
 
     b.set_insertion_point(f->create_body_block());
-    auto add = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_MUL, {x, y});
-    auto mul = b.call(Type::of<float>(), xir::IntrinsicOp::BINARY_ADD, {add, y});
+    auto add = b.call(Type::of<float>(), xir::ArithmeticOp::BINARY_MUL, {x, y});
+    auto mul = b.call(Type::of<float>(), xir::ArithmeticOp::BINARY_ADD, {add, y});
     auto coord = xir::SPR_DispatchID::create();
-    auto coord_x = b.call(Type::of<uint>(), xir::IntrinsicOp::EXTRACT, {coord, u32_zero});
+    auto coord_x = b.call(Type::of<uint>(), xir::ArithmeticOp::EXTRACT, {coord, u32_zero});
     auto outline = b.outline();
     auto outline_body = outline->create_target_block();
     b.set_insertion_point(outline_body);
@@ -42,7 +42,7 @@ int main() {
     auto switch_case_0 = switch_->create_case_block(0);
     switch_case_0->add_comment("switch case 0");
     b.set_insertion_point(switch_case_0);
-    auto cond0 = b.call(Type::of<bool>(), xir::IntrinsicOp::BINARY_EQUAL, {coord_x, u32_zero});
+    auto cond0 = b.call(Type::of<bool>(), xir::ArithmeticOp::BINARY_EQUAL, {coord_x, u32_zero});
     auto switch_default = switch_->create_default_block();
     auto switch_merge = switch_->create_merge_block();
     b.set_insertion_point(switch_merge);

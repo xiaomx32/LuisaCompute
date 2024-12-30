@@ -4,7 +4,7 @@
 namespace luisa::compute::xir {
 
 CastInst::CastInst(const Type *target_type, CastOp op, Value *value) noexcept
-    : DerivedInstruction{target_type}, _op{op} {
+    : DerivedInstruction{target_type}, InstructionOpMixin{op} {
     auto operands = std::array{value};
     set_operands(operands);
 }
@@ -15,10 +15,6 @@ Value *CastInst::value() noexcept {
 
 const Value *CastInst::value() const noexcept {
     return operand(0);
-}
-
-void CastInst::set_op(CastOp op) noexcept {
-    _op = op;
 }
 
 void CastInst::set_value(Value *value) noexcept {

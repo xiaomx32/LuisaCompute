@@ -78,7 +78,7 @@ private:
         if (operand->type()->is_matrix()) {
             switch (expr->op()) {
                 case UnaryOp::PLUS: return operand;
-                case UnaryOp::MINUS: return b.call(expr->type(), IntrinsicOp::MATRIX_COMP_NEG, {operand});
+                case UnaryOp::MINUS: return b.call(expr->type(), ArithmeticOp::MATRIX_COMP_NEG, {operand});
                 default: break;
             }
             LUISA_ERROR_WITH_LOCATION("Invalid unary operation.");
@@ -86,10 +86,10 @@ private:
         // normal cases
         auto op = [unary_op = expr->op()] {
             switch (unary_op) {
-                case UnaryOp::PLUS: return IntrinsicOp::UNARY_PLUS;
-                case UnaryOp::MINUS: return IntrinsicOp::UNARY_MINUS;
-                case UnaryOp::NOT: return IntrinsicOp::UNARY_LOGIC_NOT;
-                case UnaryOp::BIT_NOT: return IntrinsicOp::UNARY_BIT_NOT;
+                case UnaryOp::PLUS: return ArithmeticOp::UNARY_PLUS;
+                case UnaryOp::MINUS: return ArithmeticOp::UNARY_MINUS;
+                case UnaryOp::NOT: return ArithmeticOp::UNARY_LOGIC_NOT;
+                case UnaryOp::BIT_NOT: return ArithmeticOp::UNARY_BIT_NOT;
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected unary operation.");
         }();
@@ -110,17 +110,17 @@ private:
             luisa::fixed_vector<Value *, 4u> elements;
             for (auto i = 0u; i < type->dimension(); i++) {
                 auto idx = _translate_constant_access_index(i);
-                auto elem = b.call(value_elem_type, IntrinsicOp::EXTRACT, {value, idx});
+                auto elem = b.call(value_elem_type, ArithmeticOp::EXTRACT, {value, idx});
                 elements.emplace_back(b.static_cast_if_necessary(type->element(), elem));
             }
-            return b.call(type, IntrinsicOp::AGGREGATE, elements);
+            return b.call(type, ArithmeticOp::AGGREGATE, elements);
         }
         // scalar to vector cast
         if (value->type()->is_scalar() && type->is_vector()) {
             value = b.static_cast_if_necessary(type->element(), value);
             luisa::fixed_vector<Value *, 4u> elements;
             for (auto i = 0u; i < type->dimension(); i++) { elements.emplace_back(value); }
-            return b.call(type, IntrinsicOp::AGGREGATE, elements);
+            return b.call(type, ArithmeticOp::AGGREGATE, elements);
         }
         LUISA_ERROR_WITH_LOCATION("Invalid cast operation.");
     }
@@ -130,29 +130,29 @@ private:
         auto op = [binary_op = expr->op(), lhs = expr->lhs(), rhs = expr->rhs()] {
             auto has_matrix = lhs->type()->is_matrix() || rhs->type()->is_matrix();
             switch (binary_op) {
-                case BinaryOp::ADD: return has_matrix ? IntrinsicOp::MATRIX_COMP_ADD : IntrinsicOp::BINARY_ADD;
-                case BinaryOp::SUB: return has_matrix ? IntrinsicOp::MATRIX_COMP_SUB : IntrinsicOp::BINARY_SUB;
+                case BinaryOp::ADD: return has_matrix ? ArithmeticOp::MATRIX_COMP_ADD : ArithmeticOp::BINARY_ADD;
+                case BinaryOp::SUB: return has_matrix ? ArithmeticOp::MATRIX_COMP_SUB : ArithmeticOp::BINARY_SUB;
                 case BinaryOp::MUL: {
                     if (lhs->type()->is_matrix() && (rhs->type()->is_matrix() || rhs->type()->is_vector())) {
-                        return IntrinsicOp::MATRIX_LINALG_MUL;
+                        return ArithmeticOp::MATRIX_LINALG_MUL;
                     }
-                    return has_matrix ? IntrinsicOp::MATRIX_COMP_MUL : IntrinsicOp::BINARY_MUL;
+                    return has_matrix ? ArithmeticOp::MATRIX_COMP_MUL : ArithmeticOp::BINARY_MUL;
                 }
-                case BinaryOp::DIV: return has_matrix ? IntrinsicOp::MATRIX_COMP_DIV : IntrinsicOp::BINARY_DIV;
-                case BinaryOp::MOD: return IntrinsicOp::BINARY_MOD;
-                case BinaryOp::BIT_AND: return IntrinsicOp::BINARY_BIT_AND;
-                case BinaryOp::BIT_OR: return IntrinsicOp::BINARY_BIT_OR;
-                case BinaryOp::BIT_XOR: return IntrinsicOp::BINARY_BIT_XOR;
-                case BinaryOp::SHL: return IntrinsicOp::BINARY_SHIFT_LEFT;
-                case BinaryOp::SHR: return IntrinsicOp::BINARY_SHIFT_RIGHT;
-                case BinaryOp::AND: return IntrinsicOp::BINARY_LOGIC_AND;
-                case BinaryOp::OR: return IntrinsicOp::BINARY_LOGIC_OR;
-                case BinaryOp::LESS: return IntrinsicOp::BINARY_LESS;
-                case BinaryOp::GREATER: return IntrinsicOp::BINARY_GREATER;
-                case BinaryOp::LESS_EQUAL: return IntrinsicOp::BINARY_LESS_EQUAL;
-                case BinaryOp::GREATER_EQUAL: return IntrinsicOp::BINARY_GREATER_EQUAL;
-                case BinaryOp::EQUAL: return IntrinsicOp::BINARY_EQUAL;
-                case BinaryOp::NOT_EQUAL: return IntrinsicOp::BINARY_NOT_EQUAL;
+                case BinaryOp::DIV: return has_matrix ? ArithmeticOp::MATRIX_COMP_DIV : ArithmeticOp::BINARY_DIV;
+                case BinaryOp::MOD: return ArithmeticOp::BINARY_MOD;
+                case BinaryOp::BIT_AND: return ArithmeticOp::BINARY_BIT_AND;
+                case BinaryOp::BIT_OR: return ArithmeticOp::BINARY_BIT_OR;
+                case BinaryOp::BIT_XOR: return ArithmeticOp::BINARY_BIT_XOR;
+                case BinaryOp::SHL: return ArithmeticOp::BINARY_SHIFT_LEFT;
+                case BinaryOp::SHR: return ArithmeticOp::BINARY_SHIFT_RIGHT;
+                case BinaryOp::AND: return ArithmeticOp::BINARY_LOGIC_AND;
+                case BinaryOp::OR: return ArithmeticOp::BINARY_LOGIC_OR;
+                case BinaryOp::LESS: return ArithmeticOp::BINARY_LESS;
+                case BinaryOp::GREATER: return ArithmeticOp::BINARY_GREATER;
+                case BinaryOp::LESS_EQUAL: return ArithmeticOp::BINARY_LESS_EQUAL;
+                case BinaryOp::GREATER_EQUAL: return ArithmeticOp::BINARY_GREATER_EQUAL;
+                case BinaryOp::EQUAL: return ArithmeticOp::BINARY_EQUAL;
+                case BinaryOp::NOT_EQUAL: return ArithmeticOp::BINARY_NOT_EQUAL;
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected binary operation.");
         }();
@@ -199,7 +199,7 @@ private:
         }
         args.emplace_back(base);
         std::reverse(args.begin(), args.end());
-        return b.call(expr->type(), IntrinsicOp::EXTRACT, args);
+        return b.call(expr->type(), ArithmeticOp::EXTRACT, args);
     }
 
     [[nodiscard]] Value *_translate_member_expr(Builder &b, const MemberExpr *expr, bool load_lval) noexcept {
@@ -211,7 +211,7 @@ private:
                     LUISA_ASSERT(!load_lval, "Unexpected lvalue swizzle.");
                     return b.gep(expr->type(), v, {index});
                 }
-                return b.call(expr->type(), IntrinsicOp::EXTRACT, {v, index});
+                return b.call(expr->type(), ArithmeticOp::EXTRACT, {v, index});
             }
             luisa::fixed_vector<Value *, 5u> args;
             auto v = _translate_expression(b, expr->self(), true);
@@ -220,7 +220,7 @@ private:
                 auto index = expr->swizzle_index(i);
                 args.emplace_back(_translate_constant_access_index(index));
             }
-            return b.call(expr->type(), IntrinsicOp::SHUFFLE, args);
+            return b.call(expr->type(), ArithmeticOp::SHUFFLE, args);
         }
         return _translate_member_or_access_expr(b, expr, load_lval);
     }
@@ -376,7 +376,7 @@ private:
             }
             return b.call(f->type(), f, args);
         }
-        auto pure_call = [&](IntrinsicOp target_op) noexcept {
+        auto alu_call = [&](ArithmeticOp target_op) noexcept {
             luisa::fixed_vector<Value *, 16u> args;
             args.reserve(expr->arguments().size());
             for (auto ast_arg : expr->arguments()) {
@@ -451,13 +451,13 @@ private:
                     auto arg_elem_type = arg->type()->element();
                     for (auto i = 0u; i < arg->type()->dimension(); i++) {
                         auto idx = _translate_constant_access_index(i);
-                        auto elem = b.call(arg_elem_type, IntrinsicOp::EXTRACT, {arg, idx});
+                        auto elem = b.call(arg_elem_type, ArithmeticOp::EXTRACT, {arg, idx});
                         args.emplace_back(_type_cast_if_necessary(b, elem_type, elem));
                     }
                 }
             }
             LUISA_ASSERT(args.size() == dim, "Vector call requires {} arguments.", dim);
-            return b.call(expr->type(), IntrinsicOp::AGGREGATE, args);
+            return b.call(expr->type(), ArithmeticOp::AGGREGATE, args);
         };
         auto make_matrix_call = [&](const Type *elem_type, int dim) noexcept {
             LUISA_ASSERT(elem_type == Type::of<float>(), "Matrix call only supports float element type.");
@@ -471,74 +471,74 @@ private:
                 auto arg = _translate_expression(b, ast_arg, true);
                 args.emplace_back(arg);
             }
-            return b.call(expr->type(), IntrinsicOp::AGGREGATE, args);
+            return b.call(expr->type(), ArithmeticOp::AGGREGATE, args);
         };
         // builtin function
         switch (expr->op()) {
             case CallOp::CUSTOM: LUISA_ERROR_WITH_LOCATION("Unexpected custom call operation.");
             case CallOp::EXTERNAL: LUISA_ERROR_WITH_LOCATION("Unexpected external call operation.");
-            case CallOp::ALL: return pure_call(IntrinsicOp::ALL);
-            case CallOp::ANY: return pure_call(IntrinsicOp::ANY);
-            case CallOp::SELECT: return pure_call(IntrinsicOp::SELECT);
-            case CallOp::CLAMP: return pure_call(IntrinsicOp::CLAMP);
-            case CallOp::SATURATE: return pure_call(IntrinsicOp::SATURATE);
-            case CallOp::LERP: return pure_call(IntrinsicOp::LERP);
-            case CallOp::SMOOTHSTEP: return pure_call(IntrinsicOp::SMOOTHSTEP);
-            case CallOp::STEP: return pure_call(IntrinsicOp::STEP);
-            case CallOp::ABS: return pure_call(IntrinsicOp::ABS);
-            case CallOp::MIN: return pure_call(IntrinsicOp::MIN);
-            case CallOp::MAX: return pure_call(IntrinsicOp::MAX);
-            case CallOp::CLZ: return pure_call(IntrinsicOp::CLZ);
-            case CallOp::CTZ: return pure_call(IntrinsicOp::CTZ);
-            case CallOp::POPCOUNT: return pure_call(IntrinsicOp::POPCOUNT);
-            case CallOp::REVERSE: return pure_call(IntrinsicOp::REVERSE);
-            case CallOp::ISINF: return pure_call(IntrinsicOp::ISINF);
-            case CallOp::ISNAN: return pure_call(IntrinsicOp::ISNAN);
-            case CallOp::ACOS: return pure_call(IntrinsicOp::ACOS);
-            case CallOp::ACOSH: return pure_call(IntrinsicOp::ACOSH);
-            case CallOp::ASIN: return pure_call(IntrinsicOp::ASIN);
-            case CallOp::ASINH: return pure_call(IntrinsicOp::ASINH);
-            case CallOp::ATAN: return pure_call(IntrinsicOp::ATAN);
-            case CallOp::ATAN2: return pure_call(IntrinsicOp::ATAN2);
-            case CallOp::ATANH: return pure_call(IntrinsicOp::ATANH);
-            case CallOp::COS: return pure_call(IntrinsicOp::COS);
-            case CallOp::COSH: return pure_call(IntrinsicOp::COSH);
-            case CallOp::SIN: return pure_call(IntrinsicOp::SIN);
-            case CallOp::SINH: return pure_call(IntrinsicOp::SINH);
-            case CallOp::TAN: return pure_call(IntrinsicOp::TAN);
-            case CallOp::TANH: return pure_call(IntrinsicOp::TANH);
-            case CallOp::EXP: return pure_call(IntrinsicOp::EXP);
-            case CallOp::EXP2: return pure_call(IntrinsicOp::EXP2);
-            case CallOp::EXP10: return pure_call(IntrinsicOp::EXP10);
-            case CallOp::LOG: return pure_call(IntrinsicOp::LOG);
-            case CallOp::LOG2: return pure_call(IntrinsicOp::LOG2);
-            case CallOp::LOG10: return pure_call(IntrinsicOp::LOG10);
-            case CallOp::POW: return pure_call(IntrinsicOp::POW);
-            case CallOp::SQRT: return pure_call(IntrinsicOp::SQRT);
-            case CallOp::RSQRT: return pure_call(IntrinsicOp::RSQRT);
-            case CallOp::CEIL: return pure_call(IntrinsicOp::CEIL);
-            case CallOp::FLOOR: return pure_call(IntrinsicOp::FLOOR);
-            case CallOp::FRACT: return pure_call(IntrinsicOp::FRACT);
-            case CallOp::TRUNC: return pure_call(IntrinsicOp::TRUNC);
-            case CallOp::ROUND: return pure_call(IntrinsicOp::ROUND);
-            case CallOp::FMA: return pure_call(IntrinsicOp::FMA);
-            case CallOp::COPYSIGN: return pure_call(IntrinsicOp::COPYSIGN);
-            case CallOp::CROSS: return pure_call(IntrinsicOp::CROSS);
-            case CallOp::DOT: return pure_call(IntrinsicOp::DOT);
-            case CallOp::LENGTH: return pure_call(IntrinsicOp::LENGTH);
-            case CallOp::LENGTH_SQUARED: return pure_call(IntrinsicOp::LENGTH_SQUARED);
-            case CallOp::NORMALIZE: return pure_call(IntrinsicOp::NORMALIZE);
-            case CallOp::FACEFORWARD: return pure_call(IntrinsicOp::FACEFORWARD);
-            case CallOp::REFLECT: return pure_call(IntrinsicOp::REFLECT);
-            case CallOp::REDUCE_SUM: return pure_call(IntrinsicOp::REDUCE_SUM);
-            case CallOp::REDUCE_PRODUCT: return pure_call(IntrinsicOp::REDUCE_PRODUCT);
-            case CallOp::REDUCE_MIN: return pure_call(IntrinsicOp::REDUCE_MIN);
-            case CallOp::REDUCE_MAX: return pure_call(IntrinsicOp::REDUCE_MAX);
-            case CallOp::OUTER_PRODUCT: return pure_call(IntrinsicOp::OUTER_PRODUCT);
-            case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: return pure_call(IntrinsicOp::MATRIX_COMP_MUL);
-            case CallOp::DETERMINANT: return pure_call(IntrinsicOp::MATRIX_DETERMINANT);
-            case CallOp::TRANSPOSE: return pure_call(IntrinsicOp::MATRIX_TRANSPOSE);
-            case CallOp::INVERSE: return pure_call(IntrinsicOp::MATRIX_INVERSE);
+            case CallOp::ALL: return alu_call(ArithmeticOp::ALL);
+            case CallOp::ANY: return alu_call(ArithmeticOp::ANY);
+            case CallOp::SELECT: return alu_call(ArithmeticOp::SELECT);
+            case CallOp::CLAMP: return alu_call(ArithmeticOp::CLAMP);
+            case CallOp::SATURATE: return alu_call(ArithmeticOp::SATURATE);
+            case CallOp::LERP: return alu_call(ArithmeticOp::LERP);
+            case CallOp::SMOOTHSTEP: return alu_call(ArithmeticOp::SMOOTHSTEP);
+            case CallOp::STEP: return alu_call(ArithmeticOp::STEP);
+            case CallOp::ABS: return alu_call(ArithmeticOp::ABS);
+            case CallOp::MIN: return alu_call(ArithmeticOp::MIN);
+            case CallOp::MAX: return alu_call(ArithmeticOp::MAX);
+            case CallOp::CLZ: return alu_call(ArithmeticOp::CLZ);
+            case CallOp::CTZ: return alu_call(ArithmeticOp::CTZ);
+            case CallOp::POPCOUNT: return alu_call(ArithmeticOp::POPCOUNT);
+            case CallOp::REVERSE: return alu_call(ArithmeticOp::REVERSE);
+            case CallOp::ISINF: return alu_call(ArithmeticOp::ISINF);
+            case CallOp::ISNAN: return alu_call(ArithmeticOp::ISNAN);
+            case CallOp::ACOS: return alu_call(ArithmeticOp::ACOS);
+            case CallOp::ACOSH: return alu_call(ArithmeticOp::ACOSH);
+            case CallOp::ASIN: return alu_call(ArithmeticOp::ASIN);
+            case CallOp::ASINH: return alu_call(ArithmeticOp::ASINH);
+            case CallOp::ATAN: return alu_call(ArithmeticOp::ATAN);
+            case CallOp::ATAN2: return alu_call(ArithmeticOp::ATAN2);
+            case CallOp::ATANH: return alu_call(ArithmeticOp::ATANH);
+            case CallOp::COS: return alu_call(ArithmeticOp::COS);
+            case CallOp::COSH: return alu_call(ArithmeticOp::COSH);
+            case CallOp::SIN: return alu_call(ArithmeticOp::SIN);
+            case CallOp::SINH: return alu_call(ArithmeticOp::SINH);
+            case CallOp::TAN: return alu_call(ArithmeticOp::TAN);
+            case CallOp::TANH: return alu_call(ArithmeticOp::TANH);
+            case CallOp::EXP: return alu_call(ArithmeticOp::EXP);
+            case CallOp::EXP2: return alu_call(ArithmeticOp::EXP2);
+            case CallOp::EXP10: return alu_call(ArithmeticOp::EXP10);
+            case CallOp::LOG: return alu_call(ArithmeticOp::LOG);
+            case CallOp::LOG2: return alu_call(ArithmeticOp::LOG2);
+            case CallOp::LOG10: return alu_call(ArithmeticOp::LOG10);
+            case CallOp::POW: return alu_call(ArithmeticOp::POW);
+            case CallOp::SQRT: return alu_call(ArithmeticOp::SQRT);
+            case CallOp::RSQRT: return alu_call(ArithmeticOp::RSQRT);
+            case CallOp::CEIL: return alu_call(ArithmeticOp::CEIL);
+            case CallOp::FLOOR: return alu_call(ArithmeticOp::FLOOR);
+            case CallOp::FRACT: return alu_call(ArithmeticOp::FRACT);
+            case CallOp::TRUNC: return alu_call(ArithmeticOp::TRUNC);
+            case CallOp::ROUND: return alu_call(ArithmeticOp::ROUND);
+            case CallOp::FMA: return alu_call(ArithmeticOp::FMA);
+            case CallOp::COPYSIGN: return alu_call(ArithmeticOp::COPYSIGN);
+            case CallOp::CROSS: return alu_call(ArithmeticOp::CROSS);
+            case CallOp::DOT: return alu_call(ArithmeticOp::DOT);
+            case CallOp::LENGTH: return alu_call(ArithmeticOp::LENGTH);
+            case CallOp::LENGTH_SQUARED: return alu_call(ArithmeticOp::LENGTH_SQUARED);
+            case CallOp::NORMALIZE: return alu_call(ArithmeticOp::NORMALIZE);
+            case CallOp::FACEFORWARD: return alu_call(ArithmeticOp::FACEFORWARD);
+            case CallOp::REFLECT: return alu_call(ArithmeticOp::REFLECT);
+            case CallOp::REDUCE_SUM: return alu_call(ArithmeticOp::REDUCE_SUM);
+            case CallOp::REDUCE_PRODUCT: return alu_call(ArithmeticOp::REDUCE_PRODUCT);
+            case CallOp::REDUCE_MIN: return alu_call(ArithmeticOp::REDUCE_MIN);
+            case CallOp::REDUCE_MAX: return alu_call(ArithmeticOp::REDUCE_MAX);
+            case CallOp::OUTER_PRODUCT: return alu_call(ArithmeticOp::OUTER_PRODUCT);
+            case CallOp::MATRIX_COMPONENT_WISE_MULTIPLICATION: return alu_call(ArithmeticOp::MATRIX_COMP_MUL);
+            case CallOp::DETERMINANT: return alu_call(ArithmeticOp::MATRIX_DETERMINANT);
+            case CallOp::TRANSPOSE: return alu_call(ArithmeticOp::MATRIX_TRANSPOSE);
+            case CallOp::INVERSE: return alu_call(ArithmeticOp::MATRIX_INVERSE);
             case CallOp::ATOMIC_EXCHANGE: return atomic_call(AtomicOp::EXCHANGE);
             case CallOp::ATOMIC_COMPARE_EXCHANGE: return atomic_call(AtomicOp::COMPARE_EXCHANGE);
             case CallOp::ATOMIC_FETCH_ADD: return atomic_call(AtomicOp::FETCH_ADD);
@@ -922,7 +922,7 @@ private:
             auto step = _translate_expression(b, ast_for->step(), true);
             auto cast_step = _type_cast_if_necessary(b, t, step);
             auto prev = b.load(t, var);
-            auto next = b.call(t, IntrinsicOp::BINARY_ADD, {prev, cast_step});
+            auto next = b.call(t, ArithmeticOp::BINARY_ADD, {prev, cast_step});
             b.store(var, next);
             // jump back to prepare block
             b.br(prepare_block);

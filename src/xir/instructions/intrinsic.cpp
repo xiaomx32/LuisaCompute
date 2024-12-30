@@ -10,6 +10,6 @@ namespace luisa::compute::xir {
 
 IntrinsicInst::IntrinsicInst(const Type *type, IntrinsicOp op,
                              luisa::span<Value *const> operands) noexcept
-    : DerivedInstruction{type}, _op{op} { set_operands(operands); }
+    : DerivedInstruction{type}, InstructionOpMixin{op} { set_operands(operands); }
 
 }// namespace luisa::compute::xir

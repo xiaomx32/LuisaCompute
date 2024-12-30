@@ -207,4 +207,16 @@ public:
     }
 };
 
+template<typename OpType>
+class InstructionOpMixin {
+
+private:
+    OpType _op;
+
+public:
+    explicit InstructionOpMixin(OpType op) noexcept : _op{op} {}
+    [[nodiscard]] OpType op() const noexcept { return _op; }
+    void set_op(OpType op) noexcept { _op = op; }
+};
+
 }// namespace luisa::compute::xir

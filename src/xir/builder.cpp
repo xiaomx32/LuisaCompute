@@ -180,6 +180,10 @@ ThreadGroupInst *Builder::call(const Type *type, ThreadGroupOp op, luisa::span<V
     return _create_and_append_instruction<ThreadGroupInst>(type, op, operands);
 }
 
+ThreadGroupInst *Builder::call(const Type *type, ThreadGroupOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(type, op, luisa::span{operands.begin(), operands.end()});
+}
+
 ThreadGroupInst *Builder::shader_execution_reorder() noexcept {
     return this->call(nullptr, ThreadGroupOp::SHADER_EXECUTION_REORDER, {});
 }
@@ -202,6 +206,18 @@ ThreadGroupInst *Builder::raster_quad_ddy(const Type *type, Value *value) noexce
 
 AtomicInst *Builder::call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept {
     return _create_and_append_instruction<AtomicInst>(type, op, base, indices, values);
+}
+
+AtomicInst *Builder::call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, std::initializer_list<Value *> values) noexcept {
+    return this->call(type, op, base, indices, luisa::span{values.begin(), values.end()});
+}
+
+ArithmeticInst *Builder::call(const Type *type, ArithmeticOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<ArithmeticInst>(type, op, operands);
+}
+
+ArithmeticInst *Builder::call(const Type *type, ArithmeticOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(type, op, luisa::span{operands.begin(), operands.end()});
 }
 
 AtomicInst *Builder::atomic_fetch_add(const Type *type, Value *base,

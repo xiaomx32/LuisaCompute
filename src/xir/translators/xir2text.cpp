@@ -6,6 +6,7 @@
 #include <luisa/xir/constant.h>
 #include <luisa/xir/special_register.h>
 #include <luisa/xir/instructions/alloca.h>
+#include <luisa/xir/instructions/arithmetic.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/atomic.h>
@@ -381,11 +382,8 @@ private:
     }
 
     void _emit_cast_inst(const CastInst *inst) noexcept {
-        _main << "cast ";
-        switch (inst->op()) {
-            case CastOp::STATIC_CAST: _main << "static"; break;
-            case CastOp::BITWISE_CAST: _main << "bitwise"; break;
-        }
+        _main << "cast " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
     }
 
     void _emit_print_inst(const PrintInst *inst) noexcept {
@@ -399,6 +397,11 @@ private:
         LUISA_DEBUG_ASSERT(inst->target_block() != nullptr,
                            "Branch target block must not be null.");
         _main << "br " << _value_ident(inst->target_block());
+    }
+
+    void _emit_arithmetic_inst(const ArithmeticInst *inst) noexcept {
+        _main << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
     }
 
     void _emit_conditional_branch_inst(const ConditionalBranchInst *inst) noexcept {
@@ -503,7 +506,9 @@ private:
             case DerivedInstructionTag::THREAD_GROUP:
                 _emit_thread_group_inst(static_cast<const ThreadGroupInst *>(inst));
                 break;
-            case DerivedInstructionTag::ARITHMETIC: break;
+            case DerivedInstructionTag::ARITHMETIC:
+                _emit_arithmetic_inst(static_cast<const ArithmeticInst *>(inst));
+                break;
             case DerivedInstructionTag::RESOURCE: break;
         }
         _main << ";";

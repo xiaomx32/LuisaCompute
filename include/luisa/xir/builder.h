@@ -3,6 +3,7 @@
 #include <luisa/ast/type_registry.h>
 #include <luisa/xir/constant.h>
 #include <luisa/xir/instructions/alloca.h>
+#include <luisa/xir/instructions/arithmetic.h>
 #include <luisa/xir/instructions/assert.h>
 #include <luisa/xir/instructions/assume.h>
 #include <luisa/xir/instructions/atomic.h>
@@ -86,6 +87,15 @@ public:
     IntrinsicInst *call(const Type *type, IntrinsicOp op, luisa::span<Value *const> arguments) noexcept;
     IntrinsicInst *call(const Type *type, IntrinsicOp op, std::initializer_list<Value *> arguments) noexcept;
 
+    AtomicInst *call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept;
+    AtomicInst *call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, std::initializer_list<Value *> values) noexcept;
+
+    ThreadGroupInst *call(const Type *type, ThreadGroupOp op, luisa::span<Value *const> operands) noexcept;
+    ThreadGroupInst *call(const Type *type, ThreadGroupOp op, std::initializer_list<Value *> operands) noexcept;
+
+    ArithmeticInst *call(const Type *type, ArithmeticOp op, luisa::span<Value *const> operands) noexcept;
+    ArithmeticInst *call(const Type *type, ArithmeticOp op, std::initializer_list<Value *> operands) noexcept;
+
     Instruction *static_cast_(const Type *type, Value *value) noexcept;
     CastInst *bit_cast_(const Type *type, Value *value) noexcept;
 
@@ -113,7 +123,6 @@ public:
     OutlineInst *outline() noexcept;
     RayQueryInst *ray_query(Value *query_object) noexcept;
 
-    AtomicInst *call(const Type *type, AtomicOp op, Value *base, luisa::span<Value *const> indices, luisa::span<Value *const> values) noexcept;
     AtomicInst *atomic_fetch_add(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_fetch_sub(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_fetch_and(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
@@ -124,7 +133,6 @@ public:
     AtomicInst *atomic_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_compare_exchange(const Type *type, Value *base, luisa::span<Value *const> indices, Value *expected, Value *desired) noexcept;
 
-    ThreadGroupInst *call(const Type *type, ThreadGroupOp op, luisa::span<Value *const> operands) noexcept;
     ThreadGroupInst *shader_execution_reorder() noexcept;
     ThreadGroupInst *shader_execution_reorder(Value *hint, Value *hint_bits) noexcept;
     ThreadGroupInst *synchronize_block() noexcept;

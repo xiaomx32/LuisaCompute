@@ -6,7 +6,7 @@ namespace luisa::compute::xir {
 AtomicInst::AtomicInst(const Type *type, AtomicOp op,
                        Value *base, luisa::span<Value *const> indices,
                        luisa::span<Value *const> values) noexcept
-    : DerivedInstruction{type}, _op{op} {
+    : DerivedInstruction{type}, InstructionOpMixin{op} {
     auto expected_value_count = this->value_count();
     LUISA_DEBUG_ASSERT(values.empty() || values.size() == expected_value_count,
                        "Invalid number of values for atomic instruction.");
