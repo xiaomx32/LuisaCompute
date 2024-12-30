@@ -1,7 +1,5 @@
-#include "luisa/core/logging.h"
-
-#include <luisa/xir/instructions/alloca.h>
-#include <luisa/xir/instructions/gep.h>
+#include <luisa/core/logging.h>
+#include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/passes/dce.h>
 
 namespace luisa::compute::xir {
@@ -24,6 +22,11 @@ void eliminate_dead_code_in_function(Function *function, DCEInfo &info) noexcept
             }
             return true;// no user or all users are dead
         };
+        auto collect_if_dead = [&](Instruction *inst) noexcept {
+            if (all_users_dead(inst)) {
+                dead.emplace(inst);
+            }
+        };
         // collect all dead instructions
         for (;;) {
             auto prev_size = dead.size();
@@ -39,10 +42,24 @@ void eliminate_dead_code_in_function(Function *function, DCEInfo &info) noexcept
                         case DerivedInstructionTag::CLOCK: [[fallthrough]];
                         case DerivedInstructionTag::RESOURCE_QUERY: [[fallthrough]];
                         case DerivedInstructionTag::RESOURCE_READ: {
-                            if (all_users_dead(inst)) {
-                                dead.emplace(inst);
-                            }
+                            collect_if_dead(inst);
                             break;
+                        }
+                        case DerivedInstructionTag::INTRINSIC: {
+                            auto intrinsic = static_cast<IntrinsicInst *>(inst);
+                            switch (intrinsic->op()) {
+                                case IntrinsicOp::NOP: [[fallthrough]];
+                                case IntrinsicOp::AUTODIFF_GRADIENT: [[fallthrough]];
+                                case IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: [[fallthrough]];
+                                case IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: [[fallthrough]];
+                                case IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: [[fallthrough]];
+                                case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: [[fallthrough]];
+                                case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: {
+                                    collect_if_dead(inst);
+                                    break;
+                                }
+                                default: break;
+                            }
                         }
                         default: break;
                     }
