@@ -236,6 +236,7 @@
 #include <luisa/xir/metadata/location.h>
 #include <luisa/xir/metadata/name.h>
 #include <luisa/xir/module.h>
+#include <luisa/xir/passes/dce.h>
 #include <luisa/xir/passes/extract_cfg.h>
 #include <luisa/xir/passes/outline.h>
 #include <luisa/xir/passes/sink_alloca.h>

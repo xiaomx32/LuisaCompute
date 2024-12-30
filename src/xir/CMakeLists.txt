@@ -49,6 +49,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         translators/xir2text.cpp
 
         # passes
+        passes/dce.cpp
         passes/extract_cfg.cpp
         passes/outline.cpp
         passes/sink_alloca.cpp

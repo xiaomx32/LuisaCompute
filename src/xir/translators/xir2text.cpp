@@ -115,9 +115,8 @@ private:
         for (auto arg : f->arguments()) {
             static_cast<void>(_value_uid(arg));
         }
-        if (f->is_definition()) {
-            auto def = static_cast<const FunctionDefinition *>(f);
-            _traverse_values_in_basic_block(def->body_block());
+        if (auto definition = f->definition()) {
+            _traverse_values_in_basic_block(definition->body_block());
         }
     }
 
@@ -564,10 +563,9 @@ private:
             _main << "\n";
         }
         _main << ")";
-        if (f->derived_function_tag() != DerivedFunctionTag::EXTERNAL) {
+        if (auto definition = f->definition()) {
             _main << " = define ";
-            auto def = static_cast<const FunctionDefinition *>(f);
-            _emit_basic_block(def->body_block(), 0);
+            _emit_basic_block(definition->body_block(), 0);
         }
         _main << ";";
         _emit_use_debug_info(_main, f->use_list());

@@ -1,6 +1,7 @@
 //
 // Created by swfly on 2024/11/21.
 //
+
 #include <fstream>
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -15,12 +16,15 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 
-#include <luisa/xir/translators/ast2xir.h>
-#include <luisa/xir/translators/xir2text.h>
 #include <luisa/core/stl.h>
 #include <luisa/core/logging.h>
 #include <luisa/core/clock.h>
+
+#include <luisa/xir/translators/ast2xir.h>
+#include <luisa/xir/translators/xir2text.h>
 #include <luisa/xir/instructions/print.h>
+
+#include <luisa/xir/passes/dce.h>
 
 #include "../common/shader_print_formatter.h"
 
@@ -150,7 +154,11 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     auto xir_module = xir::ast_to_xir_translate(kernel, {});
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
-    //    LUISA_INFO("Kernel XIR:\n{}", xir::xir_to_text_translate(xir_module, true));
+
+    // run some simple optimization passes on XIR to reduce the size of LLVM IR
+    Clock opt_clk;
+    auto dce_info = xir::dce_pass_run_on_module(xir_module);
+    LUISA_INFO("DCE removed {} instructions in {} ms.", dce_info.removed_instructions.size(), opt_clk.toc());
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto builtin_module = fallback_backend_device_builtin_module();
@@ -382,7 +390,7 @@ private:
     std::byte *_data;
 
 public:
-    FallbackShaderDispatchBuffer(size_t size) noexcept
+    explicit FallbackShaderDispatchBuffer(size_t size) noexcept
         : _data{luisa::allocate_with_allocator<std::byte>(argument_buffer_offset + size)} {}
     ~FallbackShaderDispatchBuffer() noexcept {
         if (_data != nullptr) {

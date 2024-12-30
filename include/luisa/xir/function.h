@@ -11,6 +11,8 @@ enum struct DerivedFunctionTag {
     EXTERNAL,
 };
 
+class FunctionDefinition;
+
 class LC_XIR_API Function : public IntrusiveForwardNode<Function, DerivedValue<DerivedValueTag::FUNCTION>> {
 
 private:
@@ -38,6 +40,11 @@ public:
 
     [[nodiscard]] auto &arguments() noexcept { return _arguments; }
     [[nodiscard]] auto &arguments() const noexcept { return _arguments; }
+
+    [[nodiscard]] virtual FunctionDefinition *definition() noexcept { return nullptr; }
+    [[nodiscard]] const FunctionDefinition *definition() const noexcept {
+        return const_cast<Function *>(this)->definition();
+    }
 };
 
 using FunctionList = IntrusiveForwardList<Function>;
@@ -63,6 +70,8 @@ public:
 
     [[nodiscard]] BasicBlock *body_block() noexcept { return _body_block; }
     [[nodiscard]] const BasicBlock *body_block() const noexcept { return _body_block; }
+
+    [[nodiscard]] FunctionDefinition *definition() noexcept final { return this; }
 
 private:
     static void _traverse_basic_block_recursive(BasicBlock *block, void *visit_ctx,

@@ -35,8 +35,7 @@ namespace detail {
 }
 
 static void trace_gep_instructions_in_function(Function *function, TraceGEPInfo &info) noexcept {
-    if (function->is_definition()) {
-        auto definition = static_cast<FunctionDefinition *>(function);
+    if (auto definition = function->definition()) {
         definition->traverse_instructions([&](Instruction *inst) noexcept {
             if (inst->derived_instruction_tag() == DerivedInstructionTag::GEP) {
                 auto gep_inst = static_cast<GEPInst *>(inst);
