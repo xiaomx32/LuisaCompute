@@ -113,8 +113,7 @@ luisa::string_view to_string(ArithmeticOp op) noexcept {
         case ArithmeticOp::INSERT: return "insert"sv;
         case ArithmeticOp::EXTRACT: return "extract"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown arithmetic operation (code = {}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown arithmetic operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 ArithmeticOp arithmetic_op_from_string(luisa::string_view name) noexcept {
@@ -236,8 +235,7 @@ luisa::string_view to_string(AtomicOp op) noexcept {
         case AtomicOp::FETCH_MIN: return "fetch_min"sv;
         case AtomicOp::FETCH_MAX: return "fetch_max"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown atomic operation (code = {}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown atomic operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 AtomicOp atomic_op_from_string(luisa::string_view name) noexcept {
@@ -264,8 +262,7 @@ luisa::string_view to_string(CastOp op) noexcept {
         case CastOp::STATIC_CAST: return "static_cast"sv;
         case CastOp::BITWISE_CAST: return "bitwise_cast"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown cast operation (code = {}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown cast operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 CastOp cast_op_from_string(luisa::string_view name) noexcept {
@@ -472,8 +469,7 @@ luisa::string_view to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel"sv;
         case IntrinsicOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation (code = {}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
@@ -701,8 +697,7 @@ luisa::string_view to_string(ThreadGroupOp op) noexcept {
         case ThreadGroupOp::WARP_READ_FIRST_ACTIVE_LANE: return "warp_read_first_active_lane"sv;
         case ThreadGroupOp::SYNCHRONIZE_BLOCK: return "synchronize_block"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown thread_group operation (code = {}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown thread_group operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 ThreadGroupOp thread_group_op_from_string(luisa::string_view name) noexcept {

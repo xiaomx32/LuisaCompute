@@ -30,8 +30,7 @@ def process(module_name, file):
 """)
     file.writelines([f"        case {module_name}Op::{op}: return \"{op.lower()}\"sv;\n" for op in ops])
     file.write(f"""    }}
-    LUISA_ERROR_WITH_LOCATION("Unknown {to_snake_case(module_name)} operation (code = {{}}).",
-                          static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown {to_snake_case(module_name)} operation (code = {{}}).", static_cast<uint32_t>(op));
 }}
 
 {module_name}Op {to_snake_case(module_name)}_op_from_string(luisa::string_view name) noexcept {{
