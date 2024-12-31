@@ -83,14 +83,18 @@ public:
         auto visitor = [](void *ctx, BasicBlock *block) noexcept {
             (*static_cast<Visit *>(ctx))(block);
         };
-        _traverse_basic_block_recursive(_body_block, &visit, visitor);
+        _traverse_basic_block_recursive(
+            _body_block, &visit, [](void *ctx, BasicBlock *block) noexcept {
+                (*static_cast<Visit *>(ctx))(block);
+            });
     }
     template<typename Visit>
     void traverse_basic_blocks(Visit &&visit) const noexcept {
-        auto visitor = [](void *ctx, BasicBlock *block) noexcept {
-            (*static_cast<Visit *>(ctx))(const_cast<const BasicBlock *>(block));
-        };
-        _traverse_basic_block_recursive(const_cast<BasicBlock *>(_body_block), &visit, visitor);
+        _traverse_basic_block_recursive(
+            const_cast<BasicBlock *>(_body_block), &visit,
+            [](void *ctx, BasicBlock *block) noexcept {
+                (*static_cast<Visit *>(ctx))(const_cast<const BasicBlock *>(block));
+            });
     }
     template<typename Visit>
     void traverse_instructions(Visit &&visit) noexcept {

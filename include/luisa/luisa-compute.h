@@ -240,7 +240,6 @@
 #include <luisa/xir/metadata/name.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/passes/dce.h>
-#include <luisa/xir/passes/extract_cfg.h>
 #include <luisa/xir/passes/outline.h>
 #include <luisa/xir/passes/sink_alloca.h>
 #include <luisa/xir/passes/trace_gep.h>

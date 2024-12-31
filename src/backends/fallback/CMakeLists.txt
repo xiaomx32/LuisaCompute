@@ -33,23 +33,34 @@ if (LLVM_FOUND AND embree_FOUND)
 
     # exclude codegen from unity build since it's too big
     set_source_files_properties(fallback_codegen.cpp PROPERTIES UNITY_BUILD OFF)
+    target_link_directories(luisa-compute-backend-fallback PRIVATE ${LLVM_LIBRARY_DIRS})
 
     # use libdispatch or TBB for parallel_for on non-Apple Unix systems if available
     if (UNIX AND NOT APPLE)
-        # libdispatch
-        find_library(DISPATCH_LIB dispatch)
-        find_path(DISPATCH_INCLUDE_DIR dispatch/dispatch.h)
-        if (DISPATCH_LIB AND DISPATCH_INCLUDE_DIR)
-            target_compile_definitions(luisa-compute-backend-fallback PRIVATE LUISA_COMPUTE_ENABLE_LIBDISPATCH=1)
-            target_link_libraries(luisa-compute-backend-fallback PRIVATE ${DISPATCH_LIB})
-            target_include_directories(luisa-compute-backend-fallback PRIVATE ${DISPATCH_INCLUDE_DIR})
+        # check if the libraries exist
+        # map library dirs to link directories options
+        set(LLVM_LINK_DIR_OPTIONS "")
+        foreach (dir ${LLVM_LIBRARY_DIRS})
+            list(APPEND LLVM_LINK_DIR_OPTIONS "-L${dir}")
+        endforeach ()
+        try_compile(LLVM_LIBS_EXIST
+                SOURCE_FROM_CONTENT "try_link_llvm.cpp" "int main() {}"
+                LINK_OPTIONS ${LLVM_LINK_DIR_OPTIONS}
+                LINK_LIBRARIES ${LLVM_LIBS})
+        if (LLVM_LIB_EXIST)
+            message(STATUS "Linking with LLVM libraries: ${LLVM_LIBS}")
         else ()
-            find_package(TBB CONFIG)
-            if (TBB_FOUND)
-                target_compile_definitions(luisa-compute-backend-fallback PRIVATE LUISA_COMPUTE_ENABLE_TBB=1)
-                target_link_libraries(luisa-compute-backend-fallback PRIVATE TBB::tbb)
+            message(WARNING "LLVM libraries not found. Trying to link with LLVM shared libraries.")
+            try_compile(LLVM_DYLIB_EXISTS
+                    SOURCE_FROM_CONTENT "try_link_llvm_dylib.cpp" "int main() {}"
+                    LINK_LIBRARIES "LLVM")
+            if (LLVM_DYLIB_EXISTS)
+                message(STATUS "Linking with LLVM shared library.")
+                set(LLVM_LIBS "LLVM")
             else ()
-                message(WARNING "TBB and libdispatch not found. Performance of the fallback backend may be affected.")
+                find_library(LLVM_DYLIB LLVM REQUIRED)
+                message(STATUS "LLVM libraries found at ${LLVM_DYLIB}")
+                set(LLVM_LIBS ${LLVM_DYLIB})
             endif ()
         endif ()
     endif ()

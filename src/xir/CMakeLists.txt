@@ -51,7 +51,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
 
         # passes
         passes/dce.cpp
-        passes/extract_cfg.cpp
+        passes/dom_tree.cpp
         passes/outline.cpp
         passes/sink_alloca.cpp
         passes/trace_gep.cpp
