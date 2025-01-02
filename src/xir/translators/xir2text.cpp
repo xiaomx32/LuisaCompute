@@ -37,6 +37,7 @@
 #include <luisa/xir/metadata/comment.h>
 #include <luisa/xir/metadata/location.h>
 #include <luisa/xir/metadata/name.h>
+#include <luisa/xir/passes/dom_tree.h>
 #include <luisa/xir/translators/xir2text.h>
 
 namespace luisa::compute::xir {
@@ -171,6 +172,21 @@ private:
             for (auto &&u : uses) {
                 ss << " " << _value_ident(u.user());
             }
+        }
+    }
+
+    void _emit_basic_block_use_and_pred_debug_info(StringScratch &ss, const BasicBlock *bb) noexcept {
+        _emit_use_debug_info(ss, bb->use_list());
+        if (_debug_info) {
+            if (bb->use_list().empty()) {
+                ss << "// ";
+            } else {
+                ss << ", ";
+            }
+            ss << "preds:";
+            bb->traverse_predecessors(false, [&](const BasicBlock *pred) noexcept {
+                ss << " " << _value_ident(pred);
+            });
         }
     }
 
@@ -550,7 +566,7 @@ private:
                 _main << " ";
             }
             _main << _value_ident(b) << ": {";
-            _emit_use_debug_info(_main, b->use_list());
+            _emit_basic_block_use_and_pred_debug_info(_main, b);
             _main << "\n";
             for (auto &&inst : b->instructions()) {
                 _emit_instruction(&inst, indent + 1);
@@ -596,6 +612,80 @@ private:
         _main << ";";
         _emit_use_debug_info(_main, f->use_list());
         _main << "\n\n";
+        if (auto definition = f->definition();
+            definition != nullptr && _debug_info) {
+            _emit_control_flow_graph_debug_info(
+                const_cast<FunctionDefinition *>(definition));
+        }
+    }
+
+    void _emit_control_flow_graph_debug_info(FunctionDefinition *f) noexcept {
+        // CFG Nodes
+        _main << R"(// CFG = {"function": ")" << _value_ident(f) << "\", ";
+        {
+            _main << "\"nodes\": [";
+            f->traverse_basic_blocks([&](auto block) noexcept {
+                _main << "\"" << _value_ident(block) << "\", ";
+            });
+            _main.pop_back();
+            _main.pop_back();
+            _main << "], ";
+        }
+        // CFG Edges
+        {
+            _main << "\"edges\": {";
+            f->traverse_basic_blocks([&](auto block) noexcept {
+                _main << "\"" << _value_ident(block) << "\": [";
+                bool any_succ = false;
+                block->traverse_successors(false, [&](auto succ) noexcept {
+                    any_succ = true;
+                    _main << "\"" << _value_ident(succ) << "\", ";
+                });
+                if (any_succ) {
+                    _main.pop_back();
+                    _main.pop_back();
+                }
+                _main << "], ";
+            });
+            _main.pop_back();
+            _main.pop_back();
+            _main << "}, ";
+        }
+        // Dominance Tree
+        {
+            auto dom_tree = compute_dom_tree(f);
+            _main << "\"dominance_tree\": {";
+            for (auto &&[b, node] : dom_tree.nodes()) {
+                _main << "\"" << _value_ident(b) << "\": [";
+                for (auto &&child : node->children()) {
+                    _main << "\"" << _value_ident(child->block()) << "\", ";
+                }
+                if (!node->children().empty()) {
+                    _main.pop_back();
+                    _main.pop_back();
+                }
+                _main << "], ";
+            }
+            _main.pop_back();
+            _main.pop_back();
+            // Dominance Frontiers
+            _main << "}, \"dominance_frontiers\": {";
+            for (auto &&[b, node] : dom_tree.nodes()) {
+                _main << "\"" << _value_ident(b) << "\": [";
+                for (auto &&frontier : node->frontiers()) {
+                    _main << "\"" << _value_ident(frontier->block()) << "\", ";
+                }
+                if (!node->frontiers().empty()) {
+                    _main.pop_back();
+                    _main.pop_back();
+                }
+                _main << "], ";
+            }
+            _main.pop_back();
+            _main.pop_back();
+            _main << "}";
+        }
+        _main << "}\n\n";
     }
 
     void _emit_module(const Module *module) noexcept {

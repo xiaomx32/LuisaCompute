@@ -26,6 +26,7 @@ class ShaderPrintFormatter;
 
 namespace luisa::compute::fallback {
 
+class FallbackDevice;
 class FallbackCommandQueue;
 
 class FallbackShader {
@@ -53,7 +54,7 @@ private:
 public:
     void dispatch(ThreadPool &pool, const ShaderDispatchCommand *command) const noexcept;
     void dispatch(FallbackCommandQueue *queue, luisa::unique_ptr<ShaderDispatchCommand> command) noexcept;
-    FallbackShader(const ShaderOption &option, Function kernel) noexcept;
+    FallbackShader(FallbackDevice *device, const ShaderOption &option, Function kernel) noexcept;
     ~FallbackShader() noexcept;
 
     [[nodiscard]] auto argument_buffer_size() const noexcept { return _argument_buffer_size; }

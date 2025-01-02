@@ -7,7 +7,7 @@ inline DomTreeNode::DomTreeNode(BasicBlock *block) noexcept
     : _parent{nullptr}, _block{block} {}
 
 inline void DomTreeNode::add_child(DomTreeNode *child) noexcept {
-    LUISA_DEBUG_ASSERT(child != nullptr && child->_parent == nullptr, "Invalid child.");
+    LUISA_DEBUG_ASSERT(child != nullptr && child->_parent == nullptr && child != this, "Invalid child.");
     LUISA_DEBUG_ASSERT(std::find(_children.begin(), _children.end(), child) == _children.end(), "Child already exists.");
     child->_parent = this;
     _children.emplace_back(child);
@@ -37,9 +37,10 @@ inline void DomTree::set_root(DomTreeNode *root) noexcept {
 
 inline void DomTree::compute_dominance_frontiers() noexcept {
     luisa::fixed_vector<BasicBlock *, 16u> preds;
+    luisa::unordered_map<DomTreeNode *, luisa::unordered_set<DomTreeNode *>> frontiers;
     for (auto &&[b, node] : _nodes) {
         preds.clear();
-        b->traverse_predecessors(true, [&](BasicBlock *pred) noexcept {
+        b->traverse_predecessors(false, [&](BasicBlock *pred) noexcept {
             preds.emplace_back(pred);
         });
         if (preds.size() >= 2) {
@@ -47,12 +48,20 @@ inline void DomTree::compute_dominance_frontiers() noexcept {
                 auto runner = pred;
                 while (runner != node->parent()->block()) {
                     auto runner_node = _nodes[runner].get();
-                    runner_node->add_frontier(node.get());
+                    if (frontiers[runner_node].emplace(node.get()).second) {
+                        runner_node->add_frontier(node.get());
+                    }
                     runner = runner_node->parent()->block();
                 }
             }
         }
     }
+}
+
+const DomTreeNode *DomTree::node(BasicBlock *block) const noexcept {
+    auto iter = _nodes.find(block);
+    LUISA_ASSERT(iter != _nodes.end(), "Block not found in the dom tree.");
+    return iter->second.get();
 }
 
 // Reference: A Simple, Fast Dominance Algorithm [Cooper et al. 2001]
@@ -77,13 +86,17 @@ DomTree compute_dom_tree(Function *function) noexcept {
     // dominance information
     luisa::unordered_map<BasicBlock *, BasicBlock *> doms;
     auto intersect = [&](BasicBlock *b1, BasicBlock *b2) noexcept {
+        auto checked = [](BasicBlock *b) noexcept {
+            LUISA_DEBUG_ASSERT(b != nullptr, "Invalid block.");
+            return b;
+        };
         auto finger1 = b1;
         auto finger2 = b2;
-        while (finger1 != finger2) {
-            while (postorder_index[finger1] < postorder_index[finger2]) {
+        while (checked(finger1) != checked(finger2)) {
+            while (postorder_index[checked(finger1)] < postorder_index[checked(finger2)]) {
                 finger1 = doms[finger1];
             }
-            while (postorder_index[finger2] < postorder_index[finger1]) {
+            while (postorder_index[checked(finger2)] < postorder_index[checked(finger1)]) {
                 finger2 = doms[finger2];
             }
         }
@@ -96,24 +109,26 @@ DomTree compute_dom_tree(Function *function) noexcept {
         auto changed = false;
         for (auto block : reverse_postorder) {
             auto new_idom = static_cast<BasicBlock *>(nullptr);
-            block->traverse_predecessors(true, [&](BasicBlock *pred) noexcept {
-                if (new_idom == nullptr) {
-                    new_idom = pred;
-                } else if (auto pred_dom = doms[pred]) {
-                    new_idom = intersect(new_idom, pred_dom);
-                }
-                if (auto &dom = doms[block]; dom != new_idom) {
-                    dom = new_idom;
-                    changed = true;
+            block->traverse_predecessors(false, [&](BasicBlock *pred) noexcept {
+                if (doms[pred] != nullptr) {
+                    if (new_idom == nullptr) {
+                        new_idom = pred;
+                    } else {
+                        new_idom = intersect(pred, new_idom);
+                    }
                 }
             });
+            if (auto &dom = doms[block]; dom != new_idom) {
+                dom = new_idom;
+                changed = true;
+            }
         }
         if (!changed) { break; }
     }
     // create the dom tree
     DomTree tree;
-    for (auto [block, parent] : doms) {
-        auto parent_node = tree.add_or_get_node(parent);
+    for (auto block : reverse_postorder) {
+        auto parent_node = tree.add_or_get_node(doms[block]);
         auto block_node = tree.add_or_get_node(block);
         parent_node->add_child(block_node);
     }

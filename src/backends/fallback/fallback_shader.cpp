@@ -28,6 +28,7 @@
 
 #include "../common/shader_print_formatter.h"
 
+#include "fallback_device.h"
 #include "fallback_codegen.h"
 #include "fallback_texture.h"
 #include "fallback_accel.h"
@@ -37,6 +38,13 @@
 #include "fallback_command_queue.h"
 #include "fallback_device_api.h"
 #include "fallback_device_api_ir_module.h"
+
+static const bool LUISA_SHOULD_DUMP_XIR = [] {
+    if (auto env = getenv("LUISA_DUMP_XIR")) {
+        return std::string_view{env} == "1";
+    }
+    return false;
+}();
 
 namespace luisa::compute::fallback {
 
@@ -80,7 +88,7 @@ struct FallbackShaderLaunchConfig {
     uint3 block_size;
 };
 
-FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noexcept {
+FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &option, Function kernel) noexcept {
 
     // build JIT engine
     ::llvm::orc::LLJITBuilder jit_builder;
@@ -155,10 +163,24 @@ FallbackShader::FallbackShader(const ShaderOption &option, Function kernel) noex
     xir_module->set_name(luisa::format("kernel_{:016x}", kernel.hash()));
     if (!option.name.empty()) { xir_module->set_location(option.name); }
 
+    // dump for debugging
+    if (LUISA_SHOULD_DUMP_XIR) {
+        auto filename = luisa::format("kernel.{:016x}.xir", kernel.hash());
+        std::ofstream f{filename.c_str()};
+        f << xir::xir_to_text_translate(xir_module, true);
+    }
+
     // run some simple optimization passes on XIR to reduce the size of LLVM IR
     Clock opt_clk;
     auto dce_info = xir::dce_pass_run_on_module(xir_module);
     LUISA_INFO("DCE removed {} instructions in {} ms.", dce_info.removed_instructions.size(), opt_clk.toc());
+
+    // dump for debugging
+    if (LUISA_SHOULD_DUMP_XIR) {
+        auto filename = luisa::format("kernel.{:016x}.opt.xir", kernel.hash());
+        std::ofstream f{filename.c_str()};
+        f << xir::xir_to_text_translate(xir_module, true);
+    }
 
     auto llvm_ctx = std::make_unique<llvm::LLVMContext>();
     auto builtin_module = fallback_backend_device_builtin_module();

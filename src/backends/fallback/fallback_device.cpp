@@ -175,7 +175,7 @@ SwapchainCreationInfo FallbackDevice::create_swapchain(const SwapchainOption &op
 
 ShaderCreationInfo FallbackDevice::create_shader(const ShaderOption &option, Function kernel) noexcept {
     Clock clk;
-    auto shader = luisa::new_with_allocator<FallbackShader>(option, kernel);
+    auto shader = luisa::new_with_allocator<FallbackShader>(this, option, kernel);
     LUISA_VERBOSE("Shader compilation took {} ms.", clk.toc());
     ShaderCreationInfo info{};
     info.handle = reinterpret_cast<uint64_t>(shader);

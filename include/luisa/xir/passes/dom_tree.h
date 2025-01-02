@@ -33,13 +33,16 @@ private:
     luisa::unordered_map<BasicBlock *, luisa::unique_ptr<DomTreeNode>> _nodes;
     const DomTreeNode *_root;
 
-public:/* for internal usage only */
+public: /* for internal usage only */
     DomTree() noexcept;
     DomTreeNode *add_or_get_node(BasicBlock *block) noexcept;
     void set_root(DomTreeNode *root) noexcept;
     void compute_dominance_frontiers() noexcept;
 
 public:
+    [[nodiscard]] auto root() const noexcept { return _root; }
+    [[nodiscard]] auto &nodes() const noexcept { return _nodes; }
+    [[nodiscard]] const DomTreeNode *node(BasicBlock *block) const noexcept;
 };
 
 [[nodiscard]] LC_XIR_API DomTree compute_dom_tree(Function *function) noexcept;
