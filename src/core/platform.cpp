@@ -47,9 +47,18 @@ namespace detail {
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (LPTSTR)&buffer,
         0, nullptr);
+#if UNICODE == 1
+    auto value = static_cast<wchar_t *>(buffer);
+    luisa::wstring_view err_msg_view{value};
+    luisa::string err_msg{reinterpret_cast<char const *>(err_msg_view.data()), err_msg_view.size() * sizeof(wchar_t)};
+    LocalFree(buffer);
+    return err_msg;
+#else
+    auto value = static_cast<wchar_t *>(buffer);
     luisa::string err_msg{fmt::format("{} (code = 0x{:x}).", static_cast<char *>(buffer), err_code)};
     LocalFree(buffer);
     return err_msg;
+#endif
 }
 
 }// namespace detail
@@ -103,7 +112,7 @@ void *dynamic_module_find_symbol(void *handle, luisa::string_view name_view) noe
     auto symbol = GetProcAddress(reinterpret_cast<HMODULE>(handle), name.c_str());
     if (symbol == nullptr) [[unlikely]] {
         LUISA_WARNING("Failed to load symbol '{}', reason: {}.",
-                                  name, detail::win32_last_error_message());
+                      name, detail::win32_last_error_message());
     }
     return reinterpret_cast<void *>(symbol);
 }
@@ -217,7 +226,7 @@ void *dynamic_module_load(const luisa::filesystem::path &path) noexcept {
     auto p = path;
     for (auto ext :
 #ifdef LUISA_PLATFORM_APPLE
-         { ".so", ".dylib" }
+         {".so", ".dylib"}
 #else
          {".so"}
 #endif
@@ -228,8 +237,7 @@ void *dynamic_module_load(const luisa::filesystem::path &path) noexcept {
         }
         LUISA_WARNING_WITH_LOCATION(
             "Failed to load dynamic module '{}', reason: {}.",
-            luisa::to_string(p), dlerror()
-        );
+            luisa::to_string(p), dlerror());
     }
 
     return nullptr;
@@ -246,7 +254,7 @@ void *dynamic_module_find_symbol(void *handle, luisa::string_view name_view) noe
     auto symbol = dlsym(handle, name.c_str());
     if (symbol == nullptr) [[unlikely]] {
         LUISA_WARNING("Failed to load symbol '{}', reason: {}.",
-                                  name, dlerror());
+                      name, dlerror());
     }
     LUISA_VERBOSE_WITH_LOCATION(
         "Loading dynamic symbol '{}' in {} ms.",

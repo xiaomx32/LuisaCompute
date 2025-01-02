@@ -18,7 +18,7 @@ auto DXHDRExt::set_hdr_meta_data(
     float max_cll,
     float max_fall,
     const DisplayChromaticities *custom_chroma) noexcept -> Meta {
-    set_hdr_meta_data(
+    return set_hdr_meta_data(
         swapchain.handle(),
         max_output_nits,
         min_output_nits,
