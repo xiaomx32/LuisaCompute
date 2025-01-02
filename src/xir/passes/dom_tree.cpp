@@ -41,7 +41,9 @@ inline void DomTree::compute_dominance_frontiers() noexcept {
     for (auto &&[b, node] : _nodes) {
         preds.clear();
         b->traverse_predecessors(false, [&](BasicBlock *pred) noexcept {
-            preds.emplace_back(pred);
+            if (_nodes.contains(pred)) {// only consider reachable blocks
+                preds.emplace_back(pred);
+            }
         });
         if (preds.size() >= 2) {
             for (auto pred : preds) {
@@ -110,7 +112,7 @@ DomTree compute_dom_tree(Function *function) noexcept {
         for (auto block : reverse_postorder) {
             auto new_idom = static_cast<BasicBlock *>(nullptr);
             block->traverse_predecessors(false, [&](BasicBlock *pred) noexcept {
-                if (doms[pred] != nullptr) {
+                if (auto iter = doms.find(pred); iter != doms.end() && iter->second != nullptr) {
                     if (new_idom == nullptr) {
                         new_idom = pred;
                     } else {
