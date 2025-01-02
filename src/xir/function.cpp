@@ -99,7 +99,7 @@ BasicBlock *FunctionDefinition::create_body_block(bool overwrite_existing) noexc
 
 namespace detail {
 
-void traverse_basic_block_recursive(luisa::unordered_set<BasicBlock *> &visited, BasicBlock *block,
+void traverse_basic_block_pre_order(luisa::unordered_set<BasicBlock *> &visited, BasicBlock *block,
                                     void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
     if (visited.emplace(block).second) {
         visit(visit_ctx, block);
@@ -107,18 +107,57 @@ void traverse_basic_block_recursive(luisa::unordered_set<BasicBlock *> &visited,
         for (auto use : terminator->operand_uses()) {
             if (auto v = use->value();
                 v != nullptr && v->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
-                traverse_basic_block_recursive(visited, static_cast<BasicBlock *>(v), visit_ctx, visit);
+                traverse_basic_block_pre_order(visited, static_cast<BasicBlock *>(v), visit_ctx, visit);
             }
         }
     }
 }
 
+void traverse_basic_block_post_order(luisa::unordered_set<BasicBlock *> &visited, BasicBlock *block,
+                                     void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
+    if (visited.emplace(block).second) {
+        auto terminator = block->terminator();
+        for (auto use : terminator->operand_uses()) {
+            if (auto v = use->value();
+                v != nullptr && v->derived_value_tag() == DerivedValueTag::BASIC_BLOCK) {
+                traverse_basic_block_post_order(visited, static_cast<BasicBlock *>(v), visit_ctx, visit);
+            }
+        }
+        visit(visit_ctx, block);
+    }
+}
+
 }// namespace detail
 
-void FunctionDefinition::_traverse_basic_block_recursive(BasicBlock *block, void *visit_ctx,
+void FunctionDefinition::_traverse_basic_block_pre_order(BasicBlock *block, void *visit_ctx,
                                                          void (*visit)(void *, BasicBlock *)) noexcept {
     luisa::unordered_set<BasicBlock *> visited;
-    detail::traverse_basic_block_recursive(visited, block, visit_ctx, visit);
+    detail::traverse_basic_block_pre_order(visited, block, visit_ctx, visit);
+}
+
+void FunctionDefinition::_traverse_basic_block_post_order(BasicBlock *block, void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
+    luisa::unordered_set<BasicBlock *> visited;
+    detail::traverse_basic_block_post_order(visited, block, visit_ctx, visit);
+}
+
+void FunctionDefinition::_traverse_basic_block_reverse_pre_order(BasicBlock *block, void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
+    luisa::vector<BasicBlock *> stack;
+    _traverse_basic_block_pre_order(block, &stack, [](void *ctx, BasicBlock *bb) noexcept {
+        static_cast<luisa::vector<BasicBlock *> *>(ctx)->emplace_back(bb);
+    });
+    for (auto iter = stack.rbegin(); iter != stack.rend(); ++iter) {
+        visit(visit_ctx, *iter);
+    }
+}
+
+void FunctionDefinition::_traverse_basic_block_reverse_post_order(BasicBlock *block, void *visit_ctx, void (*visit)(void *, BasicBlock *)) noexcept {
+    luisa::vector<BasicBlock *> stack;
+    _traverse_basic_block_post_order(block, &stack, [](void *ctx, BasicBlock *bb) noexcept {
+        static_cast<luisa::vector<BasicBlock *> *>(ctx)->emplace_back(bb);
+    });
+    for (auto iter = stack.rbegin(); iter != stack.rend(); ++iter) {
+        visit(visit_ctx, *iter);
+    }
 }
 
 KernelFunction::KernelFunction(luisa::uint3 block_size) noexcept {

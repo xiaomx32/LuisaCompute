@@ -24,13 +24,22 @@ using spdlog::logger;
 using log_level = spdlog::level::level_enum;
 
 namespace detail {
+
 [[nodiscard]] LC_CORE_API luisa::logger &default_logger() noexcept;
+
+[[deprecated("Please use `luisa::default_logger_set_sink`")]]
 LC_CORE_API void set_sink(spdlog::sink_ptr sink) noexcept;
+
+LC_CORE_API void default_logger_set_sink(spdlog::sink_ptr sink) noexcept;
+LC_CORE_API void default_logger_add_sink(spdlog::sink_ptr sink) noexcept;
+
 LC_CORE_API spdlog::sink_ptr create_sink_with_callback(void (*callback)(LCLoggerMessage)) noexcept;
+
 LC_CORE_API spdlog::sink_ptr create_sink_with_callback(
     luisa::function<void(const char *level,
                          const char *message)>
         callback) noexcept;
+
 }// namespace detail
 
 template<typename... Args>

@@ -57,6 +57,16 @@ public:
     [[nodiscard]] DerivedFunctionTag derived_function_tag() const noexcept final { return static_derived_function_tag(); }
 };
 
+enum struct BasicBlockTraversalOrder {
+    PRE_ORDER,
+    POST_ORDER,
+    REVERSE_PRE_ORDER,
+    REVERSE_POST_ORDER,
+
+    // default order
+    DEFAULT_ORDER = PRE_ORDER,
+};
+
 class LC_XIR_API FunctionDefinition : public Function {
 
 private:
@@ -74,39 +84,73 @@ public:
     [[nodiscard]] FunctionDefinition *definition() noexcept final { return this; }
 
 private:
-    static void _traverse_basic_block_recursive(BasicBlock *block, void *visit_ctx,
+    static void _traverse_basic_block_pre_order(BasicBlock *block, void *visit_ctx,
                                                 void (*visit)(void *, BasicBlock *)) noexcept;
+    static void _traverse_basic_block_post_order(BasicBlock *block, void *visit_ctx,
+                                                 void (*visit)(void *, BasicBlock *)) noexcept;
+    static void _traverse_basic_block_reverse_pre_order(BasicBlock *block, void *visit_ctx,
+                                                        void (*visit)(void *, BasicBlock *)) noexcept;
+    static void _traverse_basic_block_reverse_post_order(BasicBlock *block, void *visit_ctx,
+                                                         void (*visit)(void *, BasicBlock *)) noexcept;
 
 public:
     template<typename Visit>
-    void traverse_basic_blocks(Visit &&visit) noexcept {
+    void traverse_basic_blocks(BasicBlockTraversalOrder order, Visit &&visit) noexcept {
         auto visitor = [](void *ctx, BasicBlock *block) noexcept {
             (*static_cast<Visit *>(ctx))(block);
         };
-        _traverse_basic_block_recursive(
-            _body_block, &visit, [](void *ctx, BasicBlock *block) noexcept {
-                (*static_cast<Visit *>(ctx))(block);
+        switch (order) {
+            default: /* pre-order by default */ [[fallthrough]];
+            case BasicBlockTraversalOrder::PRE_ORDER:
+                _traverse_basic_block_pre_order(_body_block, &visit, visitor);
+                break;
+            case BasicBlockTraversalOrder::POST_ORDER:
+                _traverse_basic_block_post_order(_body_block, &visit, visitor);
+                break;
+            case BasicBlockTraversalOrder::REVERSE_PRE_ORDER:
+                _traverse_basic_block_reverse_pre_order(_body_block, &visit, visitor);
+                break;
+            case BasicBlockTraversalOrder::REVERSE_POST_ORDER:
+                _traverse_basic_block_reverse_post_order(_body_block, &visit, visitor);
+                break;
+        }
+    }
+    template<typename Visit>
+    void traverse_basic_blocks(BasicBlockTraversalOrder order, Visit &&visit) const noexcept {
+        const_cast<FunctionDefinition *>(this)->traverse_basic_blocks(
+            order, [&](const BasicBlock *block) noexcept {
+                visit(block);
             });
+    }
+    template<typename Visit>
+    void traverse_instructions(BasicBlockTraversalOrder order, Visit &&visit) noexcept {
+        traverse_basic_blocks(order, [&visit](BasicBlock *block) noexcept {
+            block->traverse_instructions(visit);
+        });
+    }
+    template<typename Visit>
+    void traverse_instructions(BasicBlockTraversalOrder order, Visit &&visit) const noexcept {
+        traverse_basic_blocks(order, [&visit](const BasicBlock *block) noexcept {
+            block->traverse_instructions(visit);
+        });
+    }
+
+    // traversals with default order
+    template<typename Visit>
+    void traverse_basic_blocks(Visit &&visit) noexcept {
+        traverse_basic_blocks(BasicBlockTraversalOrder::DEFAULT_ORDER, std::forward<Visit>(visit));
     }
     template<typename Visit>
     void traverse_basic_blocks(Visit &&visit) const noexcept {
-        _traverse_basic_block_recursive(
-            const_cast<BasicBlock *>(_body_block), &visit,
-            [](void *ctx, BasicBlock *block) noexcept {
-                (*static_cast<Visit *>(ctx))(const_cast<const BasicBlock *>(block));
-            });
+        traverse_basic_blocks(BasicBlockTraversalOrder::DEFAULT_ORDER, std::forward<Visit>(visit));
     }
     template<typename Visit>
     void traverse_instructions(Visit &&visit) noexcept {
-        traverse_basic_blocks([&visit](BasicBlock *block) noexcept {
-            block->traverse_instructions(visit);
-        });
+        traverse_instructions(BasicBlockTraversalOrder::DEFAULT_ORDER, std::forward<Visit>(visit));
     }
     template<typename Visit>
     void traverse_instructions(Visit &&visit) const noexcept {
-        traverse_basic_blocks([&visit](const BasicBlock *block) noexcept {
-            block->traverse_instructions(visit);
-        });
+        traverse_instructions(BasicBlockTraversalOrder::DEFAULT_ORDER, std::forward<Visit>(visit));
     }
 };
 
