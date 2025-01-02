@@ -14,26 +14,22 @@ def normalize_node_name(node):
     return node.replace("%", "block.")
 
 
-def visualize_control_flow_graph(filename, graph_desc):
-    graph = graphviz.Digraph(format='png')
+def visualize_control_flow_graph(subgraph, graph_desc):
     nodes = graph_desc['nodes']
     edges = graph_desc['edges']
     dom_edges = graph_desc['dominance_tree']
     frontiers = graph_desc['dominance_frontiers']
     for node in nodes:
-        graph.node(node, label=normalize_node_name(node))
+        subgraph.node(node, label=normalize_node_name(node))
     for (source, targets) in edges.items():
         for target in targets:
-            graph.edge(source, target)
+            subgraph.edge(source, target)
     for (source, targets) in dom_edges.items():
         for target in targets:
-            graph.edge(source, target, color='red')
+            subgraph.edge(source, target, color='red')
     for (source, targets) in frontiers.items():
         for target in targets:
-            graph.edge(source, target, color='blue', style='dotted')
-    func = graph_desc['function'].replace("%", "func.")
-    graph.attr(label=f"Control Flow Graph for {func}")
-    graph.render(filename)
+            subgraph.edge(source, target, color='blue', style='dotted')
 
 
 if __name__ == '__main__':
@@ -41,6 +37,10 @@ if __name__ == '__main__':
         print("Usage: visualize_cfg.py <xir_file>")
         exit(1)
     graphs = parse_control_flow_graphs_from_xir(argv[1])
-    for i, graph in enumerate(graphs):
-        function = graph['function'].replace("%", "func.")
-        visualize_control_flow_graph(f"{argv[1]}.{i}", graph)
+    graph = graphviz.Digraph(format='png')
+    for graph_desc in graphs:
+        function = graph_desc['function'].replace("%", "func.")
+        with graph.subgraph(name=f"cluster_{function}") as subgraph:
+            subgraph.attr(label=f"Control Flow Graph of {function}")
+            visualize_control_flow_graph(subgraph, graph_desc)
+    graph.render(f"{argv[1]}.cfg")
