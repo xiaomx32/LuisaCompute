@@ -178,12 +178,52 @@ void eliminate_unreachable_code_in_function(Function *function, DCEInfo &info) n
     }
 }
 
+void fix_phi_nodes_in_function(Function *function) noexcept {
+    if (auto definition = function->definition()) {
+        luisa::vector<PhiIncoming> valid_incomings;
+        definition->traverse_basic_blocks([&](BasicBlock *block) noexcept {
+            for (auto &&inst : block->instructions()) {
+                if (inst.derived_instruction_tag() == DerivedInstructionTag::PHI) {
+                    auto phi = static_cast<PhiInst *>(&inst);
+                    valid_incomings.clear();
+                    for (auto i = 0u; i < phi->incoming_count(); i++) {
+                        auto incoming = phi->incoming(i);
+                        if (incoming.block == nullptr || incoming.value == nullptr) { continue; }
+                        if (auto incoming_terminator = incoming.block->terminator()) {
+                            auto unreachable_from_incoming = true;
+                            for (auto op_use : incoming_terminator->operand_uses()) {
+                                if (op_use->value() == incoming.block) {
+                                    unreachable_from_incoming = false;
+                                    break;
+                                }
+                            }
+                            if (unreachable_from_incoming) { continue; }
+                        }
+                        valid_incomings.emplace_back(incoming);
+                    }
+                    if (valid_incomings.size() != phi->incoming_count()) {
+                        phi->set_incoming_count(valid_incomings.size());
+                        for (auto i = 0u; i < valid_incomings.size(); i++) {
+                            if (auto old_incoming = phi->incoming(i), new_incoming = valid_incomings[i];
+                                old_incoming.value != new_incoming.value ||
+                                old_incoming.block != new_incoming.block) {
+                                phi->set_incoming(i, new_incoming.value, new_incoming.block);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
 void run_dce_pass_on_function(Function *function, DCEInfo &info) noexcept {
-    detail::eliminate_unreachable_code_in_function(function, info);
+    eliminate_unreachable_code_in_function(function, info);
+    fix_phi_nodes_in_function(function);
     for (;;) {
         auto prev_count = info.removed_instructions.size();
-        detail::eliminate_dead_code_in_function(function, info);
-        detail::eliminate_dead_alloca_in_function(function, info);
+        eliminate_dead_code_in_function(function, info);
+        eliminate_dead_alloca_in_function(function, info);
         // if we didn't remove any instruction, we are done
         if (info.removed_instructions.size() == prev_count) { return; }
     }
