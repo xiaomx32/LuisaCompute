@@ -47,6 +47,12 @@ enum struct DerivedInstructionTag {
     RESOURCE_READ, // read from resources, may be eliminated if not used, but can be volatile to code motion
     RESOURCE_WRITE,// write to resources, may be volatile to code elimination and motion
 
+    /* ray query instructions */
+    RAY_QUERY_LOOP,        // basic block beginning: ray query loop
+    RAY_QUERY_DISPATCH,    // basic block terminator: ray query switch branches
+    RAY_QUERY_OBJECT_READ, // read from ray query objects
+    RAY_QUERY_OBJECT_WRITE,// write to ray query objects
+
     /* other instructions */
     CALL, // user or external function calls
     CAST, // type casts
@@ -58,7 +64,6 @@ enum struct DerivedInstructionTag {
 
     OUTLINE,  // mark that the body might be outlined (e.g., for faster compilation)
     AUTO_DIFF,// automatic differentiation
-    RAY_QUERY,// ray queries
 
     INTRINSIC,// other intrinsics that are not yet promoted to dedicated instructions
 };

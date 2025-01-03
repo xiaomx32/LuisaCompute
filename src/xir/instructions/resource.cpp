@@ -1,6 +1,4 @@
-#include <luisa/xir/instructions/resource_query.h>
-#include <luisa/xir/instructions/resource_read.h>
-#include <luisa/xir/instructions/resource_write.h>
+#include <luisa/xir/instructions/resource.h>
 
 namespace luisa::compute::xir {
 

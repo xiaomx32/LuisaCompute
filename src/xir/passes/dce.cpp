@@ -41,6 +41,7 @@ void eliminate_dead_code_in_function(Function *function, DCEInfo &info) noexcept
                         case DerivedInstructionTag::ARITHMETIC: [[fallthrough]];
                         case DerivedInstructionTag::CAST: [[fallthrough]];
                         case DerivedInstructionTag::CLOCK: [[fallthrough]];
+                        case DerivedInstructionTag::RAY_QUERY_OBJECT_READ: [[fallthrough]];
                         case DerivedInstructionTag::RESOURCE_QUERY: [[fallthrough]];
                         case DerivedInstructionTag::RESOURCE_READ: {
                             collect_if_dead(inst);
@@ -50,12 +51,7 @@ void eliminate_dead_code_in_function(Function *function, DCEInfo &info) noexcept
                             auto intrinsic = static_cast<IntrinsicInst *>(inst);
                             switch (intrinsic->op()) {
                                 case IntrinsicOp::NOP: [[fallthrough]];
-                                case IntrinsicOp::AUTODIFF_GRADIENT: [[fallthrough]];
-                                case IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: [[fallthrough]];
-                                case IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: [[fallthrough]];
-                                case IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: [[fallthrough]];
-                                case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: [[fallthrough]];
-                                case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: {
+                                case IntrinsicOp::AUTODIFF_GRADIENT: {
                                     collect_if_dead(inst);
                                     break;
                                 }

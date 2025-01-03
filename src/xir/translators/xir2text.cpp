@@ -27,9 +27,7 @@
 #include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
-#include <luisa/xir/instructions/resource_query.h>
-#include <luisa/xir/instructions/resource_read.h>
-#include <luisa/xir/instructions/resource_write.h>
+#include <luisa/xir/instructions/resource.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/thread_group.h>
@@ -322,13 +320,30 @@ private:
         _emit_basic_block(inst->merge_block(), indent);
     }
 
-    void _emit_ray_query_inst(const RayQueryInst *inst, int indent) noexcept {
-        _main << "ray_query " << _value_ident(inst->query_object()) << ", on_surface_candidate ";
+    void _emit_ray_query_dispatch_inst(const RayQueryDispatchInst *inst, int indent) noexcept {
+        _main << "ray_query_dispatch " << _value_ident(inst->query_object())
+              << ", exit " << _value_ident(inst->exit_block())
+              << ", on_surface_candidate ";
         _emit_basic_block(inst->on_surface_candidate_block(), indent);
         _main << ", on_procedural_candidate ";
         _emit_basic_block(inst->on_procedural_candidate_block(), indent);
+    }
+
+    void _emit_ray_query_loop_inst(const RayQueryLoopInst *inst, int indent) noexcept {
+        _main << "ray_query_loop dispatch ";
+        _emit_basic_block(inst->dispatch_block(), indent);
         _main << ", merge ";
         _emit_basic_block(inst->merge_block(), indent);
+    }
+
+    void _emit_ray_query_object_read_inst(const RayQueryObjectReadInst *inst) noexcept {
+        _main << "ray_query_object_read " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
+    }
+
+    void _emit_ray_query_object_write_inst(const RayQueryObjectWriteInst *inst) noexcept {
+        _main << "ray_query_object_write " << xir::to_string(inst->op()) << " ";
+        _emit_operands(inst);
     }
 
     void _emit_return_inst(const ReturnInst *inst) noexcept {
@@ -515,8 +530,17 @@ private:
                 _emit_outline_inst(static_cast<const OutlineInst *>(inst), indent);
                 break;
             case DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
-            case DerivedInstructionTag::RAY_QUERY:
-                _emit_ray_query_inst(static_cast<const RayQueryInst *>(inst), indent);
+            case DerivedInstructionTag::RAY_QUERY_LOOP:
+                _emit_ray_query_loop_inst(static_cast<const RayQueryLoopInst *>(inst), indent);
+                break;
+            case DerivedInstructionTag::RAY_QUERY_DISPATCH:
+                _emit_ray_query_dispatch_inst(static_cast<const RayQueryDispatchInst *>(inst), indent);
+                break;
+            case DerivedInstructionTag::RAY_QUERY_OBJECT_READ:
+                _emit_ray_query_object_read_inst(static_cast<const RayQueryObjectReadInst *>(inst));
+                break;
+            case DerivedInstructionTag::RAY_QUERY_OBJECT_WRITE:
+                _emit_ray_query_object_write_inst(static_cast<const RayQueryObjectWriteInst *>(inst));
                 break;
             case DerivedInstructionTag::BRANCH:
                 _emit_branch_inst(static_cast<const BranchInst *>(inst));

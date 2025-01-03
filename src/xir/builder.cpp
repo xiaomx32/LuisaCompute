@@ -172,8 +172,28 @@ OutlineInst *Builder::outline() noexcept {
     return _create_and_append_instruction<OutlineInst>();
 }
 
-RayQueryInst *Builder::ray_query(Value *query_object) noexcept {
-    return _create_and_append_instruction<RayQueryInst>(query_object);
+RayQueryLoopInst *Builder::ray_query_loop() noexcept {
+    return _create_and_append_instruction<RayQueryLoopInst>();
+}
+
+RayQueryDispatchInst *Builder::ray_query_dispatch(Value *query_object) noexcept {
+    return _create_and_append_instruction<RayQueryDispatchInst>(query_object);
+}
+
+RayQueryObjectReadInst *Builder::call(const Type *type, RayQueryObjectReadOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<RayQueryObjectReadInst>(type, op, operands);
+}
+
+RayQueryObjectReadInst *Builder::call(const Type *type, RayQueryObjectReadOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(type, op, luisa::span{operands.begin(), operands.end()});
+}
+
+RayQueryObjectWriteInst *Builder::call(RayQueryObjectWriteOp op, luisa::span<Value *const> operands) noexcept {
+    return _create_and_append_instruction<RayQueryObjectWriteInst>(op, operands);
+}
+
+RayQueryObjectWriteInst *Builder::call(RayQueryObjectWriteOp op, std::initializer_list<Value *> operands) noexcept {
+    return this->call(op, luisa::span{operands.begin(), operands.end()});
 }
 
 ThreadGroupInst *Builder::call(const Type *type, ThreadGroupOp op, luisa::span<Value *const> operands) noexcept {

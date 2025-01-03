@@ -414,8 +414,9 @@ private:
                 return b.call(expr->type(), target_op, args);
             }
         };
-        auto intrinsic_call = [&](IntrinsicOp target_op) noexcept {
-            LUISA_ASSERT(!expr->arguments().empty(), "Intrinsic call requires at least one argument.");
+        auto rq_call = [&]<typename T>(T target_op) noexcept {
+            static_assert(std::is_same_v<T, RayQueryObjectReadOp> || std::is_same_v<T, RayQueryObjectWriteOp>);
+            LUISA_ASSERT(!expr->arguments().empty(), "RayQuery call requires at least one argument.");
             luisa::fixed_vector<Value *, 16u> args;
             args.reserve(expr->arguments().size());
             auto base = _translate_expression(b, expr->arguments()[0], false);
@@ -425,7 +426,11 @@ private:
                 auto arg = _translate_expression(b, ast_arg, true);
                 args.emplace_back(arg);
             }
-            return b.call(expr->type(), target_op, args);
+            if constexpr (std::is_same_v<T, RayQueryObjectWriteOp>) {
+                return b.call(target_op, args);
+            } else {
+                return b.call(expr->type(), target_op, args);
+            }
         };
         auto atomic_call = [&](AtomicOp target_op) noexcept {
             LUISA_ASSERT(!expr->arguments().empty(), "Atomic call requires at least one argument.");
@@ -712,16 +717,19 @@ private:
             case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: return resource_call(ResourceQueryOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR);
             case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: return resource_call(ResourceQueryOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR);
             case CallOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: return resource_call(ResourceQueryOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR);
-            case CallOp::RAY_QUERY_WORLD_SPACE_RAY: return intrinsic_call(IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY);
-            case CallOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: return intrinsic_call(IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT);
-            case CallOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: return intrinsic_call(IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT);
-            case CallOp::RAY_QUERY_COMMITTED_HIT: return intrinsic_call(IntrinsicOp::RAY_QUERY_COMMITTED_HIT);
-            case CallOp::RAY_QUERY_COMMIT_TRIANGLE: return intrinsic_call(IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE);
-            case CallOp::RAY_QUERY_COMMIT_PROCEDURAL: return intrinsic_call(IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL);
-            case CallOp::RAY_QUERY_TERMINATE: return intrinsic_call(IntrinsicOp::RAY_QUERY_TERMINATE);
-            case CallOp::RAY_QUERY_PROCEED: return intrinsic_call(IntrinsicOp::RAY_QUERY_PROCEED);
-            case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return intrinsic_call(IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE);
-            case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return intrinsic_call(IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE);
+            case CallOp::RAY_QUERY_WORLD_SPACE_RAY: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_WORLD_SPACE_RAY);
+            case CallOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_PROCEDURAL_CANDIDATE_HIT);
+            case CallOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_TRIANGLE_CANDIDATE_HIT);
+            case CallOp::RAY_QUERY_COMMITTED_HIT: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_COMMITTED_HIT);
+            case CallOp::RAY_QUERY_COMMIT_TRIANGLE: return rq_call(RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_TRIANGLE);
+            case CallOp::RAY_QUERY_COMMIT_PROCEDURAL: return rq_call(RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_PROCEDURAL);
+            case CallOp::RAY_QUERY_TERMINATE: return rq_call(RayQueryObjectWriteOp::RAY_QUERY_OBJECT_TERMINATE);
+            case CallOp::RAY_QUERY_PROCEED: {
+                b.call(RayQueryObjectWriteOp::RAY_QUERY_OBJECT_PROCEED, {});
+                return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TERMINATED);
+            }
+            case CallOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TRIANGLE_CANDIDATE);
+            case CallOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return rq_call(RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_PROCEDURAL_CANDIDATE);
             case CallOp::DDX: return cta_call(ThreadGroupOp::RASTER_QUAD_DDX);
             case CallOp::DDY: return cta_call(ThreadGroupOp::RASTER_QUAD_DDY);
             case CallOp::SHADER_EXECUTION_REORDER: return cta_call(ThreadGroupOp::SHADER_EXECUTION_REORDER);
@@ -956,20 +964,26 @@ private:
     void _translate_ray_query_stmt(Builder &b, const RayQueryStmt *ast_ray_query, luisa::span<const Statement *const> cdr) noexcept {
         // we do not support break/continue in ray query statement
         auto old_break_continue_target = std::exchange(_current.break_continue_target, {});
+        // create the ray query loop
+        auto loop_inst = _commented(b.ray_query_loop());
+        auto dispatch_block = loop_inst->create_dispatch_block();
+        auto merge_block = loop_inst->create_merge_block();
+        // create the ray query dispatch block
+        b.set_insertion_point(dispatch_block);
         auto query_object = _translate_expression(b, ast_ray_query->query(), false);
-        auto inst = _commented(b.ray_query(query_object));
-        auto merge_block = inst->create_merge_block();
+        auto dispatch_inst = _commented(b.ray_query_dispatch(query_object));
+        dispatch_inst->set_exit_block(merge_block);
         // on surface candidate block
         {
-            b.set_insertion_point(inst->create_on_surface_candidate_block());
+            b.set_insertion_point(dispatch_inst->create_on_surface_candidate_block());
             _translate_statements(b, ast_ray_query->on_triangle_candidate()->statements());
-            if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
+            if (!b.is_insertion_point_terminator()) { b.br(dispatch_block); }
         }
         // on procedural candidate block
         {
-            b.set_insertion_point(inst->create_on_procedural_candidate_block());
+            b.set_insertion_point(dispatch_inst->create_on_procedural_candidate_block());
             _translate_statements(b, ast_ray_query->on_procedural_candidate()->statements());
-            if (!b.is_insertion_point_terminator()) { b.br(merge_block); }
+            if (!b.is_insertion_point_terminator()) { b.br(dispatch_block); }
         }
         // merge block
         _current.break_continue_target = old_break_continue_target;

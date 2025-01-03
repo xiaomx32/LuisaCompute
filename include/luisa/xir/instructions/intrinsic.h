@@ -16,21 +16,6 @@ enum struct IntrinsicOp {
     AUTODIFF_ACCUMULATE_GRADIENT,// (ref, expr) -> void
     AUTODIFF_BACKWARD,           // (expr) -> void
     AUTODIFF_DETACH,             // (expr) -> expr
-
-    // ray query
-    RAY_QUERY_WORLD_SPACE_RAY,         // (RayQuery): Ray
-    RAY_QUERY_PROCEDURAL_CANDIDATE_HIT,// (RayQuery): ProceduralHit
-    RAY_QUERY_TRIANGLE_CANDIDATE_HIT,  // (RayQuery): TriangleHit
-    RAY_QUERY_COMMITTED_HIT,           // (RayQuery): CommittedHit
-    RAY_QUERY_COMMIT_TRIANGLE,         // (RayQuery): void
-    RAY_QUERY_COMMIT_PROCEDURAL,       // (RayQuery, float): void
-    RAY_QUERY_TERMINATE,               // (RayQuery): void
-
-    // ray query extensions for backends with native support
-    RAY_QUERY_PROCEED,
-    RAY_QUERY_IS_TRIANGLE_CANDIDATE,
-    RAY_QUERY_IS_PROCEDURAL_CANDIDATE,
-
 };
 
 [[nodiscard]] LC_XIR_API luisa::string_view to_string(IntrinsicOp op) noexcept;

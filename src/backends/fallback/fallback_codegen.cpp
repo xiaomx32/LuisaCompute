@@ -1909,7 +1909,7 @@ private:
         auto llvm_func = _llvm_module->getFunction(llvm_func_name);
         LUISA_ASSERT(llvm_func != nullptr, "Function not found.");
         if (auto result_type = inst->type()) {
-            auto llvm_result_type = _translate_type(inst->type(), true);
+            auto llvm_result_type = _translate_type(result_type, true);
             auto llvm_result_alloca = b.CreateAlloca(llvm_result_type);
             llvm_args.emplace_back(llvm_result_alloca);
             b.CreateCall(llvm_func, llvm_args);
@@ -2432,16 +2432,6 @@ private:
             case xir::IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: break;
             case xir::IntrinsicOp::AUTODIFF_BACKWARD: break;
             case xir::IntrinsicOp::AUTODIFF_DETACH: break;
-            case xir::IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: break;
-            case xir::IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: break;
-            case xir::IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: break;
-            case xir::IntrinsicOp::RAY_QUERY_COMMITTED_HIT: break;
-            case xir::IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE: break;
-            case xir::IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL: break;
-            case xir::IntrinsicOp::RAY_QUERY_TERMINATE: break;
-            case xir::IntrinsicOp::RAY_QUERY_PROCEED: break;
-            case xir::IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: break;
-            case xir::IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: break;
         }
         LUISA_INFO("unsupported intrinsic op type: {}", static_cast<int>(inst->op()));
         LUISA_NOT_IMPLEMENTED();
@@ -2882,7 +2872,6 @@ private:
                 return llvm_inst;
             }
             case xir::DerivedInstructionTag::AUTO_DIFF: LUISA_NOT_IMPLEMENTED();
-            case xir::DerivedInstructionTag::RAY_QUERY: LUISA_NOT_IMPLEMENTED();
             case xir::DerivedInstructionTag::CLOCK: {
                 auto call = b.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
                 auto llvm_result_type = _translate_type(inst->type(), true);
@@ -2919,6 +2908,10 @@ private:
                 }
                 LUISA_ERROR_WITH_LOCATION("Invalid atomic operation.");
             }
+            case xir::DerivedInstructionTag::RAY_QUERY_LOOP: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedInstructionTag::RAY_QUERY_DISPATCH: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedInstructionTag::RAY_QUERY_OBJECT_READ: LUISA_NOT_IMPLEMENTED();
+            case xir::DerivedInstructionTag::RAY_QUERY_OBJECT_WRITE: LUISA_NOT_IMPLEMENTED();
         }
         LUISA_ERROR_WITH_LOCATION("Invalid instruction.");
     }

@@ -24,9 +24,7 @@
 #include <luisa/xir/instructions/ray_query.h>
 #include <luisa/xir/instructions/raster_discard.h>
 #include <luisa/xir/instructions/return.h>
-#include <luisa/xir/instructions/resource_query.h>
-#include <luisa/xir/instructions/resource_read.h>
-#include <luisa/xir/instructions/resource_write.h>
+#include <luisa/xir/instructions/resource.h>
 #include <luisa/xir/instructions/store.h>
 #include <luisa/xir/instructions/switch.h>
 #include <luisa/xir/instructions/thread_group.h>
@@ -133,7 +131,13 @@ public:
     ClockInst *clock() noexcept;
 
     OutlineInst *outline() noexcept;
-    RayQueryInst *ray_query(Value *query_object) noexcept;
+
+    RayQueryLoopInst *ray_query_loop() noexcept;
+    RayQueryDispatchInst *ray_query_dispatch(Value *query_object) noexcept;
+    RayQueryObjectReadInst *call(const Type *type, RayQueryObjectReadOp op, luisa::span<Value *const> operands) noexcept;
+    RayQueryObjectReadInst *call(const Type *type, RayQueryObjectReadOp op, std::initializer_list<Value *> operands) noexcept;
+    RayQueryObjectWriteInst *call(RayQueryObjectWriteOp op, luisa::span<Value *const> operands) noexcept;
+    RayQueryObjectWriteInst *call(RayQueryObjectWriteOp op, std::initializer_list<Value *> operands) noexcept;
 
     AtomicInst *atomic_fetch_add(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;
     AtomicInst *atomic_fetch_sub(const Type *type, Value *base, luisa::span<Value *const> indices, Value *value) noexcept;

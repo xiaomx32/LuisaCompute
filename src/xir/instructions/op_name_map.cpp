@@ -9,9 +9,8 @@
 #include <luisa/xir/instructions/cast.h>
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/instructions/thread_group.h>
-#include <luisa/xir/instructions/resource_query.h>
-#include <luisa/xir/instructions/resource_read.h>
-#include <luisa/xir/instructions/resource_write.h>
+#include <luisa/xir/instructions/ray_query.h>
+#include <luisa/xir/instructions/resource.h>
 
 namespace luisa::compute::xir {
 
@@ -289,16 +288,6 @@ luisa::string_view to_string(IntrinsicOp op) noexcept {
         case IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT: return "autodiff_accumulate_gradient"sv;
         case IntrinsicOp::AUTODIFF_BACKWARD: return "autodiff_backward"sv;
         case IntrinsicOp::AUTODIFF_DETACH: return "autodiff_detach"sv;
-        case IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY: return "ray_query_world_space_ray"sv;
-        case IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT: return "ray_query_procedural_candidate_hit"sv;
-        case IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT: return "ray_query_triangle_candidate_hit"sv;
-        case IntrinsicOp::RAY_QUERY_COMMITTED_HIT: return "ray_query_committed_hit"sv;
-        case IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE: return "ray_query_commit_triangle"sv;
-        case IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL: return "ray_query_commit_procedural"sv;
-        case IntrinsicOp::RAY_QUERY_TERMINATE: return "ray_query_terminate"sv;
-        case IntrinsicOp::RAY_QUERY_PROCEED: return "ray_query_proceed"sv;
-        case IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE: return "ray_query_is_triangle_candidate"sv;
-        case IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE: return "ray_query_is_procedural_candidate"sv;
     }
     LUISA_ERROR_WITH_LOCATION("Unknown intrinsic operation (code = {}).", static_cast<uint32_t>(op));
 }
@@ -313,16 +302,6 @@ IntrinsicOp intrinsic_op_from_string(luisa::string_view name) noexcept {
         {"autodiff_accumulate_gradient"sv, IntrinsicOp::AUTODIFF_ACCUMULATE_GRADIENT},
         {"autodiff_backward"sv, IntrinsicOp::AUTODIFF_BACKWARD},
         {"autodiff_detach"sv, IntrinsicOp::AUTODIFF_DETACH},
-        {"ray_query_world_space_ray"sv, IntrinsicOp::RAY_QUERY_WORLD_SPACE_RAY},
-        {"ray_query_procedural_candidate_hit"sv, IntrinsicOp::RAY_QUERY_PROCEDURAL_CANDIDATE_HIT},
-        {"ray_query_triangle_candidate_hit"sv, IntrinsicOp::RAY_QUERY_TRIANGLE_CANDIDATE_HIT},
-        {"ray_query_committed_hit"sv, IntrinsicOp::RAY_QUERY_COMMITTED_HIT},
-        {"ray_query_commit_triangle"sv, IntrinsicOp::RAY_QUERY_COMMIT_TRIANGLE},
-        {"ray_query_commit_procedural"sv, IntrinsicOp::RAY_QUERY_COMMIT_PROCEDURAL},
-        {"ray_query_terminate"sv, IntrinsicOp::RAY_QUERY_TERMINATE},
-        {"ray_query_proceed"sv, IntrinsicOp::RAY_QUERY_PROCEED},
-        {"ray_query_is_triangle_candidate"sv, IntrinsicOp::RAY_QUERY_IS_TRIANGLE_CANDIDATE},
-        {"ray_query_is_procedural_candidate"sv, IntrinsicOp::RAY_QUERY_IS_PROCEDURAL_CANDIDATE},
     };
     auto iter = m.find(name);
     LUISA_ASSERT(iter != m.end(), "Unknown intrinsic operation: {}.", name);
@@ -391,6 +370,60 @@ ThreadGroupOp thread_group_op_from_string(luisa::string_view name) noexcept {
     return iter->second;
 }
 
+luisa::string_view to_string(RayQueryObjectReadOp op) noexcept {
+    using namespace std::string_view_literals;
+    switch (op) {
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_WORLD_SPACE_RAY: return "ray_query_object_world_space_ray"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_PROCEDURAL_CANDIDATE_HIT: return "ray_query_object_procedural_candidate_hit"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_TRIANGLE_CANDIDATE_HIT: return "ray_query_object_triangle_candidate_hit"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_COMMITTED_HIT: return "ray_query_object_committed_hit"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TRIANGLE_CANDIDATE: return "ray_query_object_is_triangle_candidate"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_PROCEDURAL_CANDIDATE: return "ray_query_object_is_procedural_candidate"sv;
+        case RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TERMINATED: return "ray_query_object_is_terminated"sv;
+    }
+    LUISA_ERROR_WITH_LOCATION("Unknown ray_query operation (code = {}).", static_cast<uint32_t>(op));
+}
+
+RayQueryObjectReadOp ray_query_object_read_op_from_string(luisa::string_view name) noexcept {
+    using namespace std::string_view_literals;
+    static const luisa::unordered_map<luisa::string_view, RayQueryObjectReadOp> m{
+        {"ray_query_object_world_space_ray"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_WORLD_SPACE_RAY},
+        {"ray_query_object_procedural_candidate_hit"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_PROCEDURAL_CANDIDATE_HIT},
+        {"ray_query_object_triangle_candidate_hit"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_TRIANGLE_CANDIDATE_HIT},
+        {"ray_query_object_committed_hit"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_COMMITTED_HIT},
+        {"ray_query_object_is_triangle_candidate"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TRIANGLE_CANDIDATE},
+        {"ray_query_object_is_procedural_candidate"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_PROCEDURAL_CANDIDATE},
+        {"ray_query_object_is_terminated"sv, RayQueryObjectReadOp::RAY_QUERY_OBJECT_IS_TERMINATED},
+    };
+    auto iter = m.find(name);
+    LUISA_ASSERT(iter != m.end(), "Unknown ray_query_object_read operation: {}.", name);
+    return iter->second;
+}
+
+luisa::string_view to_string(RayQueryObjectWriteOp op) noexcept {
+    using namespace std::string_view_literals;
+    switch (op) {
+        case RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_TRIANGLE: return "ray_query_object_commit_triangle"sv;
+        case RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_PROCEDURAL: return "ray_query_object_commit_procedural"sv;
+        case RayQueryObjectWriteOp::RAY_QUERY_OBJECT_TERMINATE: return "ray_query_object_terminate"sv;
+        case RayQueryObjectWriteOp::RAY_QUERY_OBJECT_PROCEED: return "ray_query_object_proceed"sv;
+    }
+    LUISA_ERROR_WITH_LOCATION("Unknown ray_query operation (code = {}).", static_cast<uint32_t>(op));
+}
+
+RayQueryObjectWriteOp ray_query_object_write_op_from_string(luisa::string_view name) noexcept {
+    using namespace std::string_view_literals;
+    static const luisa::unordered_map<luisa::string_view, RayQueryObjectWriteOp> m{
+        {"ray_query_object_commit_triangle"sv, RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_TRIANGLE},
+        {"ray_query_object_commit_procedural"sv, RayQueryObjectWriteOp::RAY_QUERY_OBJECT_COMMIT_PROCEDURAL},
+        {"ray_query_object_terminate"sv, RayQueryObjectWriteOp::RAY_QUERY_OBJECT_TERMINATE},
+        {"ray_query_object_proceed"sv, RayQueryObjectWriteOp::RAY_QUERY_OBJECT_PROCEED},
+    };
+    auto iter = m.find(name);
+    LUISA_ASSERT(iter != m.end(), "Unknown ray_query_object_write operation: {}.", name);
+    return iter->second;
+}
+
 luisa::string_view to_string(ResourceQueryOp op) noexcept {
     using namespace std::string_view_literals;
     switch (op) {
@@ -444,7 +477,7 @@ luisa::string_view to_string(ResourceQueryOp op) noexcept {
         case ResourceQueryOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: return "ray_tracing_query_all_motion_blur"sv;
         case ResourceQueryOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR: return "ray_tracing_query_any_motion_blur"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown resource_query operation (code = {}).", static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown resource operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 ResourceQueryOp resource_query_op_from_string(luisa::string_view name) noexcept {
@@ -520,7 +553,7 @@ luisa::string_view to_string(ResourceReadOp op) noexcept {
         case ResourceReadOp::BINDLESS_TEXTURE3D_READ_LEVEL: return "bindless_texture3d_read_level"sv;
         case ResourceReadOp::DEVICE_ADDRESS_READ: return "device_address_read"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown resource_read operation (code = {}).", static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown resource operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 ResourceReadOp resource_read_op_from_string(luisa::string_view name) noexcept {
@@ -562,7 +595,7 @@ luisa::string_view to_string(ResourceWriteOp op) noexcept {
         case ResourceWriteOp::INDIRECT_DISPATCH_SET_KERNEL: return "indirect_dispatch_set_kernel"sv;
         case ResourceWriteOp::INDIRECT_DISPATCH_SET_COUNT: return "indirect_dispatch_set_count"sv;
     }
-    LUISA_ERROR_WITH_LOCATION("Unknown resource_write operation (code = {}).", static_cast<uint32_t>(op));
+    LUISA_ERROR_WITH_LOCATION("Unknown resource operation (code = {}).", static_cast<uint32_t>(op));
 }
 
 ResourceWriteOp resource_write_op_from_string(luisa::string_view name) noexcept {
