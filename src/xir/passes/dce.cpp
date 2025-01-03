@@ -1,6 +1,7 @@
 #include <luisa/core/logging.h>
 #include <luisa/xir/instructions/intrinsic.h>
 #include <luisa/xir/passes/dce.h>
+#include <luisa/xir/builder.h>
 
 namespace luisa::compute::xir {
 
@@ -135,7 +136,50 @@ void eliminate_dead_alloca_in_function(Function *function, DCEInfo &info) noexce
     }
 }
 
+void eliminate_unreachable_code_in_function(Function *function, DCEInfo &info) noexcept {
+    if (auto definition = function->definition()) {
+        luisa::unordered_set<BasicBlock *> reachable;
+        definition->traverse_basic_blocks([&](BasicBlock *block) noexcept {
+            reachable.emplace(block);
+        });
+        luisa::unordered_set<BasicBlock *> unreachable;
+        for (auto b : reachable) {
+            // let's find out instructions users' blocks that are not in the reachable set
+            b->traverse_instructions([&](Instruction *inst) noexcept {
+                for (auto &&use : inst->use_list()) {
+                    if (auto user = use.user()) {
+                        if (user->derived_value_tag() == DerivedValueTag::INSTRUCTION) {
+                            auto user_inst = static_cast<Instruction *>(user);
+                            if (auto user_block = user_inst->parent_block();
+                                user_block != nullptr && !reachable.contains(user_block)) {
+                                unreachable.emplace(user_block);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        luisa::vector<Instruction *> dead;
+        for (auto b : unreachable) {
+            dead.clear();
+            // collect and remove all instructions in the unreachable block
+            for (auto &&inst : b->instructions()) {
+                dead.emplace_back(&inst);
+            }
+            for (auto &&inst : dead) {
+                info.removed_instructions.emplace(inst);
+                inst->remove_self();
+            }
+            // replace with an unreachable instruction
+            xir::Builder builder;
+            builder.set_insertion_point(b);
+            builder.unreachable_();
+        }
+    }
+}
+
 void run_dce_pass_on_function(Function *function, DCEInfo &info) noexcept {
+    detail::eliminate_unreachable_code_in_function(function, info);
     for (;;) {
         auto prev_count = info.removed_instructions.size();
         detail::eliminate_dead_code_in_function(function, info);
