@@ -20,17 +20,20 @@ def visualize_control_flow_graph(subgraph, graph_desc):
     dom_edges = graph_desc['dominance_tree']
     frontiers = graph_desc['dominance_frontiers']
     terminators = graph_desc['terminators']
+    merges = graph_desc['merges']
     for node in nodes:
         subgraph.node(node, label=f"{normalize_node_name(node)}\n[{terminators[node]}]")
-    for (source, targets) in edges.items():
+    for source, targets in edges.items():
         for target in targets:
             subgraph.edge(source, target)
-    for (source, targets) in dom_edges.items():
+    for source, targets in dom_edges.items():
         for target in targets:
             subgraph.edge(source, target, color='red')
-    for (source, targets) in frontiers.items():
+    for source, targets in frontiers.items():
         for target in targets:
-            subgraph.edge(source, target, color='blue', style='dotted')
+            subgraph.edge(source, target, color='orange', style='dashed')
+    for source, target in merges.items():
+        subgraph.edge(source, target, style='dashed')
 
 
 if __name__ == '__main__':

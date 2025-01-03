@@ -688,6 +688,25 @@ private:
             _main.pop_back();
             _main << "}, ";
         }
+        // CFG Control Merges
+        {
+            _main << "\"merges\": {";
+            auto any_merge = false;
+            f->traverse_basic_blocks([&](auto block) noexcept {
+                auto terminator = block->terminator();
+                if (auto merge = terminator->control_flow_merge();
+                    merge != nullptr && merge->merge_block() != nullptr) {
+                    any_merge = true;
+                    _main << "\"" << _value_ident(block) << "\": \""
+                          << _value_ident(merge->merge_block()) << "\", ";
+                }
+            });
+            if (any_merge) {
+                _main.pop_back();
+                _main.pop_back();
+            }
+            _main << "}, ";
+        }
         // Dominance Tree
         {
             auto dom_tree = compute_dom_tree(f);
