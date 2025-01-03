@@ -19,8 +19,9 @@ def visualize_control_flow_graph(subgraph, graph_desc):
     edges = graph_desc['edges']
     dom_edges = graph_desc['dominance_tree']
     frontiers = graph_desc['dominance_frontiers']
+    terminators = graph_desc['terminators']
     for node in nodes:
-        subgraph.node(node, label=normalize_node_name(node))
+        subgraph.node(node, label=f"{normalize_node_name(node)}\n[{terminators[node]}]")
     for (source, targets) in edges.items():
         for target in targets:
             subgraph.edge(source, target)

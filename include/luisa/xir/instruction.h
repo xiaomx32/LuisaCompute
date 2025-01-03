@@ -68,6 +68,49 @@ enum struct DerivedInstructionTag {
     INTRINSIC,// other intrinsics that are not yet promoted to dedicated instructions
 };
 
+[[nodiscard]] constexpr luisa::string_view to_string(DerivedInstructionTag tag) noexcept {
+    using namespace std::string_view_literals;
+    switch (tag) {
+        case DerivedInstructionTag::SENTINEL: return "sentinel"sv;
+        case DerivedInstructionTag::IF: return "if"sv;
+        case DerivedInstructionTag::SWITCH: return "switch"sv;
+        case DerivedInstructionTag::LOOP: return "loop"sv;
+        case DerivedInstructionTag::SIMPLE_LOOP: return "simple_loop"sv;
+        case DerivedInstructionTag::BRANCH: return "branch"sv;
+        case DerivedInstructionTag::CONDITIONAL_BRANCH: return "conditional_branch"sv;
+        case DerivedInstructionTag::UNREACHABLE: return "unreachable"sv;
+        case DerivedInstructionTag::BREAK: return "break"sv;
+        case DerivedInstructionTag::CONTINUE: return "continue"sv;
+        case DerivedInstructionTag::RETURN: return "return"sv;
+        case DerivedInstructionTag::RASTER_DISCARD: return "raster_discard"sv;
+        case DerivedInstructionTag::PHI: return "phi"sv;
+        case DerivedInstructionTag::ALLOCA: return "alloca"sv;
+        case DerivedInstructionTag::LOAD: return "load"sv;
+        case DerivedInstructionTag::STORE: return "store"sv;
+        case DerivedInstructionTag::GEP: return "gep"sv;
+        case DerivedInstructionTag::ATOMIC: return "atomic"sv;
+        case DerivedInstructionTag::ARITHMETIC: return "arithmetic"sv;
+        case DerivedInstructionTag::THREAD_GROUP: return "thread_group"sv;
+        case DerivedInstructionTag::RESOURCE_QUERY: return "resource_query"sv;
+        case DerivedInstructionTag::RESOURCE_READ: return "resource_read"sv;
+        case DerivedInstructionTag::RESOURCE_WRITE: return "resource_write"sv;
+        case DerivedInstructionTag::RAY_QUERY_LOOP: return "ray_query_loop"sv;
+        case DerivedInstructionTag::RAY_QUERY_DISPATCH: return "ray_query_dispatch"sv;
+        case DerivedInstructionTag::RAY_QUERY_OBJECT_READ: return "ray_query_object_read"sv;
+        case DerivedInstructionTag::RAY_QUERY_OBJECT_WRITE: return "ray_query_object_write"sv;
+        case DerivedInstructionTag::CALL: return "call"sv;
+        case DerivedInstructionTag::CAST: return "cast"sv;
+        case DerivedInstructionTag::PRINT: return "print"sv;
+        case DerivedInstructionTag::CLOCK: return "clock"sv;
+        case DerivedInstructionTag::ASSERT: return "assert"sv;
+        case DerivedInstructionTag::ASSUME: return "assume"sv;
+        case DerivedInstructionTag::OUTLINE: return "outline"sv;
+        case DerivedInstructionTag::AUTO_DIFF: return "auto_diff"sv;
+        case DerivedInstructionTag::INTRINSIC: return "intrinsic"sv;
+    }
+    return "unknown"sv;
+}
+
 class ControlFlowMerge;
 
 class LC_XIR_API Instruction : public IntrusiveNode<Instruction, DerivedValue<DerivedValueTag::INSTRUCTION, User>> {

@@ -675,6 +675,19 @@ private:
             _main.pop_back();
             _main << "}, ";
         }
+        // CFG Terminators
+        {
+            _main << "\"terminators\": {";
+            f->traverse_basic_blocks([&](auto block) noexcept {
+                _main << "\"" << _value_ident(block) << "\": ";
+                if (auto term = block->terminator()) {
+                    _main << "\"" << xir::to_string(term->derived_instruction_tag()) << "\", ";
+                }
+            });
+            _main.pop_back();
+            _main.pop_back();
+            _main << "}, ";
+        }
         // Dominance Tree
         {
             auto dom_tree = compute_dom_tree(f);
