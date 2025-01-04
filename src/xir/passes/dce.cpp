@@ -132,7 +132,74 @@ void eliminate_dead_alloca_in_function(Function *function, DCEInfo &info) noexce
     }
 }
 
-void eliminate_unreachable_code_in_function(Function *function, DCEInfo &info) noexcept {
+[[nodiscard]] static bool is_block_terminated_by_unreachable(BasicBlock *block) noexcept {
+    return block->terminator()->derived_instruction_tag() == DerivedInstructionTag::UNREACHABLE;
+}
+
+void eliminate_instructions_in_unreachable_blocks(const luisa::unordered_set<BasicBlock *> &blocks, DCEInfo &info) noexcept {
+    luisa::vector<Instruction *> cache;
+    for (auto b : blocks) {
+        // replace the terminator with an unreachable instruction if it's not already
+        if (!is_block_terminated_by_unreachable(b)) {
+            b->terminator()->remove_self();
+            xir::Builder builder;
+            builder.set_insertion_point(b);
+            builder.unreachable_();
+        }
+        // collect all instructions in the unreachable block
+        for (auto &&inst : b->instructions()) {
+            cache.emplace_back(&inst);
+        }
+        // pop the terminator
+        cache.pop_back();
+        // remove all instructions
+        for (auto &&inst : cache) {
+            inst->remove_self();
+            info.removed_instructions.emplace(inst);
+        }
+        cache.clear();
+    }
+}
+
+void propagate_unreachable_marks_in_function(Function *function, DCEInfo &info) noexcept {
+    // run a backward dataflow analysis to propagate unreachable marks:
+    // we should mark a block as unreachable if all its successors are marked as unreachable
+    if (auto definition = function->definition()) {
+        luisa::vector<BasicBlock *> postorder;
+        definition->traverse_basic_blocks(BasicBlockTraversalOrder::POST_ORDER, [&](BasicBlock *block) noexcept {
+            postorder.emplace_back(block);
+        });
+        luisa::unordered_set<BasicBlock *> unreachable;
+        for (;;) {
+            auto prev_reachable_count = unreachable.size();
+            for (auto block : postorder) {
+                if (!unreachable.contains(block)) {
+                    if (is_block_terminated_by_unreachable(block)) {
+                        unreachable.emplace(block);
+                    } else {
+                        auto has_any_successor = false;
+                        auto all_successors_unreachable = true;
+                        block->traverse_successors(false, [&](BasicBlock *succ) noexcept {
+                            has_any_successor = true;
+                            if (succ != block && !unreachable.contains(succ) &&
+                                !is_block_terminated_by_unreachable(succ)) {
+                                all_successors_unreachable = false;
+                            }
+                        });
+                        if (has_any_successor && all_successors_unreachable) {
+                            unreachable.emplace(block);
+                        }
+                    }
+                }
+            }
+            if (unreachable.size() == prev_reachable_count) { break; }
+        }
+        // eliminate all instructions in unreachable blocks
+        eliminate_instructions_in_unreachable_blocks(unreachable, info);
+    }
+}
+
+void eliminate_unreachable_blocks_in_function(Function *function, DCEInfo &info) noexcept {
     if (auto definition = function->definition()) {
         luisa::unordered_set<BasicBlock *> reachable;
         definition->traverse_basic_blocks([&](BasicBlock *block) noexcept {
@@ -155,22 +222,8 @@ void eliminate_unreachable_code_in_function(Function *function, DCEInfo &info) n
                 }
             });
         }
-        luisa::vector<Instruction *> dead;
-        for (auto b : unreachable) {
-            dead.clear();
-            // collect and remove all instructions in the unreachable block
-            for (auto &&inst : b->instructions()) {
-                dead.emplace_back(&inst);
-            }
-            for (auto &&inst : dead) {
-                info.removed_instructions.emplace(inst);
-                inst->remove_self();
-            }
-            // replace with an unreachable instruction
-            xir::Builder builder;
-            builder.set_insertion_point(b);
-            builder.unreachable_();
-        }
+        // eliminate all instructions in unreachable blocks
+        eliminate_instructions_in_unreachable_blocks(unreachable, info);
     }
 }
 
@@ -213,9 +266,24 @@ void fix_phi_nodes_in_function(Function *function) noexcept {
     }
 }
 
+void fix_control_flow_merges_in_function(Function *function) noexcept {
+    if (auto definition = function->definition()) {
+        definition->traverse_basic_blocks([&](BasicBlock *block) noexcept {
+            if (auto merge = block->terminator()->control_flow_merge()) {
+                if (auto merge_block = merge->merge_block();
+                    merge_block != nullptr && is_block_terminated_by_unreachable(merge_block)) {
+                    merge->set_merge_block(nullptr);
+                }
+            }
+        });
+    }
+}
+
 void run_dce_pass_on_function(Function *function, DCEInfo &info) noexcept {
-    eliminate_unreachable_code_in_function(function, info);
+    propagate_unreachable_marks_in_function(function, info);
+    eliminate_unreachable_blocks_in_function(function, info);
     fix_phi_nodes_in_function(function);
+    fix_control_flow_merges_in_function(function);
     for (;;) {
         auto prev_count = info.removed_instructions.size();
         eliminate_dead_code_in_function(function, info);

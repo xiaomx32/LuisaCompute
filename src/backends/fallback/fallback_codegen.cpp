@@ -2917,6 +2917,7 @@ private:
     }
 
     [[nodiscard]] llvm::BasicBlock *_find_or_create_basic_block(CurrentFunction &current, const xir::BasicBlock *bb) noexcept {
+        if (bb == nullptr) { return nullptr; }
         auto iter = current.value_map.try_emplace(bb, nullptr).first;
         if (iter->second) { return llvm::cast<llvm::BasicBlock>(iter->second); }
         auto llvm_bb = llvm::BasicBlock::Create(_llvm_context, _get_name_from_metadata(bb), current.func);
@@ -2925,6 +2926,7 @@ private:
     }
 
     void _translate_instructions_in_basic_block(CurrentFunction &current, llvm::BasicBlock *llvm_bb, const xir::BasicBlock *bb) noexcept {
+        if (bb == nullptr) { return; }
         if (current.translated_basic_blocks.emplace(llvm_bb).second) {
             for (auto &inst : bb->instructions()) {
                 IRBuilder b{llvm_bb};

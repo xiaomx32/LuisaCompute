@@ -60,10 +60,36 @@ inline void DomTree::compute_dominance_frontiers() noexcept {
     }
 }
 
-const DomTreeNode *DomTree::node(BasicBlock *block) const noexcept {
+auto DomTree::node(BasicBlock *block) const noexcept -> const DomTreeNode * {
     auto iter = _nodes.find(block);
     LUISA_ASSERT(iter != _nodes.end(), "Block not found in the dom tree.");
     return iter->second.get();
+}
+
+bool DomTree::contains(BasicBlock *block) const noexcept {
+    return _nodes.contains(block);
+}
+
+bool DomTree::dominates(BasicBlock *src, BasicBlock *dst) const noexcept {
+    if (src == dst) { return true; }
+    auto src_node = node(src);
+    auto dst_node = node(dst);
+    if (src_node == _root) { return true; }
+    while (dst_node != _root) {
+        if (dst_node == src_node) { return true; }
+        dst_node = dst_node->parent();
+    }
+    return false;
+}
+
+bool DomTree::strictly_dominates(BasicBlock *src, BasicBlock *dst) const noexcept {
+    return src != dst && dominates(src, dst);
+}
+
+auto DomTree::immediate_dominator(BasicBlock *block) const noexcept -> BasicBlock * {
+    auto node = this->node(block);
+    if (node == _root) { return nullptr; }
+    return node->parent()->block();
 }
 
 // Reference: A Simple, Fast Dominance Algorithm [Cooper et al. 2001]

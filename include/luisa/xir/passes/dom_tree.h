@@ -42,7 +42,11 @@ public: /* for internal usage only */
 public:
     [[nodiscard]] auto root() const noexcept { return _root; }
     [[nodiscard]] auto &nodes() const noexcept { return _nodes; }
-    [[nodiscard]] const DomTreeNode *node(BasicBlock *block) const noexcept;
+    [[nodiscard]] auto node(BasicBlock *block) const noexcept -> const DomTreeNode *;
+    [[nodiscard]] bool contains(BasicBlock *block) const noexcept;
+    [[nodiscard]] bool dominates(BasicBlock *src, BasicBlock *dst) const noexcept;
+    [[nodiscard]] bool strictly_dominates(BasicBlock *src, BasicBlock *dst) const noexcept;
+    [[nodiscard]] auto immediate_dominator(BasicBlock *block) const noexcept -> BasicBlock *;
 };
 
 [[nodiscard]] LC_XIR_API DomTree compute_dom_tree(Function *function) noexcept;
