@@ -2,10 +2,11 @@
 #include <luisa/backends/ext/dx_hdr_ext_interface.h>
 #include <DXApi/LCDevice.h>
 namespace lc::dx {
+
 class DXHDRExtImpl : public luisa::compute::DXHDRExt {
     LCDevice *_lc_device;
     bool _device_support_hdr = false;
-    bool device_support_hdr() const override;
+    bool device_support_hdr() const noexcept override;
 public:
     DXHDRExtImpl(LCDevice *lc_device);
     ~DXHDRExtImpl();
@@ -19,5 +20,8 @@ public:
         float max_cll = 2000.0f,
         float max_fall = 500.0f,
         const DXHDRExt::DisplayChromaticities *custom_chroma = nullptr) noexcept override;
+    void set_color_space(
+        uint64_t handle,
+        ColorSpace const &color_space) const noexcept override;
 };
 }// namespace lc::dx

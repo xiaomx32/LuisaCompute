@@ -64,7 +64,6 @@ public:
     };
 
     struct Meta {
-        ColorSpace color_space;
         DisplayChromaticities chromaticities;
     };
 
@@ -80,8 +79,20 @@ public:
         const DisplayChromaticities *custom_chroma = nullptr) noexcept = 0;
     static constexpr luisa::string_view name = "DXHDRExt";
     [[nodiscard]] Swapchain create_swapchain(const Stream &stream, const DXSwapchainOption &option) noexcept;
-    [[nodiscard]] virtual bool device_support_hdr() const = 0;
-
+    [[nodiscard]] virtual bool device_support_hdr() const noexcept = 0;
+    virtual void set_color_space(
+        uint64_t handle,
+        ColorSpace const &color_space) const noexcept = 0;
+    void set_color_space(
+        Swapchain const& swapchain,
+        ColorSpace const &color_space) const noexcept;
+    Meta set_hdr_meta_data(
+        Swapchain const& swapchain,
+        float max_output_nits = 1000.0f,
+        float min_output_nits = 0.001f,
+        float max_cll = 2000.0f,
+        float max_fall = 500.0f,
+        const DisplayChromaticities *custom_chroma = nullptr) noexcept;
 protected:
     ~DXHDRExt() = default;
 };

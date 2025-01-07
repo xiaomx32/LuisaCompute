@@ -10,7 +10,7 @@ using namespace luisa::compute;
 class DXHDRExtImpl : public DXHDRExt, public vstd::IOperatorNewBase {
 public:
     DXHDRExt *ptr;
-    DXHDRExtImpl(DXHDRExt *ptr) : ptr(ptr) {}
+    DXHDRExtImpl(DXHDRExt *ptr) noexcept : ptr(ptr) {}
     SwapchainCreationInfo create_swapchain(
         const DXSwapchainOption &option,
         uint64_t stream_handle) noexcept override;
@@ -21,8 +21,13 @@ public:
         float max_cll = 2000.0f,
         float max_fall = 500.0f,
         const DisplayChromaticities *custom_chroma = nullptr) noexcept override;
-    bool device_support_hdr() const override {
+    bool device_support_hdr() const noexcept override {
         return ptr->device_support_hdr();
+    }
+    void set_color_space(
+        uint64_t handle,
+        ColorSpace const &color_space) const noexcept {
+        ptr->set_color_space(handle, color_space);
     }
 };
 

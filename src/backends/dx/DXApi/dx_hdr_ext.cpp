@@ -12,7 +12,7 @@ DXHDRExt::DisplayCurve EnsureSwapChainColorSpace(
     IDXGISwapChain4 *swapChain,
     DXGI_COLOR_SPACE_TYPE &currentSwapChainColorSpace,
     DXHDRExt::SwapChainBitDepth swapChainBitDepth,
-    bool enableST2084) {
+    bool enableST2084) noexcept {
     DXHDRExt::DisplayCurve result{DXHDRExt::DisplayCurve::None};
     DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
     switch (swapChainBitDepth) {
@@ -50,7 +50,7 @@ DXHDRExt::DisplayChromaticities SetHDRMetaData(
     float MinOutputNits /*=0.001f*/,
     float MaxCLL /*=2000.0f*/,
     float MaxFALL /*=500.0f*/,
-    const DXHDRExt::DisplayChromaticities *Chroma) {
+    const DXHDRExt::DisplayChromaticities *Chroma) noexcept {
     if (!swapchain) {
         return {};
     }
@@ -186,10 +186,17 @@ auto DXHDRExtImpl::set_hdr_meta_data(
         max_fall,
         custom_chroma);
     return {
-        static_cast<ColorSpace>(color_space),
         chroma};
 }
-bool DXHDRExtImpl::device_support_hdr() const {
+void DXHDRExtImpl::set_color_space(
+    uint64_t handle,
+    ColorSpace const &color_space) const noexcept {
+    auto swapChain = reinterpret_cast<LCSwapChain *>(handle);
+    ComPtr<IDXGISwapChain3> swapChain3;
+    ThrowIfFailed(swapChain->swapChain->QueryInterface(IID_PPV_ARGS(&swapChain3)));
+    swapChain3->SetColorSpace1(static_cast<DXGI_COLOR_SPACE_TYPE>(color_space));
+}
+bool DXHDRExtImpl::device_support_hdr() const noexcept {
     return _device_support_hdr;
 }
 }// namespace lc::dx
