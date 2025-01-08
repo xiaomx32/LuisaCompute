@@ -1,5 +1,6 @@
 #pragma once
 
+#include <luisa/core/stl/memory.h>
 #include <luisa/core/stl/unordered_map.h>
 #include <luisa/xir/function.h>
 
