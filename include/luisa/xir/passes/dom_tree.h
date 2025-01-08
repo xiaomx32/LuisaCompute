@@ -28,7 +28,7 @@ public:
     [[nodiscard]] auto frontiers() const noexcept { return luisa::span{_frontiers}; }
 };
 
-class LC_XIR_API DomTree {
+class LC_XIR_API DomTree : public concepts::Noncopyable {
 
 private:
     luisa::unordered_map<BasicBlock *, luisa::unique_ptr<DomTreeNode>> _nodes;
