@@ -237,9 +237,11 @@
 #include <luisa/xir/metadata/location.h>
 #include <luisa/xir/metadata/name.h>
 #include <luisa/xir/module.h>
+#include <luisa/xir/passes/aggregate_field_bitmask.h>
 #include <luisa/xir/passes/dce.h>
 #include <luisa/xir/passes/dom_tree.h>
 #include <luisa/xir/passes/outline.h>
+#include <luisa/xir/passes/ref_arg_usage.h>
 #include <luisa/xir/passes/sink_alloca.h>
 #include <luisa/xir/passes/trace_gep.h>
 #include <luisa/xir/pool.h>

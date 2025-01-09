@@ -3,8 +3,7 @@
 #include <luisa/core/stl/vector.h>
 #include <luisa/core/stl/unordered_map.h>
 #include <luisa/ast/type.h>
-
-#include "aggregate_field_bitmask.h"
+#include <luisa/xir/passes/aggregate_field_bitmask.h>
 
 namespace luisa::compute::xir {
 
@@ -211,7 +210,7 @@ void AggregateFieldBitmask::flip() noexcept {
     }
 }
 
-void AggregateFieldBitmask::BitSpan::set(bool value) && noexcept {
+void AggregateFieldBitmask::BitSpan::set(bool value) noexcept {
     auto lower = _offset / 64u;
     auto upper = (_offset + _size - 1u) / 64u;
     if (lower == upper) {// all selected bits are in the same bucket
@@ -252,7 +251,7 @@ void AggregateFieldBitmask::BitSpan::set(bool value) && noexcept {
     }
 }
 
-void AggregateFieldBitmask::BitSpan::flip() && noexcept {
+void AggregateFieldBitmask::BitSpan::flip() noexcept {
     auto lower = _offset / 64u;
     auto upper = (_offset + _size - 1u) / 64u;
     if (lower == upper) {// all selected bits are in the same bucket
@@ -275,6 +274,56 @@ void AggregateFieldBitmask::BitSpan::flip() && noexcept {
             _bits[upper] ^= upper_mask;
         }
     }
+}
+
+// TODO: Implement the following methods in a SIMD-friendly way
+AggregateFieldBitmask::BitSpan &AggregateFieldBitmask::BitSpan::operator|=(const ConstBitSpan &rhs) noexcept {
+    LUISA_DEBUG_ASSERT(_size == rhs.size(), "Size mismatch.");
+    for (auto i = 0u; i < _size; i++) {
+        if (auto rhs_bucket = rhs.raw_bits()[(i + rhs.offset()) / 64u];
+            (rhs_bucket >> ((i + rhs.offset()) % 64u)) & 1ull) {
+            _bits[(_offset + i) / 64u] |= 1ull << ((_offset + i) % 64u);
+        }
+    }
+    return *this;
+}
+
+AggregateFieldBitmask::BitSpan &AggregateFieldBitmask::BitSpan::operator&=(const ConstBitSpan &rhs) noexcept {
+    LUISA_DEBUG_ASSERT(_size == rhs.size(), "Size mismatch.");
+    for (auto i = 0u; i < _size; i++) {
+        if (auto rhs_bucket = rhs.raw_bits()[(i + rhs.offset()) / 64u];
+            (rhs_bucket >> ((i + rhs.offset()) % 64u)) & 1ull) {
+            _bits[(_offset + i) / 64u] &= 1ull << ((_offset + i) % 64u);
+        }
+    }
+    return *this;
+}
+
+AggregateFieldBitmask::BitSpan &AggregateFieldBitmask::BitSpan::operator^=(const ConstBitSpan &rhs) noexcept {
+    LUISA_DEBUG_ASSERT(_size == rhs.size(), "Size mismatch.");
+    for (auto i = 0u; i < _size; i++) {
+        if (auto rhs_bucket = rhs.raw_bits()[(i + rhs.offset()) / 64u];
+            (rhs_bucket >> ((i + rhs.offset()) % 64u)) & 1ull) {
+            _bits[(_offset + i) / 64u] ^= 1ull << ((_offset + i) % 64u);
+        }
+    }
+    return *this;
+}
+
+bool AggregateFieldBitmask::BitSpan::operator==(const ConstBitSpan &rhs) const noexcept {
+    if (_size != rhs.size()) { return false; }
+    if (this != &rhs) {
+        for (auto i = 0u; i < _size; i++) {
+            auto lhs_bit = (_bits[(_offset + i) / 64u] >> ((_offset + i) % 64u)) & 1ull;
+            auto rhs_bit = (rhs.raw_bits()[i / 64u] >> (i % 64u)) & 1ull;
+            if (lhs_bit != rhs_bit) { return false; }
+        }
+    }
+    return true;
+}
+
+bool AggregateFieldBitmask::BitSpan::operator!=(const ConstBitSpan &rhs) const noexcept {
+    return !(*this == rhs);
 }
 
 bool AggregateFieldBitmask::ConstBitSpan::all() const noexcept {

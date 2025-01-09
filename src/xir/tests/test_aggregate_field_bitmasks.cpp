@@ -1,6 +1,4 @@
 #include <luisa/luisa-compute.h>
-#include "../passes/aggregate_field_bitmask.h"
-#include "luisa/dsl/struct.h"
 
 using namespace luisa;
 using namespace luisa::compute;

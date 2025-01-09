@@ -56,6 +56,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         passes/sink_alloca.cpp
         passes/trace_gep.cpp
         passes/aggregate_field_bitmask.cpp
+        passes/ref_arg_usage.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})

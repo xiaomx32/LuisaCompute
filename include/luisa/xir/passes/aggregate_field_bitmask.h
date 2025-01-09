@@ -1,5 +1,6 @@
 #pragma once
 
+#include <luisa/core/dll_export.h>
 #include <luisa/core/stl/memory.h>
 
 namespace luisa::compute {
@@ -12,7 +13,7 @@ namespace detail {
 class AggregateFieldTree;
 }// namespace detail
 
-class alignas(16) AggregateFieldBitmask {
+class LC_XIR_API alignas(16) AggregateFieldBitmask {
 
 private:
     const detail::AggregateFieldTree *_field_tree;
@@ -43,7 +44,7 @@ public:
     [[nodiscard]] const Type *type() const noexcept;
 
 public:
-    class ConstBitSpan {
+    class LC_XIR_API ConstBitSpan {
     protected:
         uint64_t *_bits;
         uint32_t _offset;
@@ -51,15 +52,32 @@ public:
     public:
         ConstBitSpan(uint64_t *bits, uint32_t offset, uint32_t size) noexcept
             : _bits{bits}, _offset{offset}, _size{size} {}
+        [[nodiscard]] const uint64_t *raw_bits() const noexcept { return _bits; }
+        [[nodiscard]] size_t offset() const noexcept { return _offset; }
+        [[nodiscard]] size_t size() const noexcept { return _size; }
         [[nodiscard]] bool all() const noexcept;
         [[nodiscard]] bool any() const noexcept;
         [[nodiscard]] bool none() const noexcept;
     };
-    class BitSpan : public ConstBitSpan {
+    class LC_XIR_API BitSpan : public ConstBitSpan {
     public:
         using ConstBitSpan::ConstBitSpan;
-        void set(bool value = true) && noexcept;
-        void flip() && noexcept;
+        [[nodiscard]] uint64_t *raw_bits() noexcept { return _bits; }
+
+        void set(bool value = true) noexcept;
+        void flip() noexcept;
+
+        BitSpan &operator|=(const ConstBitSpan &rhs) noexcept;
+        BitSpan &operator&=(const ConstBitSpan &rhs) noexcept;
+        BitSpan &operator^=(const ConstBitSpan &rhs) noexcept;
+        [[nodiscard]] bool operator==(const ConstBitSpan &rhs) const noexcept;
+        [[nodiscard]] bool operator!=(const ConstBitSpan &rhs) const noexcept;
+
+        BitSpan &operator|=(const AggregateFieldBitmask &rhs) noexcept { return *this |= rhs.access(); }
+        BitSpan &operator&=(const AggregateFieldBitmask &rhs) noexcept { return *this &= rhs.access(); }
+        BitSpan &operator^=(const AggregateFieldBitmask &rhs) noexcept { return *this ^= rhs.access(); }
+        [[nodiscard]] bool operator==(const AggregateFieldBitmask &rhs) const noexcept { return *this == rhs.access(); }
+        [[nodiscard]] bool operator!=(const AggregateFieldBitmask &rhs) const noexcept { return *this != rhs.access(); }
     };
     [[nodiscard]] BitSpan access(luisa::span<const size_t> access_chain) noexcept;
     [[nodiscard]] ConstBitSpan access(luisa::span<const size_t> access_chain) const noexcept;
