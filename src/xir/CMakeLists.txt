@@ -55,6 +55,7 @@ set(LUISA_COMPUTE_XIR_SOURCES
         passes/outline.cpp
         passes/sink_alloca.cpp
         passes/trace_gep.cpp
+        passes/aggregate_field_bitmask.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})
@@ -70,3 +71,8 @@ set_target_properties(luisa-compute-xir PROPERTIES
         OUTPUT_NAME lc-xir)
 
 luisa_compute_install(xir)
+
+if (LUISA_COMPUTE_ENABLE_XIR_TESTS)
+    add_executable(test_aggregate_field_bitmasks tests/test_aggregate_field_bitmasks.cpp)
+    target_link_libraries(test_aggregate_field_bitmasks PRIVATE luisa-compute-xir)
+endif ()
