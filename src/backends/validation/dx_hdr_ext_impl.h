@@ -29,6 +29,9 @@ public:
         ColorSpace const &color_space) const noexcept {
         ptr->set_color_space(handle, color_space);
     }
+    DisplayData get_display_data(uint64_t hwnd) const noexcept override {
+        return ptr->get_display_data(hwnd);
+    }
 };
 
 }// namespace lc::validation
