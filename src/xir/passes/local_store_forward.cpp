@@ -8,7 +8,7 @@ namespace luisa::compute::xir {
 
 namespace detail {
 
-[[nodiscard]] AllocaInst *trace_pointer_base_local_alloca_inst(Value *pointer) noexcept {
+[[nodiscard]] static AllocaInst *trace_pointer_base_local_alloca_inst(Value *pointer) noexcept {
     if (pointer == nullptr || pointer->derived_value_tag() != DerivedValueTag::INSTRUCTION) {
         return nullptr;
     }
@@ -30,7 +30,8 @@ namespace detail {
 
 // TODO: we only handle local alloca's in straight-line code for now
 static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,
-                                                   BasicBlock *block, LocalStoreForwardInfo &info) noexcept {
+                                                   BasicBlock *block,
+                                                   LocalStoreForwardInfo &info) noexcept {
 
     luisa::unordered_map<AllocaInst *, luisa::vector<Value *>> variable_pointers;// maps variables to pointers
     luisa::unordered_map<Value *, StoreInst *> latest_stores;                    // maps pointers to the latest store instruction
@@ -38,8 +39,9 @@ static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlo
 
     auto invalidate_interfering_stores = [&](Value *ptr) noexcept -> AllocaInst * {
         if (auto alloca_inst = trace_pointer_base_local_alloca_inst(ptr)) {
-            variable_pointers[alloca_inst].emplace_back(ptr);
-            for (auto interfering_ptr : variable_pointers[alloca_inst]) {
+            auto &interfering_ptrs = variable_pointers[alloca_inst];
+            interfering_ptrs.emplace_back(ptr);
+            for (auto interfering_ptr : interfering_ptrs) {
                 latest_stores.erase(interfering_ptr);
             }
             return alloca_inst;
@@ -49,6 +51,7 @@ static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlo
 
     // we visit the block and all of its single straight-line successors
     while (visited.emplace(block).second) {
+
         // process the instructions in the block
         for (auto &&inst : block->instructions()) {
             switch (inst.derived_instruction_tag()) {
@@ -93,14 +96,16 @@ static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlo
         if (pred_count != 1) { break; }
         block = next;
     }
-    for (auto &&[load, store] : removable_loads) {
+
+    // perform the forwarding
+    for (auto [load, store] : removable_loads) {
         load->replace_all_uses_with(store->value());
         load->remove_self();
         info.forwarded_instructions.emplace(load, store);
     }
 }
 
-void run_local_store_forward_on_function(Function *function, LocalStoreForwardInfo &info) noexcept {
+static void run_local_store_forward_on_function(Function *function, LocalStoreForwardInfo &info) noexcept {
     if (auto definition = function->definition()) {
         luisa::unordered_set<BasicBlock *> visited;
         definition->traverse_basic_blocks(BasicBlockTraversalOrder::REVERSE_POST_ORDER, [&](BasicBlock *block) noexcept {

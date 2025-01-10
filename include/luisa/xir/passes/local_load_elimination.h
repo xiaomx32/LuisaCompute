@@ -9,6 +9,11 @@ class LoadInst;
 class Function;
 class Module;
 
+// This pass implements a simple local load elimination optimization.
+// For each load instruction, if a recent load instruction with the same
+// variable has happened without possible intervening stores, the load
+// instruction can be replaced with the recent load instruction.
+
 struct LocalLoadEliminationInfo {
     luisa::unordered_map<LoadInst *, LoadInst *> eliminated_instructions;
 };

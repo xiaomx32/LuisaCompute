@@ -15,9 +15,6 @@ class Module;
 // This pass is used to forward stores to loads for scalar variables
 // within straight-line basic blocks. It is a simple peephole optimization
 // that can be used to reduce the number of memory operations.
-// Note: this pass does not remove the original store instructions.
-// It only forwards the values to the loads. To remove the original
-// store instructions, a DCE pass should be used after this pass.
 
 struct LocalStoreForwardInfo {
     luisa::unordered_map<LoadInst *, StoreInst *> forwarded_instructions;

@@ -42,10 +42,6 @@ FallbackDevice::FallbackDevice(Context &&ctx) noexcept
 
     // embree
     _rtc_device = rtcNewDevice("frequency_level=simd128,isa=avx2,verbose=1");
-    auto embree_version_major = rtcGetDeviceProperty(_rtc_device, RTC_DEVICE_PROPERTY_VERSION_MAJOR);
-    auto embree_version_minor = rtcGetDeviceProperty(_rtc_device, RTC_DEVICE_PROPERTY_VERSION_MINOR);
-    auto embree_version_patch = rtcGetDeviceProperty(_rtc_device, RTC_DEVICE_PROPERTY_VERSION_PATCH);
-    LUISA_INFO("Embree version: {}.{}.{}", embree_version_major, embree_version_minor, embree_version_patch);
     rtcSetDeviceErrorFunction(
         _rtc_device,
         [](void *, RTCError code, const char *message) {

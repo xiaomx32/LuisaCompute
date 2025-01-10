@@ -26,6 +26,7 @@
 
 #include <luisa/xir/passes/dce.h>
 #include <luisa/xir/passes/local_store_forward.h>
+#include <luisa/xir/passes/local_load_elimination.h>
 
 #include "../common/shader_print_formatter.h"
 
@@ -175,10 +176,13 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
     Clock opt_clk;
     auto dce1_info = xir::dce_pass_run_on_module(xir_module);
     auto store_forward_info = xir::local_store_forward_pass_run_on_module(xir_module);
+    auto load_elim_info = xir::local_load_elimination_pass_run_on_module(xir_module);
     auto dce2_info = xir::dce_pass_run_on_module(xir_module);
     LUISA_INFO("Forwarded {} store instruction(s), "
+               "eliminated {} load instruction(s), "
                "removed {} dead instructions in {} ms.",
                store_forward_info.forwarded_instructions.size(),
+               load_elim_info.eliminated_instructions.size(),
                dce1_info.removed_instructions.size() + dce2_info.removed_instructions.size(),
                opt_clk.toc());
 
