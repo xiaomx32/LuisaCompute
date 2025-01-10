@@ -3203,6 +3203,24 @@ private:
         }
         // translate body
         static_cast<void>(_translate_basic_block(current, f->body_block()));
+        // we should hoist all alloca instructions to the beginning of the function
+        {
+            luisa::vector<llvm::AllocaInst *> alloca_insts;
+            for (auto &&llvm_bb : *llvm_func) {
+                for (auto &&llvm_inst : llvm_bb) {
+                    if (auto alloca_inst = llvm::dyn_cast<llvm::AllocaInst>(&llvm_inst)) {
+                        alloca_insts.emplace_back(alloca_inst);
+                    }
+                }
+            }
+            // reverse the order of alloca instructions for better readability
+            std::reverse(alloca_insts.begin(), alloca_insts.end());
+            // move alloca instructions to the beginning of the function
+            auto &llvm_entry = llvm_func->getEntryBlock();
+            for (auto inst : alloca_insts) {
+                inst->moveBefore(&llvm_entry.front());
+            }
+        }
         // return
         return llvm_func;
     }
