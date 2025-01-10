@@ -204,7 +204,7 @@ void propagate_unreachable_marks_in_function(Function *function, DCEInfo &info) 
     LUISA_DEBUG_ASSERT(cond != nullptr, "Branch condition must not be null.");
     if (cond->derived_value_tag() != DerivedValueTag::CONSTANT) { return luisa::nullopt; }
     auto static_cond = static_cast<Constant *>(cond);
-    LUISA_DEBUG_ASSERT(const_cond->type()->is_bool(), "Branch condition must be a boolean constant.");
+    LUISA_DEBUG_ASSERT(static_cond->type()->is_bool(), "Branch condition must be a boolean constant.");
     return static_cond->as<bool>();
 }
 
