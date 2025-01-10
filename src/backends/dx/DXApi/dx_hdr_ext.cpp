@@ -199,4 +199,62 @@ void DXHDRExtImpl::set_color_space(
 bool DXHDRExtImpl::device_support_hdr() const noexcept {
     return _device_support_hdr;
 }
+auto DXHDRExtImpl::get_display_data(uint64_t hwnd) const noexcept -> DisplayData {
+    /////// Get window bound
+    RECT windowRect = {};
+    GetWindowRect(reinterpret_cast<HWND>(hwnd), &windowRect);
+
+    UINT i = 0;
+    Microsoft::WRL::ComPtr<IDXGIOutput> currentOutput;
+    Microsoft::WRL::ComPtr<IDXGIOutput> bestOutput;
+    float bestIntersectArea = -1;
+    auto ComputeIntersectionArea = [](int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2) {
+        return std::max(0, std::min(ax2, bx2) - std::max(ax1, bx1)) * std::max(0, std::min(ay2, by2) - std::max(ay1, by1));
+    };
+
+    while (_lc_device->nativeDevice.adapter->EnumOutputs(i, &currentOutput) != DXGI_ERROR_NOT_FOUND) {
+        // Get the retangle bounds of the app window
+        int ax1 = windowRect.left;
+        int ay1 = windowRect.top;
+        int ax2 = windowRect.right;
+        int ay2 = windowRect.bottom;
+
+        // Get the rectangle bounds of current output
+        DXGI_OUTPUT_DESC desc;
+        ThrowIfFailed(currentOutput->GetDesc(&desc));
+        RECT r = desc.DesktopCoordinates;
+        int bx1 = r.left;
+        int by1 = r.top;
+        int bx2 = r.right;
+        int by2 = r.bottom;
+
+        // Compute the intersection
+        int intersectArea = ComputeIntersectionArea(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2);
+        if (intersectArea > bestIntersectArea) {
+            bestOutput = currentOutput;
+            bestIntersectArea = static_cast<float>(intersectArea);
+        }
+
+        i++;
+    }
+
+    // Having determined the output (display) upon which the app is primarily being
+    // rendered, retrieve the HDR capabilities of that display by checking the color space.
+    ComPtr<IDXGIOutput6> output6;
+    ThrowIfFailed(bestOutput.As(&output6));
+
+    DXGI_OUTPUT_DESC1 desc1;
+    ThrowIfFailed(output6->GetDesc1(&desc1));
+    DisplayData display_data{
+        .bits_per_color = desc1.BitsPerColor,
+        .color_space = static_cast<ColorSpace>(desc1.ColorSpace),
+        .red_primary = float2(desc1.RedPrimary[0], desc1.RedPrimary[1]),
+        .green_primary = float2(desc1.GreenPrimary[0], desc1.GreenPrimary[1]),
+        .blue_primary = float2(desc1.BluePrimary[0], desc1.BluePrimary[1]),
+        .white_point = float2(desc1.WhitePoint[0], desc1.WhitePoint[1]),
+        .min_luminance = desc1.MinLuminance,
+        .max_luminance = desc1.MaxLuminance,
+        .max_full_frame_luminance = desc1.MaxFullFrameLuminance};
+    return display_data;
+}
 }// namespace lc::dx

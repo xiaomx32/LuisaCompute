@@ -23,5 +23,6 @@ public:
     void set_color_space(
         uint64_t handle,
         ColorSpace const &color_space) const noexcept override;
+    [[nodiscard]] DisplayData get_display_data(uint64_t hwnd) const noexcept override;
 };
 }// namespace lc::dx

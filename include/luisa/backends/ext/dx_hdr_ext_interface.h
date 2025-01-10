@@ -67,9 +67,22 @@ public:
         DisplayChromaticities chromaticities;
     };
 
+    struct DisplayData {
+        uint bits_per_color;
+        ColorSpace color_space;
+        float2 red_primary;
+        float2 green_primary;
+        float2 blue_primary;
+        float2 white_point;
+        float min_luminance;
+        float max_luminance;
+        float max_full_frame_luminance;
+    };
+
     [[nodiscard]] virtual SwapchainCreationInfo create_swapchain(
         const DXSwapchainOption &option,
         uint64_t stream_handle) noexcept = 0;
+
     virtual Meta set_hdr_meta_data(
         uint64_t swapchain_handle,
         float max_output_nits = 1000.0f,
@@ -77,6 +90,7 @@ public:
         float max_cll = 2000.0f,
         float max_fall = 500.0f,
         const DisplayChromaticities *custom_chroma = nullptr) noexcept = 0;
+
     static constexpr luisa::string_view name = "DXHDRExt";
     [[nodiscard]] Swapchain create_swapchain(const Stream &stream, const DXSwapchainOption &option) noexcept;
     [[nodiscard]] virtual bool device_support_hdr() const noexcept = 0;
@@ -84,15 +98,16 @@ public:
         uint64_t handle,
         ColorSpace const &color_space) const noexcept = 0;
     void set_color_space(
-        Swapchain const& swapchain,
+        Swapchain const &swapchain,
         ColorSpace const &color_space) const noexcept;
     Meta set_hdr_meta_data(
-        Swapchain const& swapchain,
+        Swapchain const &swapchain,
         float max_output_nits = 1000.0f,
         float min_output_nits = 0.001f,
         float max_cll = 2000.0f,
         float max_fall = 500.0f,
         const DisplayChromaticities *custom_chroma = nullptr) noexcept;
+    [[nodiscard]] virtual DisplayData get_display_data(uint64_t hwnd) const noexcept = 0;
 protected:
     ~DXHDRExt() = default;
 };
