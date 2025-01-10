@@ -1,4 +1,4 @@
-#include <luisa/xir/passes/ref_arg_usage.h>
+#include <luisa/xir/passes/pointer_usage.h>
 
 namespace luisa::compute::xir {
 
