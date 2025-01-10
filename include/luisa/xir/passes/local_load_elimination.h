@@ -1,0 +1,8 @@
+//
+// Created by mike on 1/10/25.
+//
+
+#ifndef PEEPHOLE_LOAD_ELIMINATION_H
+#define PEEPHOLE_LOAD_ELIMINATION_H
+
+#endif //PEEPHOLE_LOAD_ELIMINATION_H

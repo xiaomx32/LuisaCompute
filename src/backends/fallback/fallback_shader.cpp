@@ -25,7 +25,7 @@
 #include <luisa/xir/instructions/print.h>
 
 #include <luisa/xir/passes/dce.h>
-#include <luisa/xir/passes/peephole_store_forward.h>
+#include <luisa/xir/passes/local_store_forward.h>
 
 #include "../common/shader_print_formatter.h"
 
@@ -174,7 +174,7 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
     // run some simple optimization passes on XIR to reduce the size of LLVM IR
     Clock opt_clk;
     auto dce1_info = xir::dce_pass_run_on_module(xir_module);
-    auto store_forward_info = xir::peephole_store_forward_pass_run_on_module(xir_module);
+    auto store_forward_info = xir::local_store_forward_pass_run_on_module(xir_module);
     auto dce2_info = xir::dce_pass_run_on_module(xir_module);
     LUISA_INFO("Forwarded {} store instruction(s), "
                "removed {} dead instructions in {} ms.",

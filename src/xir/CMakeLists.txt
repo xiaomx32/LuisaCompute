@@ -56,8 +56,9 @@ set(LUISA_COMPUTE_XIR_SOURCES
         passes/sink_alloca.cpp
         passes/trace_gep.cpp
         passes/aggregate_field_bitmask.cpp
-        passes/peephole_store_forward.cpp
         passes/pointer_usage.cpp
+        passes/local_store_forward.cpp
+        passes/local_load_elimination.cpp
 )
 
 add_library(luisa-compute-xir SHARED ${LUISA_COMPUTE_XIR_SOURCES})

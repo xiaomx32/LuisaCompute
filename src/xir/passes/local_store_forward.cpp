@@ -1,7 +1,8 @@
 #include <luisa/xir/function.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
-#include <luisa/xir/passes/peephole_store_forward.h>
+
+#include <luisa/xir/passes/local_store_forward.h>
 
 namespace luisa::compute::xir {
 
@@ -28,8 +29,8 @@ namespace detail {
 }
 
 // TODO: we only handle local alloca's in straight-line code for now
-static void run_peephole_store_forward_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,
-                                                      BasicBlock *block, PeepholeStoreForwardInfo &info) noexcept {
+static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,
+                                                   BasicBlock *block, LocalStoreForwardInfo &info) noexcept {
 
     luisa::unordered_map<AllocaInst *, luisa::vector<Value *>> variable_pointers;// maps variables to pointers
     luisa::unordered_map<Value *, StoreInst *> latest_stores;                    // maps pointers to the latest store instruction
@@ -99,27 +100,27 @@ static void run_peephole_store_forward_on_basic_block(luisa::unordered_set<Basic
     }
 }
 
-void run_peephole_store_forward_on_function(Function *function, PeepholeStoreForwardInfo &info) noexcept {
+void run_local_store_forward_on_function(Function *function, LocalStoreForwardInfo &info) noexcept {
     if (auto definition = function->definition()) {
         luisa::unordered_set<BasicBlock *> visited;
         definition->traverse_basic_blocks(BasicBlockTraversalOrder::REVERSE_POST_ORDER, [&](BasicBlock *block) noexcept {
-            run_peephole_store_forward_on_basic_block(visited, block, info);
+            run_local_store_forward_on_basic_block(visited, block, info);
         });
     }
 }
 
 }// namespace detail
 
-PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_function(Function *function) noexcept {
-    PeepholeStoreForwardInfo info;
-    detail::run_peephole_store_forward_on_function(function, info);
+LocalStoreForwardInfo local_store_forward_pass_run_on_function(Function *function) noexcept {
+    LocalStoreForwardInfo info;
+    detail::run_local_store_forward_on_function(function, info);
     return info;
 }
 
-PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_module(Module *module) noexcept {
-    PeepholeStoreForwardInfo info;
+LocalStoreForwardInfo local_store_forward_pass_run_on_module(Module *module) noexcept {
+    LocalStoreForwardInfo info;
     for (auto &&f : module->functions()) {
-        detail::run_peephole_store_forward_on_function(&f, info);
+        detail::run_local_store_forward_on_function(&f, info);
     }
     return info;
 }

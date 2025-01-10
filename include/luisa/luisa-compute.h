@@ -240,8 +240,9 @@
 #include <luisa/xir/passes/aggregate_field_bitmask.h>
 #include <luisa/xir/passes/dce.h>
 #include <luisa/xir/passes/dom_tree.h>
+#include <luisa/xir/passes/local_load_elimination.h>
+#include <luisa/xir/passes/local_store_forward.h>
 #include <luisa/xir/passes/outline.h>
-#include <luisa/xir/passes/peephole_store_forward.h>
 #include <luisa/xir/passes/pointer_usage.h>
 #include <luisa/xir/passes/sink_alloca.h>
 #include <luisa/xir/passes/trace_gep.h>
