@@ -27,8 +27,9 @@ namespace detail {
     return nullptr;
 }
 
-// TODO: we only handle scalars for now
-static void run_peephole_store_forward_on_basic_block(BasicBlock *block, PeepholeStoreForwardInfo &info) noexcept {
+// TODO: we only handle local alloca's in straight-line code for now
+static void run_peephole_store_forward_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,
+                                                      BasicBlock *block, PeepholeStoreForwardInfo &info) noexcept {
 
     luisa::unordered_map<AllocaInst *, luisa::vector<Value *>> variable_pointers;// maps variables to pointers
     luisa::unordered_map<Value *, StoreInst *> latest_stores;                    // maps pointers to the latest store instruction
@@ -45,34 +46,51 @@ static void run_peephole_store_forward_on_basic_block(BasicBlock *block, Peephol
         return nullptr;
     };
 
-    for (auto &&inst : block->instructions()) {
-        switch (inst.derived_instruction_tag()) {
-            case DerivedInstructionTag::LOAD: {
-                auto load = static_cast<LoadInst *>(&inst);
-                if (auto iter = latest_stores.find(load->variable()); iter != latest_stores.end()) {
-                    removable_loads.emplace(load, iter->second);
+    // we visit the block and all of its single straight-line successors
+    while (visited.emplace(block).second) {
+        // process the instructions in the block
+        for (auto &&inst : block->instructions()) {
+            switch (inst.derived_instruction_tag()) {
+                case DerivedInstructionTag::LOAD: {
+                    auto load = static_cast<LoadInst *>(&inst);
+                    if (auto iter = latest_stores.find(load->variable()); iter != latest_stores.end()) {
+                        removable_loads.emplace(load, iter->second);
+                    }
+                    break;
                 }
-                break;
-            }
-            case DerivedInstructionTag::STORE: {
-                auto store = static_cast<StoreInst *>(&inst);
-                // if this is a store to (part of) a local alloca, we might be able to forward it
-                if (auto pointer = store->variable(); invalidate_interfering_stores(pointer)) {
-                    latest_stores[pointer] = store;
+                case DerivedInstructionTag::STORE: {
+                    auto store = static_cast<StoreInst *>(&inst);
+                    // if this is a store to (part of) a local alloca, we might be able to forward it
+                    if (auto pointer = store->variable(); invalidate_interfering_stores(pointer)) {
+                        latest_stores[pointer] = store;
+                    }
+                    break;
                 }
-                break;
-            }
-            case DerivedInstructionTag::GEP: {
-                // users of GEPs will handle the forwarding, so we don't need to do anything here
-                break;
-            }
-            default: {// for other instructions, we invalidate possibly interfering stores
-                for (auto op_use : inst.operand_uses()) {
-                    invalidate_interfering_stores(op_use->value());
+                case DerivedInstructionTag::GEP: {
+                    // users of GEPs will handle the forwarding, so we don't need to do anything here
+                    break;
                 }
-                break;
+                default: {// for other instructions, we invalidate possibly interfering stores
+                    for (auto op_use : inst.operand_uses()) {
+                        invalidate_interfering_stores(op_use->value());
+                    }
+                    break;
+                }
             }
         }
+        // move to the next block if it is the only successor and only has a single predecessor
+        BasicBlock *next = nullptr;
+        auto successor_count = 0u;
+        block->traverse_successors(true, [&](BasicBlock *succ) noexcept {
+            successor_count++;
+            next = succ;
+        });
+        if (successor_count != 1) { break; }
+        // check if the next block has a single predecessor
+        auto pred_count = 0u;
+        next->traverse_predecessors(false, [&](BasicBlock *) noexcept { pred_count++; });
+        if (pred_count != 1) { break; }
+        block = next;
     }
     for (auto &&[load, store] : removable_loads) {
         load->replace_all_uses_with(store->value());
@@ -83,19 +101,14 @@ static void run_peephole_store_forward_on_basic_block(BasicBlock *block, Peephol
 
 void run_peephole_store_forward_on_function(Function *function, PeepholeStoreForwardInfo &info) noexcept {
     if (auto definition = function->definition()) {
-        definition->traverse_basic_blocks([&](BasicBlock *block) noexcept {
-            run_peephole_store_forward_on_basic_block(block, info);
+        luisa::unordered_set<BasicBlock *> visited;
+        definition->traverse_basic_blocks(BasicBlockTraversalOrder::REVERSE_POST_ORDER, [&](BasicBlock *block) noexcept {
+            run_peephole_store_forward_on_basic_block(visited, block, info);
         });
     }
 }
 
 }// namespace detail
-
-PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_basic_block(BasicBlock *block) noexcept {
-    PeepholeStoreForwardInfo info;
-    detail::run_peephole_store_forward_on_basic_block(block, info);
-    return info;
-}
 
 PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_function(Function *function) noexcept {
     PeepholeStoreForwardInfo info;

@@ -23,7 +23,6 @@ struct PeepholeStoreForwardInfo {
     luisa::unordered_map<LoadInst *, StoreInst *> forwarded_instructions;
 };
 
-[[nodiscard]] LC_XIR_API PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_basic_block(BasicBlock *block) noexcept;
 [[nodiscard]] LC_XIR_API PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_function(Function *function) noexcept;
 [[nodiscard]] LC_XIR_API PeepholeStoreForwardInfo peephole_store_forward_pass_run_on_module(Module *module) noexcept;
 
