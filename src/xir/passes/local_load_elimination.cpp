@@ -1,3 +1,5 @@
-//
-// Created by mike on 1/10/25.
-//
+#include <luisa/xir/passes/local_load_elimination.h>
+
+namespace luisa::compute::xir {
+
+}
