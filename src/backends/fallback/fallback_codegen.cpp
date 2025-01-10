@@ -544,15 +544,6 @@ private:
         return b.CreateZExt(value, i8_type);
     }
 
-    [[nodiscard]] llvm::Value *_translate_unary_logic_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
-        auto llvm_operand = _lookup_value(current, b, operand);
-        auto operand_type = operand->type();
-        LUISA_ASSERT(operand_type != nullptr, "Operand type is null.");
-        LUISA_ASSERT(operand_type->is_scalar() || operand_type->is_vector(), "Invalid operand type.");
-        auto llvm_cmp = _cmp_eq_zero(b, llvm_operand);
-        return _zext_i1_to_i8(b, llvm_cmp);
-    }
-
     [[nodiscard]] llvm::Value *_translate_unary_bit_not(CurrentFunction &current, IRBuilder &b, const xir::Value *operand) noexcept {
         auto llvm_operand = _lookup_value(current, b, operand);
         LUISA_ASSERT(llvm_operand->getType()->isIntOrIntVectorTy() &&
@@ -667,46 +658,6 @@ private:
             default: break;
         }
         LUISA_ERROR_WITH_LOCATION("Invalid binary mod operand type: {}.", elem_type->description());
-    }
-
-    [[nodiscard]] llvm::Value *_translate_binary_logic_and(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
-        // Lookup LLVM values for operands
-        auto llvm_lhs = _lookup_value(current, b, lhs);
-        auto llvm_rhs = _lookup_value(current, b, rhs);
-        auto lhs_type = lhs->type();
-        auto rhs_type = rhs->type();
-        // Type and null checks
-        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
-        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for logic and.");
-        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
-        LUISA_ASSERT(rhs_type->is_scalar() || rhs_type->is_vector(), "Invalid operand type.");
-        // Convert operands to boolean values (non-zero becomes true, zero becomes false)
-        auto llvm_lhs_bool = _cmp_ne_zero(b, llvm_lhs);
-        auto llvm_rhs_bool = _cmp_ne_zero(b, llvm_rhs);
-        // Perform logical AND (a && b)
-        auto llvm_and_result = b.CreateAnd(llvm_lhs_bool, llvm_rhs_bool);
-        // Convert result to i8 for consistency with your implementation needs
-        return _zext_i1_to_i8(b, llvm_and_result);
-    }
-
-    [[nodiscard]] llvm::Value *_translate_binary_logic_or(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
-        // Lookup LLVM values for operands
-        auto llvm_lhs = _lookup_value(current, b, lhs);
-        auto llvm_rhs = _lookup_value(current, b, rhs);
-        auto lhs_type = lhs->type();
-        auto rhs_type = rhs->type();
-        // Type and null checks
-        LUISA_ASSERT(lhs_type != nullptr && rhs_type != nullptr, "Operand type is null.");
-        LUISA_ASSERT(lhs_type == rhs_type, "Type mismatch for logic and.");
-        LUISA_ASSERT(lhs_type->is_scalar() || lhs_type->is_vector(), "Invalid operand type.");
-        LUISA_ASSERT(rhs_type->is_scalar() || rhs_type->is_vector(), "Invalid operand type.");
-        // Convert operands to boolean values (non-zero becomes true, zero becomes false)
-        auto llvm_lhs_bool = _cmp_ne_zero(b, llvm_lhs);
-        auto llvm_rhs_bool = _cmp_ne_zero(b, llvm_rhs);
-        // Perform logical OR (a && b)
-        auto llvm_or_result = b.CreateOr(llvm_lhs_bool, llvm_rhs_bool);
-        // Convert result to i8 for consistency with your implementation needs
-        return _zext_i1_to_i8(b, llvm_or_result);
     }
 
     [[nodiscard]] llvm::Value *_translate_binary_bit_and(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
@@ -1965,15 +1916,12 @@ private:
         switch (inst->op()) {
             case xir::ArithmeticOp::UNARY_PLUS: return _translate_unary_plus(current, b, inst->operand(0u));
             case xir::ArithmeticOp::UNARY_MINUS: return _translate_unary_minus(current, b, inst->operand(0u));
-            case xir::ArithmeticOp::UNARY_LOGIC_NOT: return _translate_unary_logic_not(current, b, inst->operand(0u));
             case xir::ArithmeticOp::UNARY_BIT_NOT: return _translate_unary_bit_not(current, b, inst->operand(0u));
             case xir::ArithmeticOp::BINARY_ADD: return _translate_binary_add(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_SUB: return _translate_binary_sub(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_MUL: return _translate_binary_mul(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_DIV: return _translate_binary_div(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_MOD: return _translate_binary_mod(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::ArithmeticOp::BINARY_LOGIC_AND: return _translate_binary_logic_and(current, b, inst->operand(0u), inst->operand(1u));
-            case xir::ArithmeticOp::BINARY_LOGIC_OR: return _translate_binary_logic_or(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_BIT_AND: return _translate_binary_bit_and(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_BIT_OR: return _translate_binary_bit_or(current, b, inst->operand(0u), inst->operand(1u));
             case xir::ArithmeticOp::BINARY_BIT_XOR: return _translate_binary_bit_xor(current, b, inst->operand(0u), inst->operand(1u));

@@ -433,7 +433,7 @@ private:
     }
 
     void _emit_arithmetic_inst(const ArithmeticInst *inst) noexcept {
-        _main << xir::to_string(inst->op()) << " ";
+        _main << "arithmetic " << xir::to_string(inst->op()) << " ";
         _emit_operands(inst);
     }
 

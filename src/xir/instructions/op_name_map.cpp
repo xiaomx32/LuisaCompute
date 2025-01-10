@@ -19,15 +19,12 @@ luisa::string_view to_string(ArithmeticOp op) noexcept {
     switch (op) {
         case ArithmeticOp::UNARY_PLUS: return "unary_plus"sv;
         case ArithmeticOp::UNARY_MINUS: return "unary_minus"sv;
-        case ArithmeticOp::UNARY_LOGIC_NOT: return "unary_logic_not"sv;
         case ArithmeticOp::UNARY_BIT_NOT: return "unary_bit_not"sv;
         case ArithmeticOp::BINARY_ADD: return "binary_add"sv;
         case ArithmeticOp::BINARY_SUB: return "binary_sub"sv;
         case ArithmeticOp::BINARY_MUL: return "binary_mul"sv;
         case ArithmeticOp::BINARY_DIV: return "binary_div"sv;
         case ArithmeticOp::BINARY_MOD: return "binary_mod"sv;
-        case ArithmeticOp::BINARY_LOGIC_AND: return "binary_logic_and"sv;
-        case ArithmeticOp::BINARY_LOGIC_OR: return "binary_logic_or"sv;
         case ArithmeticOp::BINARY_BIT_AND: return "binary_bit_and"sv;
         case ArithmeticOp::BINARY_BIT_OR: return "binary_bit_or"sv;
         case ArithmeticOp::BINARY_BIT_XOR: return "binary_bit_xor"sv;
@@ -123,15 +120,12 @@ ArithmeticOp arithmetic_op_from_string(luisa::string_view name) noexcept {
     static const luisa::unordered_map<luisa::string_view, ArithmeticOp> m{
         {"unary_plus"sv, ArithmeticOp::UNARY_PLUS},
         {"unary_minus"sv, ArithmeticOp::UNARY_MINUS},
-        {"unary_logic_not"sv, ArithmeticOp::UNARY_LOGIC_NOT},
         {"unary_bit_not"sv, ArithmeticOp::UNARY_BIT_NOT},
         {"binary_add"sv, ArithmeticOp::BINARY_ADD},
         {"binary_sub"sv, ArithmeticOp::BINARY_SUB},
         {"binary_mul"sv, ArithmeticOp::BINARY_MUL},
         {"binary_div"sv, ArithmeticOp::BINARY_DIV},
         {"binary_mod"sv, ArithmeticOp::BINARY_MOD},
-        {"binary_logic_and"sv, ArithmeticOp::BINARY_LOGIC_AND},
-        {"binary_logic_or"sv, ArithmeticOp::BINARY_LOGIC_OR},
         {"binary_bit_and"sv, ArithmeticOp::BINARY_BIT_AND},
         {"binary_bit_or"sv, ArithmeticOp::BINARY_BIT_OR},
         {"binary_bit_xor"sv, ArithmeticOp::BINARY_BIT_XOR},

@@ -9,7 +9,6 @@ enum class ArithmeticOp {
     // unary operators
     UNARY_PLUS,     // +x
     UNARY_MINUS,    // -x
-    UNARY_LOGIC_NOT,// !x
     UNARY_BIT_NOT,  // ~x
 
     // binary operators
@@ -18,9 +17,6 @@ enum class ArithmeticOp {
     BINARY_MUL,
     BINARY_DIV,
     BINARY_MOD,
-
-    BINARY_LOGIC_AND,
-    BINARY_LOGIC_OR,
 
     BINARY_BIT_AND,
     BINARY_BIT_OR,

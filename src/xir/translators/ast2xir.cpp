@@ -88,11 +88,16 @@ private:
             switch (unary_op) {
                 case UnaryOp::PLUS: return ArithmeticOp::UNARY_PLUS;
                 case UnaryOp::MINUS: return ArithmeticOp::UNARY_MINUS;
-                case UnaryOp::NOT: return ArithmeticOp::UNARY_LOGIC_NOT;
+                case UnaryOp::NOT: return ArithmeticOp::UNARY_BIT_NOT;
                 case UnaryOp::BIT_NOT: return ArithmeticOp::UNARY_BIT_NOT;
             }
             LUISA_ERROR_WITH_LOCATION("Unexpected unary operation.");
         }();
+        if (expr->op() == UnaryOp::NOT) {
+            LUISA_DEBUG_ASSERT(expr->type()->is_bool() || expr->type()->is_bool_vector(),
+                               "Invalid type for logical not operation.");
+            operand = _type_cast_if_necessary(b, expr->type(), operand);
+        }
         return b.call(expr->type(), op, {operand});
     }
 
@@ -145,8 +150,8 @@ private:
                 case BinaryOp::BIT_XOR: return ArithmeticOp::BINARY_BIT_XOR;
                 case BinaryOp::SHL: return ArithmeticOp::BINARY_SHIFT_LEFT;
                 case BinaryOp::SHR: return ArithmeticOp::BINARY_SHIFT_RIGHT;
-                case BinaryOp::AND: return ArithmeticOp::BINARY_LOGIC_AND;
-                case BinaryOp::OR: return ArithmeticOp::BINARY_LOGIC_OR;
+                case BinaryOp::AND: return ArithmeticOp::BINARY_BIT_AND;
+                case BinaryOp::OR: return ArithmeticOp::BINARY_BIT_OR;
                 case BinaryOp::LESS: return ArithmeticOp::BINARY_LESS;
                 case BinaryOp::GREATER: return ArithmeticOp::BINARY_GREATER;
                 case BinaryOp::LESS_EQUAL: return ArithmeticOp::BINARY_LESS_EQUAL;
@@ -158,8 +163,17 @@ private:
         }();
         auto lhs = _translate_expression(b, expr->lhs(), true);
         auto rhs = _translate_expression(b, expr->rhs(), true);
-        lhs = _type_cast_if_necessary(b, type_promotion.lhs, lhs);
-        rhs = _type_cast_if_necessary(b, type_promotion.rhs, rhs);
+        if (expr->op() == BinaryOp::AND || expr->op() == BinaryOp::OR) {
+            LUISA_DEBUG_ASSERT(type_promotion.result->is_bool() ||
+                                   type_promotion.result->is_bool_vector(),
+                               "Invalid type promotion result type for binary logic operator: {}.",
+                               type_promotion.result->description());
+            lhs = b.static_cast_if_necessary(type_promotion.result, lhs);
+            rhs = b.static_cast_if_necessary(type_promotion.result, rhs);
+        } else {
+            lhs = _type_cast_if_necessary(b, type_promotion.lhs, lhs);
+            rhs = _type_cast_if_necessary(b, type_promotion.rhs, rhs);
+        }
         auto result = b.call(expr->type(), op, {lhs, rhs});
         return _type_cast_if_necessary(b, type_promotion.result, result);
     }
