@@ -1,31 +1,13 @@
 #include <luisa/xir/function.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
+
+#include "helpers.h"
 #include <luisa/xir/passes/local_load_elimination.h>
 
 namespace luisa::compute::xir {
 
 namespace detail {
-
-[[nodiscard]] static AllocaInst *trace_pointer_base_local_alloca_inst(Value *pointer) noexcept {
-    if (pointer == nullptr || pointer->derived_value_tag() != DerivedValueTag::INSTRUCTION) {
-        return nullptr;
-    }
-    switch (auto inst = static_cast<Instruction *>(pointer); inst->derived_instruction_tag()) {
-        case DerivedInstructionTag::ALLOCA: {
-            if (auto alloca_inst = static_cast<AllocaInst *>(inst); alloca_inst->space() == AllocSpace::LOCAL) {
-                return alloca_inst;
-            }
-            return nullptr;
-        }
-        case DerivedInstructionTag::GEP: {
-            auto gep_inst = static_cast<GEPInst *>(inst);
-            return trace_pointer_base_local_alloca_inst(gep_inst->base());
-        }
-        default: break;
-    }
-    return nullptr;
-}
 
 static void run_local_load_elimination_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,
                                                       BasicBlock *block,
@@ -57,7 +39,8 @@ static void run_local_load_elimination_on_basic_block(luisa::unordered_set<Basic
                     auto load = static_cast<LoadInst *>(&inst);
                     if (auto iter = already_loaded.find(load->variable()); iter != already_loaded.end()) {
                         removable_loads.emplace(load, iter->second);
-                    } else {
+                    } else if (auto alloca_inst = trace_pointer_base_local_alloca_inst(load->variable())) {
+                        variable_pointers[alloca_inst].emplace_back(load->variable());
                         already_loaded[load->variable()] = load;
                     }
                     break;

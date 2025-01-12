@@ -1,34 +1,14 @@
-#include "luisa/core/logging.h"
-
+#include <luisa/core/logging.h>
 #include <luisa/xir/function.h>
 #include <luisa/xir/module.h>
 #include <luisa/xir/builder.h>
 
+#include "helpers.h"
 #include <luisa/xir/passes/local_store_forward.h>
 
 namespace luisa::compute::xir {
 
 namespace detail {
-
-[[nodiscard]] static AllocaInst *trace_pointer_base_local_alloca_inst(Value *pointer) noexcept {
-    if (pointer == nullptr || pointer->derived_value_tag() != DerivedValueTag::INSTRUCTION) {
-        return nullptr;
-    }
-    switch (auto inst = static_cast<Instruction *>(pointer); inst->derived_instruction_tag()) {
-        case DerivedInstructionTag::ALLOCA: {
-            if (auto alloca_inst = static_cast<AllocaInst *>(inst); alloca_inst->space() == AllocSpace::LOCAL) {
-                return alloca_inst;
-            }
-            return nullptr;
-        }
-        case DerivedInstructionTag::GEP: {
-            auto gep_inst = static_cast<GEPInst *>(inst);
-            return trace_pointer_base_local_alloca_inst(gep_inst->base());
-        }
-        default: break;
-    }
-    return nullptr;
-}
 
 // TODO: we only handle local alloca's in straight-line code for now
 static void run_local_store_forward_on_basic_block(luisa::unordered_set<BasicBlock *> &visited,

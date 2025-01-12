@@ -180,7 +180,7 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
     auto dce2_info = xir::dce_pass_run_on_module(xir_module);
     LUISA_INFO("Forwarded {} store instruction(s), "
                "eliminated {} load instruction(s), "
-               "removed {} dead instructions in {} ms.",
+               "removed {} dead instruction(s) in {} ms.",
                store_forward_info.forwarded_instructions.size(),
                load_elim_info.eliminated_instructions.size(),
                dce1_info.removed_instructions.size() + dce2_info.removed_instructions.size(),
