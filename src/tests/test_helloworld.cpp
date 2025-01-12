@@ -12,7 +12,6 @@
 #include <luisa/ast/interface.h>
 #include <luisa/dsl/syntax.h>
 
-#include "../backends/common/c_codegen/codegen_utils.h"
 using namespace luisa;
 using namespace luisa::compute;
 
