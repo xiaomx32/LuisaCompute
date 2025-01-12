@@ -12,9 +12,11 @@ class BasicBlock;
 class Function;
 class Module;
 
-// This pass is used to forward stores to loads for scalar variables
-// within straight-line basic blocks. It is a simple peephole optimization
-// that can be used to reduce the number of memory operations.
+// This pass is used to forward stores to loads for thread-local variables within
+// straight-line basic blocks. It is a simple peephole-style optimization but can
+// effectively reduce the number of memory operations produced by the C++ DSL.
+// Note: we do not remove the stores after forwarding them to loads, as the DCE
+// pass should be able to remove them if they are dead.
 
 struct LocalStoreForwardInfo {
     luisa::unordered_map<LoadInst *, StoreInst *> forwarded_instructions;

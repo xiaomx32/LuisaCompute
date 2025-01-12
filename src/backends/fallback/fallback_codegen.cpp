@@ -3051,7 +3051,12 @@ private:
         // loop merge
         b.SetInsertPoint(llvm_loop_merge_block);
         b.CreateRetVoid();
-
+        // hoist the loop variable to the top
+        {
+            auto &llvm_entry = llvm_wrapper_function->getEntryBlock();
+            auto &llvm_first_inst = llvm_entry.front();
+            llvm_ptr_i->moveBefore(&llvm_first_inst);
+        }
         return llvm_wrapper_function;
     }
 
