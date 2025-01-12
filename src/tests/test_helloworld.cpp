@@ -1,16 +1,4 @@
-#include <iostream>
-#include <chrono>
-#include <numeric>
-
-#include <luisa/core/clock.h>
-#include <luisa/core/fiber.h>
-#include <luisa/core/dynamic_module.h>
-#include <luisa/core/logging.h>
-#include <luisa/runtime/device.h>
-#include <luisa/runtime/stream.h>
-#include <luisa/runtime/context.h>
-#include <luisa/ast/interface.h>
-#include <luisa/dsl/syntax.h>
+#include <luisa/luisa-compute.h>
 
 using namespace luisa;
 using namespace luisa::compute;
