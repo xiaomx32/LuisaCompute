@@ -110,6 +110,7 @@ int main(int argc, char *argv[]) {
     };
 
     Callable tea = [](UInt v0, UInt v1) noexcept {
+        set_name("tea");
         UInt s0 = def(0u);
         for (uint n = 0u; n < 4u; n++) {
             s0 += 0x9e3779b9u;
@@ -120,12 +121,14 @@ int main(int argc, char *argv[]) {
     };
 
     Kernel2D make_sampler_kernel = [&](ImageUInt seed_image) noexcept {
+        set_name("make_sampler_kernel");
         UInt2 p = dispatch_id().xy();
         UInt state = tea(p.x, p.y);
         seed_image.write(p, make_uint4(state));
     };
 
     Callable lcg = [](UInt &state) noexcept {
+        set_name("lcg");
         constexpr uint lcg_a = 1664525u;
         constexpr uint lcg_c = 1013904223u;
         state = lcg_a * state + lcg_c;
@@ -134,6 +137,7 @@ int main(int argc, char *argv[]) {
     };
 
     Callable make_onb = [](const Float3 &normal) noexcept {
+        set_name("make_onb");
         Float3 binormal = normalize(ite(
             abs(normal.x) > abs(normal.z),
             make_float3(-normal.y, normal.x, 0.0f),
@@ -143,6 +147,7 @@ int main(int argc, char *argv[]) {
     };
 
     Callable generate_ray = [](Float2 p) noexcept {
+        set_name("generate_ray");
         static constexpr float fov = radians(27.8f);
         static constexpr float3 origin = make_float3(-0.01f, 0.995f, 5.0f);
         Float3 pixel = origin + make_float3(p * tan(0.5f * fov), -1.0f);
@@ -151,18 +156,21 @@ int main(int argc, char *argv[]) {
     };
 
     Callable cosine_sample_hemisphere = [](Float2 u) noexcept {
+        set_name("cosine_sample_hemisphere");
         Float r = sqrt(u.x);
         Float phi = 2.0f * constants::pi * u.y;
         return make_float3(r * cos(phi), r * sin(phi), sqrt(1.0f - u.x));
     };
 
     Callable balanced_heuristic = [](Float pdf_a, Float pdf_b) noexcept {
+        set_name("balanced_heuristic");
         return pdf_a / max(pdf_a + pdf_b, 1e-4f);
     };
 
     auto spp_per_dispatch = device.backend_name() == "metal" || device.backend_name() == "cpu" || device.backend_name() == "fallback" ? 1u : 64u;
 
     Kernel2D raytracing_kernel = [&](ImageFloat image, ImageUInt seed_image, AccelVar accel, UInt2 resolution) noexcept {
+        set_name("raytracing_kernel");
         set_block_size(16u, 16u, 1u);
         UInt2 coord = dispatch_id().xy();
         Float frame_size = min(resolution.x, resolution.y).cast<float>();
@@ -256,6 +264,7 @@ int main(int argc, char *argv[]) {
     };
 
     Kernel2D accumulate_kernel = [&](ImageFloat accum_image, ImageFloat curr_image) noexcept {
+        set_name("accumulate_kernel");
         UInt2 p = dispatch_id().xy();
         Float4 accum = accum_image.read(p);
         Float3 curr = curr_image.read(p).xyz();
@@ -263,10 +272,12 @@ int main(int argc, char *argv[]) {
     };
 
     Kernel2D clear_kernel = [](ImageFloat image) noexcept {
+        set_name("clear_kernel");
         image.write(dispatch_id().xy(), make_float4(0.f));
     };
 
     Kernel2D hdr2ldr_kernel = [&](ImageFloat hdr_image, ImageFloat ldr_image, Float scale) noexcept {
+        set_name("hdr2ldr_kernel");
         UInt2 coord = dispatch_id().xy();
         Float4 hdr = hdr_image.read(coord);
         Float3 ldr = linear_to_srgb(clamp(hdr.xyz() / hdr.w * scale, 0.f, 1.f));

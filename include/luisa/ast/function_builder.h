@@ -115,6 +115,7 @@ private:
     bool _hash_computed{false};
     bool _requires_atomic_float{false};
     bool _requires_printing{false};
+    luisa::string _name;
 
 protected:
     [[nodiscard]] static luisa::vector<FunctionBuilder *> &_function_stack() noexcept;
@@ -227,6 +228,10 @@ public:
     [[nodiscard]] auto variable_usage(uint uid) const noexcept { return _variable_usages[uid]; }
     /// Return block size in uint3.
     [[nodiscard]] auto block_size() const noexcept { return _block_size; }
+    /// Return name.
+    [[nodiscard]] auto name() const noexcept { return luisa::string_view{_name}; }
+    /// Return a name suitable for debugging
+    [[nodiscard]] luisa::string debug_name() const noexcept;
     /// Return hash.
     [[nodiscard]] uint64_t hash() const noexcept;
     /// Return if is raytracing.
@@ -265,6 +270,9 @@ public:
     // config
     /// Set block size
     void set_block_size(uint3 size) noexcept;
+
+    /// Set name
+    void set_name(luisa::string_view name) noexcept;
 
     // built-in variables
     /// Return thread id.

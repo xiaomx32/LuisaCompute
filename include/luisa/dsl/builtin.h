@@ -202,6 +202,10 @@ inline void set_block_size(uint2 size) noexcept {
     set_block_size(size.x, size.y, 1u);
 }
 
+inline void set_name(luisa::string_view name) noexcept {
+    detail::FunctionBuilder::current()->set_name(name);
+}
+
 inline void require_curve_basis(CurveBasis basis) noexcept {
     detail::FunctionBuilder::current()->mark_required_curve_basis(basis);
 }

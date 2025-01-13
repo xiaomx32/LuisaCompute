@@ -1153,6 +1153,9 @@ public:
             }
             LUISA_ERROR_WITH_LOCATION("Invalid function tag.");
         }();
+        if (auto name = f.name(); !name.empty()) {
+            def->set_name(name);
+        }
         iter->second = def;
         // translate the function
         auto old = std::exchange(_current, {.f = def, .ast = &f});
