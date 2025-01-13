@@ -1200,7 +1200,7 @@ private:
             case Type::Tag::FLOAT32: [[fallthrough]];
             case Type::Tag::FLOAT64: {
                 auto llvm_elem_type = _translate_type(operand_elem_type, false);
-                auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+                auto llvm_zero = llvm::ConstantFP::getNegativeZero(llvm_elem_type);
                 auto llvm_one = llvm::ConstantFP::get(llvm_elem_type, 1.);
                 switch (op) {
                     case xir::ArithmeticOp::REDUCE_SUM: return b.CreateFAddReduce(llvm_zero, llvm_operand);
@@ -1224,7 +1224,7 @@ private:
             auto llvm_elem_type = llvm_mul->getType()->isVectorTy() ?
                                       llvm::cast<llvm::VectorType>(llvm_mul->getType())->getElementType() :
                                       llvm_mul->getType();
-            auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+            auto llvm_zero = llvm::ConstantFP::getNegativeZero(llvm_elem_type);
             return b.CreateFAddReduce(llvm_zero, llvm_mul);
         }
         return b.CreateAddReduce(llvm_mul);
