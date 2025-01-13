@@ -49,6 +49,20 @@ static const bool LUISA_SHOULD_DUMP_XIR = [] {
     return false;
 }();
 
+static const bool LUISA_SHOULD_DUMP_LLVM_IR = [] {
+    if (auto env = getenv("LUISA_DUMP_LLVM_IR")) {
+        return std::string_view{env} == "1";
+    }
+    return false;
+}();
+
+static const bool LUISA_SHOULD_DUMP_ASM = [] {
+    if (auto env = getenv("LUISA_DUMP_ASM")) {
+        return std::string_view{env} == "1";
+    }
+    return false;
+}();
+
 namespace luisa::compute::fallback {
 
 [[nodiscard]] static luisa::half luisa_fallback_asin_f16(luisa::half x) noexcept { return ::half_float::asin(x); }
@@ -209,18 +223,9 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
                                   luisa::string_view{parse_error.getMessage()});
     }
     auto codegen_feedback = luisa_fallback_backend_codegen(*llvm_ctx, llvm_module.get(), xir_module);
-    //llvm_module->print(llvm::errs(), nullptr, true, true);
-    //llvm_module->print(llvm::outs(), nullptr, true, true);
     if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
-    // {
-    //     llvm_module->print(llvm::errs(), nullptr, true, true);
-    //     // std::error_code EC;
-    //     // llvm::raw_fd_ostream file_stream("H:/abc.ll", EC, llvm::sys::fs::OF_None);
-    //     // llvm_module->print(file_stream, nullptr, true, true);
-    //     // file_stream.close();
-    // }
 
     // map symbols
     llvm::orc::SymbolMap symbol_map{};
@@ -276,7 +281,6 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
     }
 
-    // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
     llvm_module->setTargetTriple(_target_machine->getTargetTriple().str());
 
@@ -291,7 +295,18 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         }
     }
 
-    // optimize with the new pass manager
+    if (LUISA_SHOULD_DUMP_LLVM_IR) {
+        auto filename = luisa::format("kernel.{:016x}.ll", kernel.hash());
+        std::error_code ec;
+        llvm::raw_fd_ostream ofs{llvm::StringRef{filename}, ec};
+        if (ec) {
+            LUISA_WARNING_WITH_LOCATION("Failed to open file for dumping LLVM IR: {}.", ec.message());
+        } else {
+            llvm_module->print(ofs, nullptr, false, true);
+        }
+    }
+
+    // optimize
     ::llvm::LoopAnalysisManager LAM;
     ::llvm::FunctionAnalysisManager FAM;
     ::llvm::CGSCCAnalysisManager CGAM;
@@ -323,45 +338,30 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
     if (::llvm::verifyModule(*llvm_module, &::llvm::errs())) {
         LUISA_ERROR_WITH_LOCATION("Failed to verify module.");
     }
-    //	{
-    //		std::error_code EC;
-    //		llvm::raw_fd_ostream file_stream("bbc.ll", EC, llvm::sys::fs::OF_None);
-    //		llvm_module->print(file_stream, nullptr, true, true);
-    //		file_stream.close();
-    //	}
-    // LUISA_INFO("Printing optimized LLVM module...");
-    // llvm_module->print(llvm::outs(), nullptr, false, true);
 
-    // print x64 assembly of llvm_module
-    if constexpr (false) {
-        auto asm_name = "kernel_" + std::to_string(kernel.hash()) + ".s";
-        {
-            std::error_code EC;
-            llvm::raw_fd_ostream dest(asm_name, EC, llvm::sys::fs::OF_None);
+    if (LUISA_SHOULD_DUMP_LLVM_IR) {
+        auto filename = luisa::format("kernel.{:016x}.opt.ll", kernel.hash());
+        std::error_code ec;
+        llvm::raw_fd_ostream ofs{llvm::StringRef{filename}, ec};
+        if (ec) {
+            LUISA_WARNING_WITH_LOCATION("Failed to open file for dumping optimized LLVM IR: {}.", ec.message());
+        } else {
+            llvm_module->print(ofs, nullptr, false, true);
+        }
+    }
+
+    if (LUISA_SHOULD_DUMP_ASM) {
+        auto asm_name = luisa::format("kernel.{:016x}.s", kernel.hash());
+        std::error_code ec;
+        llvm::raw_fd_ostream ofs{llvm::StringRef{asm_name}, ec};
+        if (ec) {
+            LUISA_WARNING_WITH_LOCATION("Failed to open file for dumping assembly: {}.", ec.message());
+        } else {
             llvm::legacy::PassManager pass;
-
-            if (EC) {
-                LUISA_ERROR_WITH_LOCATION("Could not open file: {}", EC.message());
-            }
-
-            if (_target_machine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::AssemblyFile)) {
+            if (_target_machine->addPassesToEmitFile(pass, ofs, nullptr, llvm::CodeGenFileType::AssemblyFile)) {
                 LUISA_ERROR_WITH_LOCATION("TheTargetMachine can't emit a file of this type");
             }
             pass.run(*llvm_module);
-            dest.flush();
-        }
-
-        std::ifstream asm_file(asm_name);
-        if (asm_file.is_open()) {
-            std::stringstream buffer;
-            buffer << asm_file.rdbuf();
-            LUISA_INFO("Kernel Assembly:\n{}", buffer.str());
-            asm_file.close();
-            if (std::remove(asm_name.c_str()) != 0) {
-                LUISA_WARNING_WITH_LOCATION("Failed to delete assembly file: {}", asm_name);
-            }
-        } else {
-            LUISA_ERROR_WITH_LOCATION("Failed to open assembly file: {}", asm_name);
         }
     }
 

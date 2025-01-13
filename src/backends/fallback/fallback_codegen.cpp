@@ -765,77 +765,17 @@ private:
     }
 
     [[nodiscard]] llvm::Value *_translate_binary_rotate_left(CurrentFunction &current, IRBuilder &b, const xir::Value *value, const xir::Value *shift) noexcept {
+        LUISA_ASSERT(value->type() == shift->type(), "Type mismatch for rotate left.");
         auto llvm_value = _lookup_value(current, b, value);
         auto llvm_shift = _lookup_value(current, b, shift);
-        auto value_type = value->type();
-        auto elem_type = value_type->is_vector() ? value_type->element() : value_type;
-        LUISA_ASSERT(value_type != nullptr, "Operand type is null.");
-        LUISA_ASSERT(value_type == shift->type(), "Type mismatch for rotate left.");
-        LUISA_ASSERT(value_type->is_scalar() || value_type->is_vector(), "Invalid operand type.");
-        auto bit_width = 0u;
-        switch (elem_type->tag()) {
-            case Type::Tag::INT8: [[fallthrough]];
-            case Type::Tag::UINT8: bit_width = 8; break;
-            case Type::Tag::INT16: [[fallthrough]];
-            case Type::Tag::UINT16: bit_width = 16; break;
-            case Type::Tag::INT32: [[fallthrough]];
-            case Type::Tag::UINT32: bit_width = 32; break;
-            case Type::Tag::INT64: [[fallthrough]];
-            case Type::Tag::UINT64: bit_width = 64; break;
-            default: LUISA_ERROR_WITH_LOCATION(
-                "Invalid operand type for rotate left operation: {}.",
-                elem_type->description());
-        }
-        auto llvm_elem_type = _translate_type(elem_type, true);
-        auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
-        if (value_type->is_vector()) {
-            llvm_bit_width = llvm::ConstantVector::getSplat(
-                llvm::ElementCount::getFixed(value_type->dimension()),
-                llvm_bit_width);
-        }
-        auto shifted_left = b.CreateShl(llvm_value, llvm_shift);
-        auto complement_shift = b.CreateSub(llvm_bit_width, llvm_shift);
-        auto shifted_right = b.CreateLShr(llvm_value, complement_shift);
-        return b.CreateOr(shifted_left, shifted_right);
+        return b.CreateIntrinsic(llvm_value->getType(), llvm::Intrinsic::fshl, {llvm_value, llvm_value, llvm_shift});
     }
 
     [[nodiscard]] llvm::Value *_translate_binary_rotate_right(CurrentFunction &current, IRBuilder &b, const xir::Value *value, const xir::Value *shift) noexcept {
-        // Lookup LLVM values for operands
+        LUISA_ASSERT(value->type() == shift->type(), "Type mismatch for rotate right.");
         auto llvm_value = _lookup_value(current, b, value);
         auto llvm_shift = _lookup_value(current, b, shift);
-        auto value_type = value->type();
-        auto elem_type = value_type->is_vector() ? value_type->element() : value_type;
-
-        // Type and null checks
-        LUISA_ASSERT(value_type != nullptr, "Operand type is null.");
-        LUISA_ASSERT(value_type == shift->type(), "Type mismatch for rotate right.");
-        LUISA_ASSERT(value_type->is_scalar() || value_type->is_vector(), "Invalid operand type.");
-
-        auto bit_width = 0u;
-        switch (elem_type->tag()) {
-            case Type::Tag::INT8: [[fallthrough]];
-            case Type::Tag::UINT8: bit_width = 8; break;
-            case Type::Tag::INT16: [[fallthrough]];
-            case Type::Tag::UINT16: bit_width = 16; break;
-            case Type::Tag::INT32: [[fallthrough]];
-            case Type::Tag::UINT32: bit_width = 32; break;
-            case Type::Tag::INT64: [[fallthrough]];
-            case Type::Tag::UINT64: bit_width = 64; break;
-            default: LUISA_ERROR_WITH_LOCATION(
-                "Invalid operand type for rotate right operation: {}.",
-                elem_type->description());
-        }
-        auto llvm_elem_type = _translate_type(elem_type, true);
-        auto llvm_bit_width = llvm::ConstantInt::get(llvm_elem_type, bit_width);
-        if (value_type->is_vector()) {
-            llvm_bit_width = llvm::ConstantVector::getSplat(
-                llvm::ElementCount::getFixed(value_type->dimension()),
-                llvm_bit_width);
-        }
-        auto shifted_right = b.CreateLShr(llvm_value, llvm_shift);
-        auto complement_shift = b.CreateSub(llvm_bit_width, llvm_shift);
-        auto shifted_left = b.CreateShl(llvm_value, complement_shift);
-        return b.CreateOr(shifted_left, shifted_right);
+        return b.CreateIntrinsic(llvm_value->getType(), llvm::Intrinsic::fshr, {llvm_value, llvm_value, llvm_shift});
     }
 
     [[nodiscard]] llvm::Value *_translate_binary_less(CurrentFunction &current, IRBuilder &b, const xir::Value *lhs, const xir::Value *rhs) noexcept {
@@ -1200,7 +1140,7 @@ private:
             case Type::Tag::FLOAT32: [[fallthrough]];
             case Type::Tag::FLOAT64: {
                 auto llvm_elem_type = _translate_type(operand_elem_type, false);
-                auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+                auto llvm_zero = llvm::ConstantFP::getNegativeZero(llvm_elem_type);
                 auto llvm_one = llvm::ConstantFP::get(llvm_elem_type, 1.);
                 switch (op) {
                     case xir::ArithmeticOp::REDUCE_SUM: return b.CreateFAddReduce(llvm_zero, llvm_operand);
@@ -1224,7 +1164,7 @@ private:
             auto llvm_elem_type = llvm_mul->getType()->isVectorTy() ?
                                       llvm::cast<llvm::VectorType>(llvm_mul->getType())->getElementType() :
                                       llvm_mul->getType();
-            auto llvm_zero = llvm::ConstantFP::get(llvm_elem_type, 0.);
+            auto llvm_zero = llvm::ConstantFP::getNegativeZero(llvm_elem_type);
             return b.CreateFAddReduce(llvm_zero, llvm_mul);
         }
         return b.CreateAddReduce(llvm_mul);
@@ -2086,7 +2026,13 @@ private:
             }
             case xir::ArithmeticOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::ArithmeticOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
-            case xir::ArithmeticOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+            case xir::ArithmeticOp::ACOS: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::acos);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+#endif
+            }
             case xir::ArithmeticOp::ACOSH: {
                 // acosh(x) = log(x + sqrt(x^2 - 1))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2097,7 +2043,13 @@ private:
                 auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
                 return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
             }
-            case xir::ArithmeticOp::ASIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+            case xir::ArithmeticOp::ASIN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::asin);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+#endif
+            }
             case xir::ArithmeticOp::ASINH: {
                 // asinh(x) = log(x + sqrt(x^2 + 1))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2108,8 +2060,16 @@ private:
                 auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
                 return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
             }
-            case xir::ArithmeticOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
-            case xir::ArithmeticOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            case xir::ArithmeticOp::ATAN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::atan);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
+#endif
+            }
+            case xir::ArithmeticOp::ATAN2: {
+                return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            }
             case xir::ArithmeticOp::ATANH: {
                 // atanh(x) = 0.5 * log((1 + x) / (1 - x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2123,6 +2083,9 @@ private:
             }
             case xir::ArithmeticOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
             case xir::ArithmeticOp::COSH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cosh);
+#else
                 // cosh(x) = 0.5 * (exp(x) + exp(-x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
@@ -2131,9 +2094,13 @@ private:
                 auto llvm_exp_sum = b.CreateFAdd(llvm_exp_x, llvm_exp_neg_x);
                 auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
                 return b.CreateFMul(llvm_half, llvm_exp_sum);
+#endif
             }
             case xir::ArithmeticOp::SIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
             case xir::ArithmeticOp::SINH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sinh);
+#else
                 // sinh(x) = 0.5 * (exp(x) - exp(-x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
@@ -2142,13 +2109,21 @@ private:
                 auto llvm_exp_diff = b.CreateFSub(llvm_exp_x, llvm_exp_neg_x);
                 auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
                 return b.CreateFMul(llvm_half, llvm_exp_diff);
+#endif
             }
             case xir::ArithmeticOp::TAN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::tan);
+#else
                 auto llvm_sin = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
                 auto llvm_cos = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
                 return b.CreateFDiv(llvm_sin, llvm_cos);
+#endif
             }
             case xir::ArithmeticOp::TANH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::tanh);
+#else
                 // tanh(x) = sinh(x) / cosh(x) = (exp(2x) - 1) / (exp(2x) + 1)
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_two_x = b.CreateFMul(llvm_x, llvm::ConstantFP::get(llvm_x->getType(), 2.f));
@@ -2156,6 +2131,7 @@ private:
                 auto llvm_exp_2x_minus_one = b.CreateFSub(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
                 auto llvm_exp_2x_plus_one = b.CreateFAdd(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
                 return b.CreateFDiv(llvm_exp_2x_minus_one, llvm_exp_2x_plus_one);
+#endif
             }
             case xir::ArithmeticOp::EXP: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp);
             case xir::ArithmeticOp::EXP2: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp2);
