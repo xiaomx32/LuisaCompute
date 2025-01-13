@@ -2086,7 +2086,13 @@ private:
             }
             case xir::ArithmeticOp::ISINF: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
             case xir::ArithmeticOp::ISNAN: return _translate_isinf_isnan(current, b, inst->op(), inst->operand(0u));
-            case xir::ArithmeticOp::ACOS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+            case xir::ArithmeticOp::ACOS: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::acos);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "acos");
+#endif
+            }
             case xir::ArithmeticOp::ACOSH: {
                 // acosh(x) = log(x + sqrt(x^2 - 1))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2097,7 +2103,13 @@ private:
                 auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
                 return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
             }
-            case xir::ArithmeticOp::ASIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+            case xir::ArithmeticOp::ASIN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::asin);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "asin");
+#endif
+            }
             case xir::ArithmeticOp::ASINH: {
                 // asinh(x) = log(x + sqrt(x^2 + 1))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2108,8 +2120,16 @@ private:
                 auto llvm_x_plus_sqrt = b.CreateFAdd(llvm_x, llvm_sqrt);
                 return b.CreateUnaryIntrinsic(llvm::Intrinsic::log, llvm_x_plus_sqrt);
             }
-            case xir::ArithmeticOp::ATAN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
-            case xir::ArithmeticOp::ATAN2: return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            case xir::ArithmeticOp::ATAN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::atan);
+#else
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), "atan");
+#endif
+            }
+            case xir::ArithmeticOp::ATAN2: {
+                return _translate_binary_fp_math_operation(current, b, inst->operand(0), inst->operand(1), "atan2");
+            }
             case xir::ArithmeticOp::ATANH: {
                 // atanh(x) = 0.5 * log((1 + x) / (1 - x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
@@ -2123,6 +2143,9 @@ private:
             }
             case xir::ArithmeticOp::COS: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
             case xir::ArithmeticOp::COSH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cosh);
+#else
                 // cosh(x) = 0.5 * (exp(x) + exp(-x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
@@ -2131,9 +2154,13 @@ private:
                 auto llvm_exp_sum = b.CreateFAdd(llvm_exp_x, llvm_exp_neg_x);
                 auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
                 return b.CreateFMul(llvm_half, llvm_exp_sum);
+#endif
             }
             case xir::ArithmeticOp::SIN: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
             case xir::ArithmeticOp::SINH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sinh);
+#else
                 // sinh(x) = 0.5 * (exp(x) - exp(-x))
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_exp_x = b.CreateUnaryIntrinsic(llvm::Intrinsic::exp, llvm_x);
@@ -2142,13 +2169,21 @@ private:
                 auto llvm_exp_diff = b.CreateFSub(llvm_exp_x, llvm_exp_neg_x);
                 auto llvm_half = llvm::ConstantFP::get(llvm_x->getType(), .5f);
                 return b.CreateFMul(llvm_half, llvm_exp_diff);
+#endif
             }
             case xir::ArithmeticOp::TAN: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::tan);
+#else
                 auto llvm_sin = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::sin);
                 auto llvm_cos = _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::cos);
                 return b.CreateFDiv(llvm_sin, llvm_cos);
+#endif
             }
             case xir::ArithmeticOp::TANH: {
+#if LLVM_VERSION_MAJOR >= 19
+                return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::tanh);
+#else
                 // tanh(x) = sinh(x) / cosh(x) = (exp(2x) - 1) / (exp(2x) + 1)
                 auto llvm_x = _lookup_value(current, b, inst->operand(0u));
                 auto llvm_two_x = b.CreateFMul(llvm_x, llvm::ConstantFP::get(llvm_x->getType(), 2.f));
@@ -2156,6 +2191,7 @@ private:
                 auto llvm_exp_2x_minus_one = b.CreateFSub(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
                 auto llvm_exp_2x_plus_one = b.CreateFAdd(llvm_exp_2x, llvm::ConstantFP::get(llvm_x->getType(), 1.f));
                 return b.CreateFDiv(llvm_exp_2x_minus_one, llvm_exp_2x_plus_one);
+#endif
             }
             case xir::ArithmeticOp::EXP: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp);
             case xir::ArithmeticOp::EXP2: return _translate_unary_fp_math_operation(current, b, inst->operand(0u), llvm::Intrinsic::exp2);
