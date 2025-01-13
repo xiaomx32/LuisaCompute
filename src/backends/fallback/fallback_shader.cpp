@@ -220,17 +220,6 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         LUISA_ERROR_WITH_LOCATION("LLVM module verification failed.");
     }
 
-    if (LUISA_SHOULD_DUMP_LLVM_IR) {
-        auto filename = luisa::format("kernel.{:016x}.ll", kernel.hash());
-        std::error_code ec;
-        llvm::raw_fd_ostream ofs{llvm::StringRef{filename}, ec};
-        if (ec) {
-            LUISA_WARNING_WITH_LOCATION("Failed to open file for dumping LLVM IR: {}.", ec.message());
-        } else {
-            llvm_module->print(ofs, nullptr, false, true);
-        }
-    }
-
     // map symbols
     llvm::orc::SymbolMap symbol_map{};
     auto map_symbol = [jit = _jit.get(), &symbol_map]<typename T>(const char *name, T *f) noexcept {
@@ -285,7 +274,6 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         LUISA_ERROR_WITH_LOCATION("Failed to define symbols.");
     }
 
-    // optimize
     llvm_module->setDataLayout(_target_machine->createDataLayout());
     llvm_module->setTargetTriple(_target_machine->getTargetTriple().str());
 
@@ -300,7 +288,18 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         }
     }
 
-    // optimize with the new pass manager
+    if (LUISA_SHOULD_DUMP_LLVM_IR) {
+        auto filename = luisa::format("kernel.{:016x}.ll", kernel.hash());
+        std::error_code ec;
+        llvm::raw_fd_ostream ofs{llvm::StringRef{filename}, ec};
+        if (ec) {
+            LUISA_WARNING_WITH_LOCATION("Failed to open file for dumping LLVM IR: {}.", ec.message());
+        } else {
+            llvm_module->print(ofs, nullptr, false, true);
+        }
+    }
+
+    // optimize
     ::llvm::LoopAnalysisManager LAM;
     ::llvm::FunctionAnalysisManager FAM;
     ::llvm::CGSCCAnalysisManager CGAM;
