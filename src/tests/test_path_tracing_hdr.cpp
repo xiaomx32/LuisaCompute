@@ -30,11 +30,11 @@ int main(int argc, char *argv[]) {
     log_level_verbose();
 
     Context context{argv[0]};
-    // if (argc <= 1) {
-    //     LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
-    //     exit(1);
-    // }
-    Device device = context.create_device("dx");
+    if (argc <= 1) {
+        LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
+        exit(1);
+    }
+    Device device = context.create_device(argv[1]);
 
     // load the Cornell Box scene
     tinyobj::ObjReaderConfig obj_reader_config;
@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
     float scale = 1.0f;
 
     if (device.backend_name() == "dx") {
-        constexpr bool use_hdr10 = false;
+        constexpr bool use_hdr10 = true;
         constexpr PixelStorage hdr_storage = use_hdr10 ? PixelStorage::R10G10B10A2 : PixelStorage::HALF4;
         constexpr DXHDRExt::ColorSpace hdr_color_space = use_hdr10 ? DXHDRExt::ColorSpace::RGB_FULL_G2084_NONE_P2020 : DXHDRExt::ColorSpace::RGB_FULL_G10_NONE_P709;
         auto dx_hdr_ext = device.extension<DXHDRExt>();
@@ -366,6 +366,7 @@ int main(int argc, char *argv[]) {
         dx_hdr_ext->set_color_space(swap_chain, dx_hdr_ext->device_support_hdr() ? hdr_color_space : DXHDRExt::ColorSpace::RGB_FULL_G22_NONE_P709);
         if (dx_hdr_ext->device_support_hdr()) {
             auto display_data = dx_hdr_ext->get_display_data(window.native_handle());
+            LUISA_INFO("Display data: \nbits_per_color: {}\ncolor_space: {}\nred_primary: {}\ngreen_primary: {}\nblue_primary: {}\nwhite_point: {}\nmin_luminance: {}\nmax_luminance: {}\nmax_full_frame_luminance: {}", display_data.bits_per_color, luisa::to_string(display_data.color_space), display_data.red_primary, display_data.green_primary, display_data.blue_primary, display_data.white_point, display_data.min_luminance, display_data.max_luminance, display_data.max_full_frame_luminance);
             white_point = make_float3(display_data.max_full_frame_luminance / 80.0f);
             use_aces = true;
         }
