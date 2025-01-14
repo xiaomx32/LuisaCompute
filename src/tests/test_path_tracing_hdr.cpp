@@ -30,11 +30,11 @@ int main(int argc, char *argv[]) {
     log_level_verbose();
 
     Context context{argv[0]};
-    if (argc <= 1) {
-        LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
-        exit(1);
-    }
-    Device device = context.create_device(argv[1]);
+    // if (argc <= 1) {
+    //     LUISA_INFO("Usage: {} <backend>. <backend>: cuda, dx, cpu, metal", argv[0]);
+    //     exit(1);
+    // }
+    Device device = context.create_device("dx");
 
     // load the Cornell Box scene
     tinyobj::ObjReaderConfig obj_reader_config;
@@ -274,6 +274,15 @@ int main(int argc, char *argv[]) {
         return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
     };
 
+    Callable rec709_to_rec2020 = [](Float3 color) {
+        float3x3 conversion =
+            transpose(make_float3x3(
+                0.627402, 0.329292, 0.043306,
+                0.069095, 0.919544, 0.011360,
+                0.016394, 0.088028, 0.895578));
+        return conversion * color;
+    };
+
     Callable linear_to_st2084 = [](Float3 color) noexcept {
         Float m1 = 2610.f / 4096.f / 4.f;
         Float m2 = 2523.f / 4096.f * 128.f;
@@ -293,7 +302,7 @@ int main(int argc, char *argv[]) {
         Float4 hdr = hdr_image.read(coord);
         Float3 ldr = hdr.xyz() / hdr.w * scale;
         $if (aces) {
-            ldr = (filmic_aces(ldr) / filmic_aces(white_point)) * white_point;
+            ldr = (filmic_aces(ldr) / filmic_aces(11.2f * white_point)) * white_point;
         };
         $switch (mode) {
             // sRGB
@@ -302,7 +311,15 @@ int main(int argc, char *argv[]) {
             };
             // 10-bit
             $case (1) {
-                ldr = linear_to_st2084(ldr * 80.f / 10000.f);
+
+                const float st2084max = 10000.0;
+                const float hdrScalar = 80.0f / st2084max;
+
+                // The HDR scene is in Rec.709, but the display is Rec.2020
+                ldr = rec709_to_rec2020(ldr);
+
+                // Apply the ST.2084 curve to the scene.
+                ldr = linear_to_st2084(ldr * hdrScalar);
             };
             // 16-bit
             $case (2) {
@@ -332,17 +349,21 @@ int main(int argc, char *argv[]) {
     bool use_aces = false;
     float3 white_point{1.0f};
     float scale = 1.0f;
+
     if (device.backend_name() == "dx") {
+        constexpr bool use_hdr10 = false;
+        constexpr PixelStorage hdr_storage = use_hdr10 ? PixelStorage::R10G10B10A2 : PixelStorage::HALF4;
+        constexpr DXHDRExt::ColorSpace hdr_color_space = use_hdr10 ? DXHDRExt::ColorSpace::RGB_FULL_G2084_NONE_P2020 : DXHDRExt::ColorSpace::RGB_FULL_G10_NONE_P709;
         auto dx_hdr_ext = device.extension<DXHDRExt>();
         swap_chain = dx_hdr_ext->create_swapchain(
             stream,
             DXHDRExt::DXSwapchainOption{
                 .window = window.native_handle(),
                 .size = make_uint2(resolution),
-                .storage = dx_hdr_ext->device_support_hdr() ? PixelStorage::HALF4 : PixelStorage::BYTE4,
+                .storage = dx_hdr_ext->device_support_hdr() ? hdr_storage : PixelStorage::BYTE4,
                 .wants_vsync = false,
             });
-        dx_hdr_ext->set_color_space(swap_chain, dx_hdr_ext->device_support_hdr() ? DXHDRExt::ColorSpace::RGB_FULL_G10_NONE_P709 : DXHDRExt::ColorSpace::RGB_FULL_G22_NONE_P709);
+        dx_hdr_ext->set_color_space(swap_chain, dx_hdr_ext->device_support_hdr() ? hdr_color_space : DXHDRExt::ColorSpace::RGB_FULL_G22_NONE_P709);
         if (dx_hdr_ext->device_support_hdr()) {
             auto display_data = dx_hdr_ext->get_display_data(window.native_handle());
             white_point = make_float3(display_data.max_full_frame_luminance / 80.0f);
@@ -355,7 +376,7 @@ int main(int argc, char *argv[]) {
                 .display = window.native_display(),
                 .window = window.native_handle(),
                 .size = make_uint2(resolution),
-                .wants_hdr = false,
+                .wants_hdr = true,
                 .wants_vsync = false,
                 .back_buffer_count = 8,
             });
