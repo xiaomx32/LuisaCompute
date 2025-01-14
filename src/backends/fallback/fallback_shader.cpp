@@ -122,9 +122,13 @@ FallbackShader::FallbackShader(FallbackDevice *device, const ShaderOption &optio
         options.AllowFPOpFusion = ::llvm::FPOpFusion::Fast;
         options.EnableIPRA = false;// true causes crash
         options.StackSymbolOrdering = true;
+#ifndef NDEBUG
+        options.TrapUnreachable = true;
+#else
         options.TrapUnreachable = false;
+#endif
         options.EnableMachineFunctionSplitter = true;
-        options.EnableMachineOutliner = true;
+        options.EnableMachineOutliner = false;
         options.NoTrapAfterNoreturn = true;
         host->setOptions(options);
         host->setCodeGenOptLevel(::llvm::CodeGenOptLevel::Aggressive);
