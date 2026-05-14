@@ -1635,6 +1635,8 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             str << "_SetAccelMotionMatrix("sv;
             args[0]->accept(vis);
             str << "Inst,"sv;
+            args[0]->accept(vis);
+            str << "Motion,"sv;
             PrintArgs(1);
             str << ')';
             return;
@@ -1658,7 +1660,7 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             // (Accel, index: uint, key: uint): float4x4
             str << "_GetAccelMotionMatrix("sv;
             args[0]->accept(vis);
-            str << "Inst,"sv;
+            str << "Motion,"sv;
             PrintArgs(1);
             str << ')';
             return;

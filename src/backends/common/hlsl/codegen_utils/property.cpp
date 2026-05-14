@@ -250,8 +250,8 @@ void CodegenUtility::CodegenProperties(
         // Non-vulkan backends (DX) bind a 16-byte dummy buffer; since DX doesn't
         // support motion blur, _MakeSRTFromMatrix won't be called through meaningful
         // data on DX.
-        auto printMotionBuffer = [&]() {
-            varData << "ByteAddressBuffer "sv;
+        auto printMotionBuffer = [&](bool rw = false) {
+            varData << (rw ? "RWByteAddressBuffer "sv : "ByteAddressBuffer "sv);
             GetVariableName(kernel, i, varData);
             varData << "Motion"sv;
         };
@@ -266,7 +266,7 @@ void CodegenUtility::CodegenProperties(
                 printInstBuffer.operator()<writable>();
                 properties.emplace_back(prop);
             } else if constexpr (rtBufferKind == 2) {
-                printMotionBuffer();
+                printMotionBuffer(writable);
                 properties.emplace_back(prop);
             } else {
                 print();
@@ -320,11 +320,9 @@ void CodegenUtility::CodegenProperties(
             case Type::Tag::ACCEL:
                 if (Writable(i)) {
                     genArg.operator()<RegisterType::UAV, 1, true>(ShaderVariableType::RWStructuredBuffer, 'u');
-                    // Writable-accel paths (set_instance_*) don't actually
-                    // read SRT keyframes, but we still emit a motion buffer
-                    // binding so the descriptor layout matches read-only accel.
-                    // It's a read-only ByteAddressBuffer in t register space.
-                    genArg.operator()<RegisterType::SRV, 2>(ShaderVariableType::StructuredBuffer, 't');
+                    // Writable-accel motion buffer: RWByteAddressBuffer so
+                    // _SetAccelMotionMatrix can write keyframes directly.
+                    genArg.operator()<RegisterType::UAV, 2, true>(ShaderVariableType::RWStructuredBuffer, 'u');
                 } else {
                     genArg.operator()<RegisterType::SRV>(opt->isSpirv ? ShaderVariableType::SPIRVAccel : ShaderVariableType::StructuredBuffer, 't');
                     genArg.operator()<RegisterType::SRV, 1>(ShaderVariableType::StructuredBuffer, 't');

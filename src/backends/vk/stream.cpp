@@ -206,6 +206,11 @@ struct ResourceBarrierVisitor {
             barrier->record(
                 BufferView(tlas->instance_buffer()),
                 ResourceBarrier::Usage::kComputeUAV);
+            if (auto mbuf = tlas->motion_instance_buffer()) {
+                barrier->record(
+                    BufferView(mbuf),
+                    ResourceBarrier::Usage::kComputeUAV);
+            }
         } else {
             if (!tlas->accel_buffer()) [[unlikely]] {
                 LUISA_ERROR("Accel not initialized.");
@@ -339,17 +344,26 @@ struct BindPropVisitor {
                 nullptr,
                 buffer_descs,
                 nullptr});
-            // Placeholder motion buffer binding for writable accel; match the
+            // Motion buffer binding for writable accel; match the
             // extra 2nd binding emitted by property.cpp's ACCEL Writable case.
-            // set_instance_* operations never read this, so bind the instance
-            // buffer again as a dummy.
+            // When motion is enabled, bind the real motion instance buffer so
+            // _SetAccelMotionMatrix can write keyframes directly.
             {
                 auto midx = desc_index++;
-                auto dummy_descs = cmdbuffer->temp_desc->allocate_memory<VkDescriptorBufferInfo>();
-                *dummy_descs = VkDescriptorBufferInfo{
-                    tlas->instance_buffer()->vk_buffer(),
-                    0,
-                    tlas->instance_buffer()->byte_size()};
+                auto motion_descs = cmdbuffer->temp_desc->allocate_memory<VkDescriptorBufferInfo>();
+                auto motion_buffer = tlas->motion_instance_buffer();
+                if (motion_buffer) {
+                    *motion_descs = VkDescriptorBufferInfo{
+                        motion_buffer->vk_buffer(),
+                        0,
+                        motion_buffer->byte_size()};
+                } else {
+                    // No motion buffer yet; bind instance buffer as placeholder
+                    *motion_descs = VkDescriptorBufferInfo{
+                        tlas->instance_buffer()->vk_buffer(),
+                        0,
+                        tlas->instance_buffer()->byte_size()};
+                }
                 cmdbuffer->write_desc_sets->emplace_back(VkWriteDescriptorSet{
                     VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     nullptr,
@@ -359,7 +373,7 @@ struct BindPropVisitor {
                     1,
                     VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     nullptr,
-                    dummy_descs,
+                    motion_descs,
                     nullptr});
             }
         } else {
@@ -1749,7 +1763,7 @@ void CommandBuffer::execute(vstd::span<const luisa::unique_ptr<Command>> cmds) {
                     }
                     auto bind_point = is_rt_shader ? VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR : VK_PIPELINE_BIND_POINT_COMPUTE;
                     auto push_stage = is_rt_shader ?
-                        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_KHR) :
+                        static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR) :
                         static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_COMPUTE_BIT);
                     // Get pipeline and block_size from the correct shader type
                     VkPipeline vk_pipeline;

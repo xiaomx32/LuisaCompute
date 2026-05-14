@@ -167,7 +167,8 @@ void Tlas::pre_build(
         }
         if (!_motion_instance_buffer) {
             update = false;
-            _motion_instance_buffer = vstd::make_unique<DefaultBuffer>(device(), motion_buf_size, false, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR);
+            _motion_instance_buffer = vstd::make_unique<DefaultBuffer>(device(), motion_buf_size, false,
+                static_cast<VkBufferUsageFlagBits>(VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
         }
     }
     if (!(modifications.empty() && _set_map.empty())) {
@@ -281,7 +282,44 @@ void Tlas::pre_build(
                 std_inst->accelerationStructureReference = accel_ref;
 
                 // Fill motion instance buffer (for TLAS build)
-                if (mi && mi->mode() == AccelMotionMode::SRT && mi->keyframe_count() >= 2) {
+                if (mi && mi->mode() == AccelMotionMode::MATRIX && mi->keyframe_count() >= 2) {
+                    // Matrix Motion Instance: type = VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_MATRIX_MOTION_NV (1)
+                    *reinterpret_cast<uint32_t *>(inst_base + 0) = VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_MATRIX_MOTION_NV;
+                    *reinterpret_cast<uint32_t *>(inst_base + 4) = 0u; // flags = 0
+
+                    // VkAccelerationStructureMatrixMotionInstanceNV layout:
+                    //   transformT0 (VkTransformMatrixKHR, 48 bytes) at offset 8
+                    //   transformT1 (VkTransformMatrixKHR, 48 bytes) at offset 56
+                    //   instanceCustomIndex:24 | mask:8 at offset 104
+                    //   instanceShaderBindingTableRecordOffset:24 | flags:8 at offset 108
+                    //   accelerationStructureReference (uint64) at offset 112
+                    auto &keyframes = mi->keyframes();
+                    auto &mat0 = keyframes[0].as_matrix();
+                    auto &mat1 = keyframes[mi->keyframe_count() - 1].as_matrix();
+
+                    // Write VkTransformMatrixKHR (row-major float[3][4]) from float4x4 (column-major)
+                    auto write_vk_matrix = [](uint8_t *dst, const float4x4 &m) {
+                        auto *f = reinterpret_cast<float *>(dst);
+                        // Row 0
+                        f[0] = m[0][0]; f[1] = m[1][0]; f[2] = m[2][0]; f[3] = m[3][0];
+                        // Row 1
+                        f[4] = m[0][1]; f[5] = m[1][1]; f[6] = m[2][1]; f[7] = m[3][1];
+                        // Row 2
+                        f[8] = m[0][2]; f[9] = m[1][2]; f[10] = m[2][2]; f[11] = m[3][2];
+                    };
+
+                    write_vk_matrix(inst_base + 8, mat0);       // transformT0
+                    write_vk_matrix(inst_base + 8 + 48, mat1);  // transformT1
+
+                    // Instance fields after the two matrix transforms
+                    auto *mat_inst_fields = inst_base + 8 + 48 + 48; // offset 104
+                    *reinterpret_cast<uint32_t *>(mat_inst_fields + 0) =
+                        (custom_index & 0x00FFFFFFu) | (static_cast<uint32_t>(mask) << 24u);
+                    *reinterpret_cast<uint32_t *>(mat_inst_fields + 4) =
+                        (0u & 0x00FFFFFFu) | (static_cast<uint32_t>(geom_flags) << 24u);
+                    *reinterpret_cast<uint64_t *>(mat_inst_fields + 8) = accel_ref;
+
+                } else if (mi && mi->mode() == AccelMotionMode::SRT && mi->keyframe_count() >= 2) {
                     // SRT Motion Instance: type = VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_SRT_MOTION_NV (2)
                     *reinterpret_cast<uint32_t *>(inst_base + 0) = VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_SRT_MOTION_NV;
                     *reinterpret_cast<uint32_t *>(inst_base + 4) = 0u; // flags = 0
@@ -369,6 +407,9 @@ void Tlas::pre_build(
                 if (motion_type == VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_SRT_MOTION_NV) {
                     // SRT motion instance: accel ref at offset 8 + 64 + 64 + 8 = 144
                     *reinterpret_cast<uint64_t *>(inst_base + 8 + 64 + 64 + 8) = accel_ref;
+                } else if (motion_type == VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_MATRIX_MOTION_NV) {
+                    // Matrix motion instance: accel ref at offset 8 + 48 + 48 + 8 = 112
+                    *reinterpret_cast<uint64_t *>(inst_base + 8 + 48 + 48 + 8) = accel_ref;
                 } else {
                     // Static motion instance: accel ref at offset 8 + offsetof(VkAccelerationStructureInstanceKHR, accelerationStructureReference)
                     auto motion_inst = reinterpret_cast<VkAccelerationStructureInstanceKHR *>(inst_base + 8);

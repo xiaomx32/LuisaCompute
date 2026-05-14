@@ -32,12 +32,52 @@ buffer[index].Flags=select(opaque,4,8);
 void _SetUserId(RWStructuredBuffer<_MeshInst> buffer,uint index,uint id){
 buffer[index].InstanceID=id;
 }
-void _SetAccelMotionMatrix(RWStructuredBuffer<_MeshInst> buffer,uint index,uint key,float4x4 mat){
+void _SetAccelMotionMatrix(RWStructuredBuffer<_MeshInst> buffer,RWByteAddressBuffer motionBuf,uint index,uint key,float4x4 mat){
 _SetInstTransform(buffer[index],mat);
+// Write to motion instance buffer (VkAccelerationStructureMatrixMotionInstanceNV layout)
+// Stride=160, type(4)+flags(4)+transformT0(48)+transformT1(48)+metadata(16)=120
+const uint kStride=160u;
+uint base=index*kStride;
+// Set type=MATRIX_MOTION(1), flags=0
+motionBuf.Store(base,1u);
+motionBuf.Store(base+4u,0u);
+// Write VkTransformMatrixKHR (row-major float[3][4]) at offset 8+key*48
+uint kfBase=base+8u+key*48u;
+motionBuf.Store(kfBase+0u,asuint(mat[0].x));
+motionBuf.Store(kfBase+4u,asuint(mat[1].x));
+motionBuf.Store(kfBase+8u,asuint(mat[2].x));
+motionBuf.Store(kfBase+12u,asuint(mat[3].x));
+motionBuf.Store(kfBase+16u,asuint(mat[0].y));
+motionBuf.Store(kfBase+20u,asuint(mat[1].y));
+motionBuf.Store(kfBase+24u,asuint(mat[2].y));
+motionBuf.Store(kfBase+28u,asuint(mat[3].y));
+motionBuf.Store(kfBase+32u,asuint(mat[0].z));
+motionBuf.Store(kfBase+36u,asuint(mat[1].z));
+motionBuf.Store(kfBase+40u,asuint(mat[2].z));
+motionBuf.Store(kfBase+44u,asuint(mat[3].z));
 }
 template<typename T>
-float4x4 _GetAccelMotionMatrix(T buffer,uint index,uint key){
-return _InstMatrix(buffer,index);
+float4x4 _GetAccelMotionMatrix(T motionBuf,uint index,uint key){
+// Read from motion instance buffer
+const uint kStride=160u;
+uint base=index*kStride+8u+key*48u;
+float r00=asfloat(motionBuf.Load(base+0u));
+float r01=asfloat(motionBuf.Load(base+4u));
+float r02=asfloat(motionBuf.Load(base+8u));
+float r03=asfloat(motionBuf.Load(base+12u));
+float r10=asfloat(motionBuf.Load(base+16u));
+float r11=asfloat(motionBuf.Load(base+20u));
+float r12=asfloat(motionBuf.Load(base+24u));
+float r13=asfloat(motionBuf.Load(base+28u));
+float r20=asfloat(motionBuf.Load(base+32u));
+float r21=asfloat(motionBuf.Load(base+36u));
+float r22=asfloat(motionBuf.Load(base+40u));
+float r23=asfloat(motionBuf.Load(base+44u));
+return float4x4(
+float4(r00,r10,r20,0),
+float4(r01,r11,r21,0),
+float4(r02,r12,r22,0),
+float4(r03,r13,r23,1));
 }
 template<typename SRT_T, typename T>
 SRT_T _MakeSRTFromMatrix(T buffer,uint index){
