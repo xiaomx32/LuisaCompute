@@ -760,14 +760,27 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             str << "_texsize"sv;
         } break;
         case CallOp::RAY_TRACING_TRACE_CLOSEST:
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_TRACE_CLOSEST, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_TraceClosest"sv;
             break;
         case CallOp::RAY_TRACING_TRACE_ANY:
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_TRACE_ANY, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_TraceAny"sv;
             break;
         case CallOp::RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR: {
-            // Motion blur trace: args are (accel, ray, time, mask)
-            // Map to non-motion _TraceClosest(accel, ray, mask), ignoring time
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_TRACE_CLOSEST_MOTION_BLUR, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             // str << "_TraceClosest("sv;
             // args[0]->accept(vis);// accel
             // str << ',';
@@ -788,28 +801,50 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             str << ')';
             return;
         }
-        // case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR:
-        //     // Motion blur trace any: args are (accel, ray, time, mask)
-        //     // Map to non-motion _TraceAny(accel, ray, mask), ignoring time
-        //     str << "_TraceAny("sv;
-        //     args[0]->accept(vis);// accel
-        //     str << ',';
-        //     args[1]->accept(vis);// ray
-        //     str << ',';
-        //     args[3]->accept(vis);// mask (skip time at index 2)
-        //     str << ')';
-        //     return;
+        case CallOp::RAY_TRACING_TRACE_ANY_MOTION_BLUR: {
+            // Motion blur trace any: args are (accel, ray, time, mask)
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_TRACE_ANY_MOTION_BLUR, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
+            str << "_TraceAnyMotion("sv;
+            args[0]->accept(vis);// accel
+            str << ',';
+            args[1]->accept(vis);// ray
+            str << ',';
+            args[2]->accept(vis);// time
+            str << ',';
+            args[3]->accept(vis);// mask
+            str << ')';
+            return;
+        }
         case CallOp::RAY_TRACING_QUERY_ALL:
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_QUERY_ALL, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_QueryAll("sv;
             PrintArgs();
             return;
         case CallOp::RAY_TRACING_QUERY_ANY:
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_QUERY_ANY, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_QueryAny("sv;
             PrintArgs();
             return;
-        case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR:
+        case CallOp::RAY_TRACING_QUERY_ALL_MOTION_BLUR: {
             // Motion blur query all: args are (accel, ray, time, mask, query)
             // Map to non-motion _QueryAll(accel, ray, mask, query), ignoring time
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_QUERY_ALL_MOTION_BLUR, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_QueryAll("sv;
             args[0]->accept(vis);// accel
             str << ',';
@@ -820,9 +855,15 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             args[4]->accept(vis);// query
             str << ')';
             return;
+        }
         case CallOp::RAY_TRACING_QUERY_ANY_MOTION_BLUR:
             // Motion blur query any: args are (accel, ray, time, mask, query)
             // Map to non-motion _QueryAny(accel, ray, mask, query), ignoring time
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_QUERY_ANY_MOTION_BLUR, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
             str << "_QueryAny("sv;
             args[0]->accept(vis);// accel
             str << ',';
@@ -1584,6 +1625,67 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
             str << ')';
             return;
         }
+        case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_MATRIX: {
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_SET_INSTANCE_MOTION_MATRIX, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
+            // (Accel, index: uint, key: uint, transform: float4x4)
+            str << "_SetAccelMotionMatrix("sv;
+            args[0]->accept(vis);
+            str << "Inst,"sv;
+            PrintArgs(1);
+            str << ')';
+            return;
+        }
+        case CallOp::RAY_TRACING_SET_INSTANCE_MOTION_SRT: {
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_SET_INSTANCE_MOTION_SRT, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
+            // (Accel, index: uint, key: uint, transform: SRT)
+            // No-op placeholder - full implementation requires motion keyframe buffer
+            return;
+        }
+        case CallOp::RAY_TRACING_INSTANCE_MOTION_MATRIX: {
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_INSTANCE_MOTION_MATRIX, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
+            // (Accel, index: uint, key: uint): float4x4
+            str << "_GetAccelMotionMatrix("sv;
+            args[0]->accept(vis);
+            str << "Inst,"sv;
+            PrintArgs(1);
+            str << ')';
+            return;
+        }
+        case CallOp::RAY_TRACING_INSTANCE_MOTION_SRT: {
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\iwork\\Smaray\\smaray_log\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] RAY_TRACING_INSTANCE_MOTION_SRT, args_count=%zu\n", args.size()); fflush(_mblog); }
+            }
+            // (Accel, index: uint, key: uint): SRT
+            // Reads the SRT keyframe from the per-accel motion instance buffer
+            // (3rd binding emitted by property.cpp for ACCEL type). The motion
+            // buffer has 160-byte stride per instance with VkSRTDataNV layout
+            // for keyframe 0 at offset +8 and keyframe 1 at offset +72.
+            // Generate: _MakeSRTFromMotionBuffer<SRT_TYPE>(varNameMotion, inst_idx, key_idx)
+            str << "_MakeSRTFromMotionBuffer<"sv;
+            CodegenUtility::GetTypeName(*expr->type(), str, Usage::READ);
+            str << ">("sv;
+            args[0]->accept(vis);
+            str << "Motion,"sv;
+            args[1]->accept(vis);
+            str << ',';
+            args[2]->accept(vis);
+            str << ')';
+            return;
+        }
         case CallOp::INDIRECT_SET_DISPATCH_COUNT: {
             str << "_SetDispCount"sv;
         } break;
@@ -1888,6 +1990,11 @@ void CodegenUtility::GetFunctionName(CallExpr const *expr, vstd::StringBuilder &
         }
             return;
         default:
+            {
+                static FILE *_mblog = nullptr;
+                if (!_mblog) _mblog = fopen("D:\\smaray_vk_motion_debug.txt", "a");
+                if (_mblog) { fprintf(_mblog, "[CallExpr] UNHANDLED CallOp=%d, args_count=%zu\n", (int)expr->op(), args.size()); fflush(_mblog); }
+            }
             LUISA_ERROR("Bad op. {}", luisa::to_string(expr->op()));
             break;
     }

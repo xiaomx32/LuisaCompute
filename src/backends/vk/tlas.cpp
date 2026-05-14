@@ -6,6 +6,29 @@
 #include "log.h"
 #include "blas.h"
 #include "motion_instance.h"
+#include <cstdio>
+#include <cstdarg>
+#include <atomic>
+
+// Shared debug log: writes to D:\smaray_vk_motion_debug.txt, max 500 lines total
+static std::atomic<int> g_motion_log_count{0};
+static FILE *g_motion_log_file = nullptr;
+
+static void motion_debug_log(const char *fmt, ...) {
+    int n = g_motion_log_count.fetch_add(1);
+    if (n >= 5000) return;
+    if (!g_motion_log_file) {
+        g_motion_log_file = fopen("D:\\iwork\\Smaray\\smaray_log\\smaray_tlas_trace.log", "a");
+        if (!g_motion_log_file) return;
+    }
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(g_motion_log_file, fmt, args);
+    va_end(args);
+    fprintf(g_motion_log_file, "\n");
+    fflush(g_motion_log_file);
+}
+
 namespace lc::vk {
 namespace tlas_detail {
 struct TlasInputInst {
@@ -41,6 +64,12 @@ void Tlas::pre_build(
     luisa::span<AccelBuildCommand::Modification const> modifications,
     AccelBuildRequest request) {
     using namespace tlas_detail;
+    static int tlas_prebuild_count = 0;
+    tlas_prebuild_count++;
+    if (tlas_prebuild_count <= 5 || _has_motion) {
+        motion_debug_log("[TLAS::pre_build] #%d instance_count=%u, modifications=%zu, _set_map=%zu, _has_motion=%d",
+                         tlas_prebuild_count, instance_count, modifications.size(), _set_map.size(), (int)_has_motion);
+    }
     _resize_instance(instance_count);
 
     // Pre-scan modifications to detect motion before calculating buffer sizes
@@ -48,16 +77,33 @@ void Tlas::pre_build(
         for (auto &&i : modifications) {
             if (i.flags & AccelBuildCommand::Modification::flag_primitive) {
                 auto prim = reinterpret_cast<PrimitiveBase *>(i.primitive);
+                motion_debug_log("[TLAS::pre_build] checking modification: flags=0x%x, primitive=%p, prim_tag=%d",
+                                 (unsigned)i.flags, (void*)prim,
+                                 prim ? (int)prim->prim_tag() : -1);
                 if (prim) {
                     if (prim->is_motion_instance()) {
+                        motion_debug_log("[TLAS::pre_build] DETECTED motion instance! prim=%p", (void*)prim);
                         _has_motion = true;
                         break;
                     }
                     auto blas = tlas_detail::resolve_to_blas(i.primitive);
                     if (blas && blas->has_motion()) {
+                        motion_debug_log("[TLAS::pre_build] DETECTED blas with motion! blas=%p", (void*)blas);
                         _has_motion = true;
                         break;
                     }
+                    motion_debug_log("[TLAS::pre_build] prim is NOT motion instance (tag=%d), blas=%p, blas->has_motion=%d",
+                                     (int)prim->prim_tag(), (void*)blas, blas ? (int)blas->has_motion() : -1);
+                }
+            }
+        }
+        // Also check _set_map for motion instances
+        if (!_has_motion) {
+            for (auto &[idx, entry] : _set_map) {
+                if (entry && entry->mesh) {
+                    // _set_map entries store resolved Blas*, check if the original primitive was motion
+                    motion_debug_log("[TLAS::pre_build] _set_map[%u]: mesh=%p, has_motion=%d",
+                                     idx, (void*)entry->mesh, (int)entry->mesh->has_motion());
                 }
             }
         }
@@ -161,6 +207,8 @@ void Tlas::pre_build(
         // 1. _motion_instance_buffer (160-byte stride, 16-byte aligned) for TLAS build
         // 2. _instance_buffer (64-byte stride) for shader reads via StructuredBuffer<_MeshInst>
         if (_has_motion) {
+            motion_debug_log("[TLAS::pre_build] ENTERING MOTION PATH, instance_count=%u, modifications=%zu",
+                             instance_count, modifications.size());
             // Allocate upload buffer for motion instances (160-byte stride)
             auto motion_upload_size = static_cast<size_t>(instance_count) * kMotionInstanceStride;
             // Allocate upload buffer for standard instances (64-byte stride)
@@ -174,7 +222,7 @@ void Tlas::pre_build(
             memset(motion_data, 0, motion_upload_size);
             memset(std_data, 0, std_inst_size_bytes);
 
-            // Fill each instance
+            // Fill each instance from modifications
             for (size_t idx = 0; idx < modifications.size(); idx++) {
                 auto &&i = modifications[idx];
                 if (i.index >= instance_count) continue;
@@ -302,6 +350,39 @@ void Tlas::pre_build(
                 }
             }
 
+            // Also process remaining _set_map entries (BLAS updates not covered by modifications).
+            // Without this, when a BLAS is rebuilt (address changes) and notifies the TLAS via
+            // _update_mesh/_set_map, the motion instance buffer would retain stale BLAS addresses,
+            // causing GPU hangs on the next TraceRay.
+            for (auto &[set_idx, handle] : _set_map) {
+                if (set_idx >= instance_count) continue;
+                auto *mesh = handle->mesh;
+                if (!mesh) continue;
+                uint64_t accel_ref = mesh->get_accel_device_address();
+                resource_barrier->record(BufferView{mesh->_accel_buffer.get()},
+                                         ResourceBarrier::Usage::kAccelInstanceBuffer);
+
+                // Update accelerationStructureReference in motion instance buffer
+                auto inst_base = motion_data + static_cast<size_t>(set_idx) * kMotionInstanceStride;
+                uint32_t motion_type = *reinterpret_cast<uint32_t *>(inst_base + 0);
+                if (motion_type == VK_ACCELERATION_STRUCTURE_MOTION_INSTANCE_TYPE_SRT_MOTION_NV) {
+                    // SRT motion instance: accel ref at offset 8 + 64 + 64 + 8 = 144
+                    *reinterpret_cast<uint64_t *>(inst_base + 8 + 64 + 64 + 8) = accel_ref;
+                } else {
+                    // Static motion instance: accel ref at offset 8 + offsetof(VkAccelerationStructureInstanceKHR, accelerationStructureReference)
+                    auto motion_inst = reinterpret_cast<VkAccelerationStructureInstanceKHR *>(inst_base + 8);
+                    motion_inst->accelerationStructureReference = accel_ref;
+                }
+
+                // Update accelerationStructureReference in standard instance buffer
+                auto std_inst = reinterpret_cast<VkAccelerationStructureInstanceKHR *>(
+                    std_data + static_cast<size_t>(set_idx) * sizeof(VkAccelerationStructureInstanceKHR));
+                std_inst->accelerationStructureReference = accel_ref;
+
+                _set_mesh(mesh, set_idx);
+                update = false;
+            }
+
             // Copy motion instances to _motion_instance_buffer (for TLAS build)
             resource_barrier->record(
                 BufferView{_motion_instance_buffer.get()},
@@ -344,6 +425,7 @@ void Tlas::pre_build(
                 vkCmdCopyBuffer2(cmdbuffer.cmdbuffer(), &copy_info2);
             }
             _set_map.clear();
+            motion_debug_log("[TLAS::pre_build] motion path: copy done, _set_map cleared");
         } else {
         // Non-motion path: use compute shader to fill instance buffer
         resource_barrier->record(
@@ -528,7 +610,11 @@ void Tlas::pre_build(
             vkDestroyAccelerationStructureKHR(device->logic_device(), a, Device::alloc_callbacks());
         });
     }
+    motion_debug_log("[TLAS::pre_build] vkCreateAccelerationStructureKHR: _has_motion=%d, createFlags=0x%x, size=%llu, motion_maxInstances=%u, prebuild#=%d",
+                     (int)_has_motion, acceleration_structure_create_info.createFlags,
+                     (unsigned long long)acceleration_structure_create_info.size, motion_info.maxInstances, tlas_prebuild_count);
     VK_CHECK_RESULT(vkCreateAccelerationStructureKHR(device()->logic_device(), &acceleration_structure_create_info, Device::alloc_callbacks(), &_accel));
+    motion_debug_log("[TLAS::pre_build] vkCreateAccelerationStructureKHR succeeded, _accel=%p", (void*)_accel);
     scratch_buffer_size = (scratch_buffer_size + 255) & (~(255u));
     auto scratch_chunk = cmdbuffer.scratch_buffer_alloc->allocate(scratch_buffer_size);
 
@@ -548,6 +634,7 @@ void Tlas::_update_mesh(
 void Tlas::build(
     CommandBuffer &cmdbuffer,
     uint instance_count) {
+    motion_debug_log("[TLAS::build] instance_count=%u, _has_motion=%d", instance_count, (int)_has_motion);
     _acceleration_build_geometry_info->dstAccelerationStructure = _accel;
     _acceleration_build_geometry_info->scratchData.deviceAddress = _scratch_buffer->get_device_address() + _scratch_buffer_offset;
     auto acceleration_structure_build_range_info = cmdbuffer.temp_desc->allocate_memory<VkAccelerationStructureBuildRangeInfoKHR>();
@@ -555,6 +642,8 @@ void Tlas::build(
     acceleration_structure_build_range_info->primitiveOffset = 0;
     acceleration_structure_build_range_info->firstVertex = 0;
     acceleration_structure_build_range_info->transformOffset = 0;
+    motion_debug_log("[TLAS::build] calling vkCmdBuildAccelerationStructuresKHR, primitiveCount=%u, mode=%d, flags=0x%x",
+                     instance_count, _acceleration_build_geometry_info->mode, _acceleration_build_geometry_info->flags);
     vkCmdBuildAccelerationStructuresKHR(
         cmdbuffer.cmdbuffer(),
         1,
